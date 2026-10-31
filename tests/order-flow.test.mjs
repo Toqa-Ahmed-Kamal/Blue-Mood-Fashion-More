@@ -1,0 +1,169 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  addUniqueModel,
+  buildWhatsAppOrderText,
+  calculateOrderTotals,
+  createOrderReference,
+  createWhatsAppUrl,
+  isBundleComplete,
+  normalizePhoneDigits,
+  pajamaFitLabel,
+  removeBundleModel,
+} from "../lib/order-flow.ts";
+import { findShippingRate, shippingRates } from "../lib/shipping-rates.ts";
+import { winterLooks } from "../lib/site-data.ts";
+
+const fourPajamas = { pajamaCount: 4, wearableBlanketCount: 0 };
+const mixedOffer = { pajamaCount: 3, wearableBlanketCount: 1 };
+
+function model(modelId, category = "winter-pajamas") {
+  return {
+    modelId,
+    name: category === "winter-pajamas" ? "بيجاما بطبعة دب" : "بلانكيت شتوي بغطاء للرأس",
+    category,
+    image: category === "winter-pajamas"
+      ? "/images/pink-gray-bear-print-pajama-set.jpg"
+      : "/images/black-hooded-wearable-blanket.jpg",
+  };
+}
+
+test("the same fixed model id cannot be added twice", () => {
+  const first = addUniqueModel([], model("bm-winter-pajama-001"), fourPajamas);
+  const second = addUniqueModel(first.bundle, model("bm-winter-pajama-001"), fourPajamas);
+
+  assert.equal(first.added, true);
+  assert.equal(second.added, false);
+  assert.equal(second.reason, "duplicate");
+  assert.equal(second.bundle.length, 1);
+});
+
+test("removing a model makes its fixed id selectable again", () => {
+  const added = addUniqueModel([], model("bm-winter-pajama-002"), fourPajamas);
+  const removed = removeBundleModel(added.bundle, "bm-winter-pajama-002");
+  const reselected = addUniqueModel(removed, model("bm-winter-pajama-002"), fourPajamas);
+
+  assert.equal(removed.length, 0);
+  assert.equal(reselected.added, true);
+});
+
+test("offer completion requires four unique pajamas or three unique pajamas and one blanket", () => {
+  const four = ["001", "002", "003", "004"].reduce(
+    (bundle, id) => addUniqueModel(bundle, model(`pajama-${id}`), fourPajamas).bundle,
+    [],
+  );
+  const mixed = [
+    model("pajama-001"),
+    model("pajama-002"),
+    model("pajama-003"),
+    model("blanket-001", "wearable-blankets"),
+  ].reduce((bundle, entry) => addUniqueModel(bundle, entry, mixedOffer).bundle, []);
+
+  assert.equal(isBundleComplete(four, fourPajamas), true);
+  assert.equal(isBundleComplete(mixed, mixedOffer), true);
+  assert.equal(addUniqueModel(mixed, model("blanket-001", "wearable-blankets"), mixedOffer).added, false);
+  assert.equal(isBundleComplete(four.slice(0, 3), fourPajamas), false);
+});
+
+test("pajamas use the single One Size label and carry no per-item size or weight fields", () => {
+  const pajama = model("bm-winter-pajama-003");
+  assert.equal(pajamaFitLabel, "One Size – مقاس واحد");
+  assert.equal("size" in pajama, false);
+  assert.equal("weightGuide" in pajama, false);
+});
+
+test("customer phone validation accepts Arabic, Persian, and Western numerals consistently", () => {
+  assert.equal(normalizePhoneDigits("٠١٠-٢٢٥٩٠٥٥٧"), "01022590557");
+  assert.equal(normalizePhoneDigits("۰۱۰-۲۲۵۹۰۵۵۷"), "01022590557");
+  assert.equal(normalizePhoneDigits("010-22590557"), "01022590557");
+});
+
+test("offer models keep unique internal ids without filename codes", () => {
+  const ids = winterLooks.map((look) => look.id);
+  assert.equal(new Set(ids).size, winterLooks.length);
+  assert.equal(winterLooks.every((look) => !("code" in look)), true);
+  assert.equal(winterLooks.every((look) => look.name.length > 0), true);
+});
+
+test("Cairo shipping quote updates from the configured draft area fee", () => {
+  const nearest = findShippingRate("القاهرة", "المطرية");
+  const farthest = findShippingRate("القاهرة", "حلوان");
+
+  assert.equal(nearest.fee, 30);
+  assert.deepEqual(calculateOrderTotals(1100, nearest.fee), { offerPrice: 1100, shipping: 30, total: 1130 });
+  assert.equal(farthest.fee, 85);
+  assert.deepEqual(calculateOrderTotals(1100, farthest.fee), { offerPrice: 1100, shipping: 85, total: 1185 });
+  const noRate = findShippingRate("القاهرة", "منطقة أخرى بالقاهرة (السعر غير محدد)");
+  assert.equal(noRate.fee, null);
+  assert.equal(findShippingRate("القاهرة", "منطقة غير مدرجة"), undefined);
+  assert.equal(shippingRates.every((rate) => rate.fee === null || (rate.fee >= 30 && rate.fee <= 85)), true);
+
+  const originalFee = nearest.fee;
+  nearest.fee = 37;
+  assert.equal(findShippingRate("القاهرة", "المطرية").fee, 37);
+  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("القاهرة", "المطرية").fee), { offerPrice: 1100, shipping: 37, total: 1137 });
+  nearest.fee = originalFee;
+  assert.deepEqual(calculateOrderTotals(1100, noRate.fee), { offerPrice: 1100, shipping: null, total: null });
+
+});
+
+test("WhatsApp text names pajama styles without technical ids or false size selections", () => {
+  const reference = createOrderReference(new Date("2026-10-31T10:20:00.000Z"), "12345678-1234-1234-1234-123456789abc");
+  const message = buildWhatsAppOrderText({
+    reference,
+    createdAt: "2026-10-31T10:20:00.000Z",
+    customer: {
+      name: "اسم اختبار",
+      phone: "01000000000",
+      alternatePhone: "",
+      governorate: "القاهرة",
+      area: "المطرية",
+      address: "عنوان اختبار",
+      notes: "ملاحظة اختبار",
+    },
+    offerLabel: "٤ بيجامات شتوية",
+    items: [model("bm-winter-pajama-001")],
+    offerPrice: 1100,
+    shipping: 30,
+    total: 1130,
+  });
+  const url = new URL(createWhatsAppUrl(message));
+
+  assert.equal(reference, "BM-20261031-12345678");
+  assert.equal(url.hostname, "wa.me");
+  assert.equal(url.pathname, "/201022590557");
+  assert.equal(url.searchParams.get("text"), message);
+  assert.match(message, /بيجاما بطبعة دب/);
+  assert.match(message, /One Size – مقاس واحد/);
+  assert.doesNotMatch(message, /bm-winter-pajama-001|1000505866|كود الموديل|الوزن الإرشادي/);
+  assert.match(message, /سعر العرض: 1100 جنيه/);
+  assert.match(message, /الشحن التقديري \(الأسعار الحالية مبدئية وقابلة للتعديل\): 30 جنيه/);
+  assert.match(message, /الإجمالي التقديري \(وفق سعر الشحن المبدئي\): 1130 جنيه/);
+});
+
+test("WhatsApp text stays sendable when no shipping fee exists and does not invent a total", () => {
+  const message = buildWhatsAppOrderText({
+    reference: "BM-20261031-ABCDEFGH",
+    createdAt: "2026-10-31T10:20:00.000Z",
+    customer: {
+      name: "اسم اختبار",
+      phone: "01000000000",
+      alternatePhone: "",
+      governorate: "القاهرة",
+      area: "منطقة أخرى بالقاهرة (السعر غير محدد)",
+      address: "عنوان اختبار",
+      notes: "",
+    },
+    offerLabel: "٤ بيجامات شتوية",
+    items: [model("bm-winter-pajama-001")],
+    offerPrice: 1100,
+    shipping: null,
+    total: null,
+  });
+
+  assert.match(message, /المنطقة: منطقة أخرى بالقاهرة/);
+  assert.match(message, /تكلفة الشحن تحتاج إلى تأكيد لاحقًا/);
+  assert.match(message, /الإجمالي النهائي غير متاح حتى تأكيد الشحن/);
+  assert.doesNotMatch(message, /الإجمالي التقديري: 1100 جنيه/);
+});
