@@ -13,7 +13,7 @@ import {
   removeBundleModel,
 } from "../lib/order-flow.ts";
 import { findShippingRate, shippingRates } from "../lib/shipping-rates.ts";
-import { winterLooks } from "../lib/site-data.ts";
+import { catalog } from "../lib/site-data.ts";
 
 const fourPajamas = { pajamaCount: 4, wearableBlanketCount: 0 };
 const mixedOffer = { pajamaCount: 3, wearableBlanketCount: 1 };
@@ -79,11 +79,11 @@ test("customer phone validation accepts Arabic, Persian, and Western numerals co
   assert.equal(normalizePhoneDigits("010-22590557"), "01022590557");
 });
 
-test("offer models keep unique internal ids without filename codes", () => {
-  const ids = winterLooks.map((look) => look.id);
-  assert.equal(new Set(ids).size, winterLooks.length);
-  assert.equal(winterLooks.every((look) => !("code" in look)), true);
-  assert.equal(winterLooks.every((look) => look.name.length > 0), true);
+test("catalog products keep unique internal ids and names", () => {
+  const ids = catalog.map((product) => product.id);
+  assert.equal(new Set(ids).size, catalog.length);
+  assert.equal(new Set(catalog.map((product) => product.name)).size, catalog.length);
+  assert.equal(catalog.every((product) => product.image.startsWith("/images/")), true);
 });
 
 test("Cairo shipping quote updates from the configured draft area fee", () => {
@@ -91,9 +91,9 @@ test("Cairo shipping quote updates from the configured draft area fee", () => {
   const farthest = findShippingRate("القاهرة", "حلوان");
 
   assert.equal(nearest.fee, 30);
-  assert.deepEqual(calculateOrderTotals(1100, nearest.fee), { offerPrice: 1100, shipping: 30, total: 1130 });
+  assert.deepEqual(calculateOrderTotals(1100, nearest.fee), { subtotal: 1100, shipping: 30, total: 1130 });
   assert.equal(farthest.fee, 85);
-  assert.deepEqual(calculateOrderTotals(1100, farthest.fee), { offerPrice: 1100, shipping: 85, total: 1185 });
+  assert.deepEqual(calculateOrderTotals(1100, farthest.fee), { subtotal: 1100, shipping: 85, total: 1185 });
   const noRate = findShippingRate("القاهرة", "منطقة أخرى بالقاهرة (السعر غير محدد)");
   assert.equal(noRate.fee, null);
   assert.equal(findShippingRate("القاهرة", "منطقة غير مدرجة"), undefined);
@@ -102,9 +102,9 @@ test("Cairo shipping quote updates from the configured draft area fee", () => {
   const originalFee = nearest.fee;
   nearest.fee = 37;
   assert.equal(findShippingRate("القاهرة", "المطرية").fee, 37);
-  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("القاهرة", "المطرية").fee), { offerPrice: 1100, shipping: 37, total: 1137 });
+  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("القاهرة", "المطرية").fee), { subtotal: 1100, shipping: 37, total: 1137 });
   nearest.fee = originalFee;
-  assert.deepEqual(calculateOrderTotals(1100, noRate.fee), { offerPrice: 1100, shipping: null, total: null });
+  assert.deepEqual(calculateOrderTotals(1100, noRate.fee), { subtotal: 1100, shipping: null, total: null });
 
 });
 
@@ -122,9 +122,9 @@ test("WhatsApp text names pajama styles without technical ids or false size sele
       address: "عنوان اختبار",
       notes: "ملاحظة اختبار",
     },
-    offerLabel: "٤ بيجامات شتوية",
-    items: [model("bm-winter-pajama-001")],
-    offerPrice: 1100,
+    offer: { label: "٤ بيجامات شتوية", price: 1100, items: [{ name: "بيجاما بطبعة دب", category: "winter-pajamas" }] },
+    items: [],
+    subtotal: 1100,
     shipping: 30,
     total: 1130,
   });
@@ -137,7 +137,7 @@ test("WhatsApp text names pajama styles without technical ids or false size sele
   assert.match(message, /بيجاما بطبعة دب/);
   assert.match(message, /One Size – مقاس واحد/);
   assert.doesNotMatch(message, /bm-winter-pajama-001|1000505866|كود الموديل|الوزن الإرشادي/);
-  assert.match(message, /سعر العرض: 1100 جنيه/);
+  assert.match(message, /عرض الشتاء: ٤ بيجامات شتوية — 1100 جنيه/);
   assert.match(message, /الشحن التقديري \(الأسعار الحالية مبدئية وقابلة للتعديل\): 30 جنيه/);
   assert.match(message, /الإجمالي التقديري \(وفق سعر الشحن المبدئي\): 1130 جنيه/);
 });
@@ -155,9 +155,9 @@ test("WhatsApp text stays sendable when no shipping fee exists and does not inve
       address: "عنوان اختبار",
       notes: "",
     },
-    offerLabel: "٤ بيجامات شتوية",
-    items: [model("bm-winter-pajama-001")],
-    offerPrice: 1100,
+    offer: { label: "٤ بيجامات شتوية", price: 1100, items: [{ name: "بيجاما بطبعة دب", category: "winter-pajamas" }] },
+    items: [],
+    subtotal: 1100,
     shipping: null,
     total: null,
   });
@@ -166,4 +166,31 @@ test("WhatsApp text stays sendable when no shipping fee exists and does not inve
   assert.match(message, /تكلفة الشحن تحتاج إلى تأكيد لاحقًا/);
   assert.match(message, /الإجمالي النهائي غير متاح حتى تأكيد الشحن/);
   assert.doesNotMatch(message, /الإجمالي التقديري: 1100 جنيه/);
+});
+
+test("WhatsApp text lists single pieces with quantity and line totals next to the offer", () => {
+  const message = buildWhatsAppOrderText({
+    reference: "BM-TEST",
+    createdAt: "2026-10-31T10:20:00.000Z",
+    customer: {
+      name: "اسم اختبار",
+      phone: "01000000000",
+      alternatePhone: "",
+      governorate: "القاهرة",
+      area: "المطرية",
+      address: "عنوان اختبار",
+      notes: "",
+    },
+    offer: null,
+    items: [{ name: "عباية قطيفة كحلي بتطريز ورد كريمي", quantity: 2, unitPrice: 350 }],
+    subtotal: 700,
+    shipping: 30,
+    total: 730,
+  });
+
+  assert.doesNotMatch(message, /عرض الشتاء/);
+  assert.match(message, /قطع منفردة:/);
+  assert.match(message, /عباية قطيفة كحلي بتطريز ورد كريمي × 2 — 700 جنيه/);
+  assert.match(message, /المجموع قبل الشحن: 700 جنيه/);
+  assert.match(message, /730 جنيه/);
 });
