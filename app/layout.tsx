@@ -1,28 +1,42 @@
-import type { Metadata } from "next";
-import { Cormorant_Garamond, Noto_Naskh_Arabic } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Cairo, El_Messiri, Great_Vibes, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
-const arabicFont = Noto_Naskh_Arabic({
-  variable: "--font-arabic",
-  subsets: ["arabic"],
-  weight: ["400", "500", "600", "700"],
+const cairo = Cairo({
+  variable: "--font-cairo",
+  subsets: ["arabic", "latin"],
 });
 
-const displayFont = Cormorant_Garamond({
-  variable: "--font-display",
+const messiri = El_Messiri({
+  variable: "--font-messiri",
+  subsets: ["arabic", "latin"],
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+});
+
+const greatVibes = Great_Vibes({
+  variable: "--font-script",
+  subsets: ["latin"],
+  weight: "400",
 });
 
 export const metadata: Metadata = {
-  title: "Blue Mood | Fashion & More",
-  description: "Premium Arabic fashion storefront for Blue Mood with winter collections, offers and product details.",
+  title: "Blue Mood | عبايات، أرواب، بيجامات وبلانكيت",
+  description: "Blue Mood — عبايات قطيفة، أرواب فرو، بيجامات شتوي وبلانكيت. عرض الشتاء ٤ قطع بـ ١١٠٠ جنيه والطلب بيتأكد على واتساب.",
+  icons: { icon: "/images/blue-mood-logo-badge.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#fbf6f1",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ar" dir="rtl" className={`${arabicFont.variable} ${displayFont.variable} h-full antialiased`}>
-      <body className="min-h-full bg-[#f8f3ed] text-[#13233f]">{children}</body>
+    <html lang="ar" dir="rtl" className={`${cairo.variable} ${messiri.variable} ${playfair.variable} ${greatVibes.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }

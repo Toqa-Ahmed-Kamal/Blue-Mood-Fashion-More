@@ -1,379 +1,111 @@
-export type Category = {
-  label: string;
-  description: string;
-  image: string;
-  slug: string;
-};
+export type CatalogCategory = "abayas" | "robes" | "winter-pajamas" | "wearable-blankets";
 
-export type Offer = {
+export type CatalogProduct = {
+  /** Stable internal identifier used in orders; never shown to customers. */
   id: string;
-  title: string;
-  subtitle: string;
-  price: number;
-  description: string;
-  cta: string;
-  accent: string;
-};
-
-export type Product = {
-  slug: string;
   name: string;
-  category: string;
-  price: number;
-  originalPrice?: number;
-  badge?: string;
-  image: string;
-  gallery: string[];
-  colors: string[];
-  sizes: string[];
-  description: string;
-  stock?: number | null;
-  featured?: boolean;
-};
-
-export const announcementItems = [
-  "عروض الموسم",
-  "شحن لجميع المحافظات",
-  "اكتشفي أحدث الموديلات",
-];
-
-export const navItems = [
-  "الرئيسية",
-  "المنتجات",
-  "العروض",
-  "البلانكيت",
-  "اتصل بنا",
-];
-
-export const categories: Category[] = [
-  {
-    label: "بيجامات شتوي حريمي",
-    description: "راحة ودفء بأقمشة ناعمة",
-    image:
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-    slug: "winter-pajamas",
-  },
-  {
-    label: "ملابس حريمي",
-    description: "إطلالات أنيقة لكل يوم",
-    image:
-      "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80",
-    slug: "women-fashion",
-  },
-  {
-    label: "روب شتوي",
-    description: "استرخاء فخم في المنزل",
-    image:
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80",
-    slug: "robes",
-  },
-  {
-    label: "بلانكيت وبطاطين",
-    description: "دفء بألوان مميزة",
-    image:
-      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80",
-    slug: "blankets",
-  },
-  {
-    label: "ملابس أطفال",
-    description: "راحة ومرح لكل أفراد العائلة",
-    image:
-      "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&w=900&q=80",
-    slug: "kids",
-  },
-  {
-    label: "العروض والباقات",
-    description: "تخفيضات موسمية مختارة",
-    image:
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
-    slug: "offers",
-  },
-];
-
-export const offers: Offer[] = [
-  {
-    id: "bundle-1",
-    title: "عرض واحد يكفي",
-    subtitle: "تكملي جهازك أو جددي دولابك",
-    price: 1100,
-    description: "أربعة بيجامات شتوية بسعر 1100 ج.م فقط لمدة 3 أيام.",
-    cta: "اشتري العرض",
-    accent: "#d9b99b",
-  },
-  {
-    id: "bundle-2",
-    title: "باقة الدفء",
-    subtitle: "3 بيجامات + بطانية",
-    price: 1100,
-    description: "اختر مجموعة مريحة للمنزل والليل بلمسة عصرية.",
-    cta: "اعرف التفاصيل",
-    accent: "#8ba8bf",
-  },
-  {
-    id: "bundle-3",
-    title: "اكتملي العائلة",
-    subtitle: "ملابس أطفال + بطانيات",
-    price: 890,
-    description: "عروض مناسبة للمنزل والرحلات الشتوية المنزلية.",
-    cta: "شاهد الباقة",
-    accent: "#b58a90",
-  },
-];
-
-export const products: Product[] = [
-  {
-    slug: "pyjama-moss",
-    name: "بيجاما موس",
-    category: "winter-pajamas",
-    price: 390,
-    originalPrice: 520,
-    badge: "جديد",
-    image:
-      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80",
-    ],
-    colors: ["#d7c7b3", "#8aa9be", "#3a4868"],
-    sizes: ["S", "M", "L", "XL"],
-    description: "قماش ناعم وخفيف مع لمسة دافئة مناسبة للشتاء المنزلي.",
-    stock: 15,
-    featured: true,
-  },
-  {
-    slug: "soft-robe-rose",
-    name: "روب روز كاكي",
-    category: "robes",
-    price: 540,
-    originalPrice: 690,
-    badge: "عرض خاص",
-    image:
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80",
-    ],
-    colors: ["#d6b7a5", "#7e5d53", "#d1d7dc"],
-    sizes: ["S", "M", "L", "XL"],
-    description: "روب شتوي فاخر مع خياطة أنيقة وراحة لا تضاهى طوال اليوم.",
-    stock: 8,
-  },
-  {
-    slug: "mauve-blanket",
-    name: "بطانية ميوفي",
-    category: "blankets",
-    price: 620,
-    originalPrice: 780,
-    badge: "الأكثر مبيعاً",
-    image:
-      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80",
-    ],
-    colors: ["#b38bb7", "#7b3d45", "#d0b18c"],
-    sizes: ["مقاس مزدوج", "مقاس أسرة"],
-    description: "بطانية مريحة بالألياف الناعمة مع ألوان شتوية أنثوية متوازنة.",
-    stock: null,
-  },
-  {
-    slug: "winter-set-navy",
-    name: "طقم شتوي نافي",
-    category: "winter-pajamas",
-    price: 470,
-    originalPrice: 610,
-    badge: "جديد",
-    image:
-      "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80",
-    ],
-    colors: ["#2f405d", "#d8c9bb", "#7f5f5f"],
-    sizes: ["S", "M", "L"],
-    description: "طقم فاخر لليالي الدافئة مع تفاصيل ناعمة وملمس عطرية.",
-    stock: 12,
-  },
-  {
-    slug: "kids-cozy-set",
-    name: "طقم أطفال كوزي",
-    category: "kids",
-    price: 320,
-    originalPrice: 420,
-    badge: "مميز",
-    image:
-      "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&w=900&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80",
-    ],
-    colors: ["#8db3b9", "#d9b8ad", "#5a698c"],
-    sizes: ["2-3Y", "4-5Y", "6-7Y"],
-    description: "مزيج مريح وملابس يومية مريحة لأطفالك خلال فصل الشتاء.",
-    stock: 20,
-  },
-  {
-    slug: "linen-day-dress",
-    name: "فستان لينر داي",
-    category: "women-fashion",
-    price: 460,
-    originalPrice: 560,
-    badge: "حصري",
-    image:
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
-    ],
-    colors: ["#d7c2b5", "#7788a9", "#706a66"],
-    sizes: ["S", "M", "L"],
-    description: "إطلالة أنيقة وعملية تناسب اليوم المنزلي والسهرات الرقيقة.",
-    stock: 9,
-  },
-  {
-    slug: "camel-throw",
-    name: "بطانية كاميل",
-    category: "blankets",
-    price: 580,
-    originalPrice: 680,
-    badge: "شتوية",
-    image:
-      "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
-    ],
-    colors: ["#c9a77f", "#8b6d5f", "#b6af9b"],
-    sizes: ["مقاس صغير", "مقاس كبير"],
-    description: "بطانية ناعمة ومستديرة بألوان هادئة لجو دافئ ومنزلي.",
-    stock: null,
-  },
-  {
-    slug: "rose-knit-robe",
-    name: "روب كنيت روز",
-    category: "robes",
-    price: 510,
-    originalPrice: 650,
-    badge: "مقترح",
-    image:
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
-    gallery: [
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80",
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=900&q=80",
-    ],
-    colors: ["#d9a8a0", "#b18d83", "#e7dfd8"],
-    sizes: ["S", "M", "L"],
-    description: "روب مطرز بنقش ناعم يضيف نضارة وأناقة لوضعية الاسترخاء.",
-    stock: 11,
-  },
-];
-
-export const benefits = [
-  "خامات مريحة",
-  "موديلات متنوعة",
-  "اختيارات تناسب العائلة",
-  "سهولة الطلب عبر واتساب",
-];
-
-export const testimonials = [
-  {
-    name: "سارة م.",
-    quote: "الألوان والراحة فاقت توقعاتي، والخدمة ممتازة وسريعة جدًا.",
-  },
-  {
-    name: "نورا ع.",
-    quote: "البيجامات شتوية مريحة جدًا، والبطانيات تضيف دفئًا رائعًا في المنزل.",
-  },
-  {
-    name: "مها س.",
-    quote: "أحببت الجودة والأناقة، خاصة في الروب الشتوي والملابس العائلية.",
-  },
-];
-
-// Verified, image-led content used by the landing page. Keep this separate from
-// the legacy product detail data until those details can be confirmed.
-export type WinterLook = {
-  /** Stable internal identifier for offer selection; never shown to customers. */
-  id: string;
-  slug: string;
-  name: string;
-  category: "winter-pajamas" | "wearable-blankets";
+  category: CatalogCategory;
   image: string;
   imageAlt: string;
+  /** Overrides the category price for this one product. */
+  price?: number;
+  /** Hidden products stay orderable by ID for old orders but are not shown in the store. */
+  hidden?: boolean;
 };
 
-export const landingCategories = [
-  { slug: "all", label: "كل القطع" },
-  { slug: "winter-pajamas", label: "بيجامات شتوية" },
-  { slug: "wearable-blankets", label: "بلانكيت شتوي قابل للارتداء" },
-] as const;
+/**
+ * Single-piece prices in EGP — edit here.
+ * A product's own `price` wins over its category price; null means offer-only.
+ */
+export const categoryPrices: Record<CatalogCategory, number | null> = {
+  abayas: 350,
+  robes: 250,
+  "winter-pajamas": 275,
+  "wearable-blankets": 250,
+};
 
-export const winterLooks: WinterLook[] = [
-  {
-    id: "bm-winter-blanket-001",
-    slug: "black-hooded-wearable-blanket",
-    name: "بلانكيت شتوي بغطاء للرأس",
-    category: "wearable-blankets",
-    image: "/images/black-hooded-wearable-blanket.jpg",
-    imageAlt: "عارضة ترتدي بلانكيت شتوياً أسود بغطاء للرأس",
-  },
-  {
-    id: "bm-winter-pajama-001",
-    slug: "pink-gray-bear-print-pajama-set",
-    name: "بيجاما بطبعة دب",
-    category: "winter-pajamas",
-    image: "/images/pink-gray-bear-print-pajama-set.jpg",
-    imageAlt: "بيجاما بطبعة دب، بلوزة وردية وبنطال رمادي",
-  },
-  {
-    id: "bm-winter-pajama-002",
-    slug: "brown-cow-print-pajamas",
-    name: "بيجاما بطبعة بقرة",
-    category: "winter-pajamas",
-    image: "/images/brown-cow-print-pajamas.jpg",
-    imageAlt: "بيجاما بلوزتها بنية وبنطالها بطبعة بقرة",
-  },
-  {
-    id: "bm-winter-pajama-003",
-    slug: "cream-bear-print-pajamas",
-    name: "بيجاما بطبعة دب باللون الكريمي",
-    category: "winter-pajamas",
-    image: "/images/cream-bear-print-pajamas.jpg",
-    imageAlt: "عارضة ترتدي بيجاما كريمية بطبعة دب",
-  },
-  {
-    id: "bm-winter-pajama-004",
-    slug: "gray-bow-print-pajama-set",
-    name: "بيجاما رمادية بطبعة فيونكات",
-    category: "winter-pajamas",
-    image: "/images/gray-bow-print-pajama-set.jpg",
-    imageAlt: "بيجاما رمادية بطبعة فيونكات صغيرة",
-  },
-  {
-    id: "bm-winter-pajama-005",
-    slug: "pink-bow-print-pajama-set",
-    name: "بيجاما وردية بطبعة فيونكات",
-    category: "winter-pajamas",
-    image: "/images/pink-bow-print-pajama-set.jpg",
-    imageAlt: "عارضتان ترتديان بيجاما وردية بطبعة فيونكات",
-  },
-  {
-    id: "bm-winter-pajama-006",
-    slug: "blue-koala-print-pajama-set",
-    name: "بيجاما زرقاء بطبعة كوالا",
-    category: "winter-pajamas",
-    image: "/images/blue-koala-print-pajama-set.jpg",
-    imageAlt: "بيجاما زرقاء بطبعة كوالا",
-  },
+/** Categories that can also be picked inside the winter offer. */
+export const offerCategories: CatalogCategory[] = ["winter-pajamas", "wearable-blankets"];
+
+export const categoryInfo: Record<CatalogCategory, { label: string; singular: string; anchor: string; tagline: string }> = {
+  abayas: { label: "عبايات", singular: "عباية", anchor: "abayas", tagline: "قطيفة بتطريز راقي لكل يوم" },
+  robes: { label: "أرواب", singular: "روب", anchor: "robes", tagline: "فرو ناعم ودافي بغطاء رأس" },
+  "winter-pajamas": { label: "بيجامات", singular: "بيجاما", anchor: "pajamas", tagline: "فليس وفرو ناعم · لوحدها أو ضمن عرض الشتاء" },
+  "wearable-blankets": { label: "بلانكيت", singular: "بلانكيت", anchor: "blankets", tagline: "بلانكيت يُلبس · لوحده أو ضمن عرض الشتاء" },
+};
+
+export const categoryOrder: CatalogCategory[] = ["abayas", "robes", "winter-pajamas", "wearable-blankets"];
+
+export const catalog: CatalogProduct[] = [
+  // ── عبايات ──
+  { id: "bm-abaya-001", name: "عباية قطيفة سوداء بتطريز ورد أبيض", category: "abayas", image: "/images/abayas/1000507623.jpg", imageAlt: "عباية سوداء طويلة بتطريز ورود بيضاء وبيج على الصدر وشريط مطرز في المنتصف" },
+  { id: "bm-abaya-002", name: "عباية قطيفة بترولي بتطريز هندسي", category: "abayas", image: "/images/abayas/1000507624.jpg", imageAlt: "عباية زرقاء بترولي بتطريز هندسي على الصدر وشريطين مطرزين بطول العباية" },
+  { id: "bm-abaya-003", name: "عباية قطيفة زرقاء ملكي بتطريز أبيض", category: "abayas", image: "/images/abayas/1000507625.jpg", imageAlt: "عباية زرقاء ملكي بتطريز أبيض وبيج على الرقبة وشريطين مطرزين على الجانبين" },
+  { id: "bm-abaya-004", name: "عباية قطيفة زرقاء بتطريز ورد على الذيل", category: "abayas", image: "/images/abayas/1000507626.jpg", imageAlt: "عباية زرقاء ملكي بصدرية مطرزة وتطريز نباتي على الطرف السفلي" },
+  { id: "bm-abaya-005", name: "عباية قطيفة خضراء غامقة بتطريز بيج", category: "abayas", image: "/images/abayas/1000507627.jpg", imageAlt: "عباية خضراء غامقة بتطريز أبيض وبيج على الصدر وشريط مطرز في المنتصف" },
+  { id: "bm-abaya-006", name: "عباية بمبي بتطريز بني", category: "abayas", image: "/images/abayas/1000507628.jpg", imageAlt: "عباية وردي بتطريز بني وأبيض على الصدر وشريط مطرز بطول العباية" },
+  { id: "bm-abaya-007", name: "عباية قطيفة بني بتطريز دوائر", category: "abayas", image: "/images/abayas/1000507629.jpg", imageAlt: "عباية بني غامق بتطريز دوائر بيضاء وبيج على الرقبة والذيل" },
+  { id: "bm-abaya-008", name: "عباية قطيفة زيتي بتطريز ذهبي", category: "abayas", image: "/images/abayas/1000507630.jpg", imageAlt: "عباية قطيفة خضراء زيتي بتطريز كريمي ذهبي على الصدر والأكمام" },
+  { id: "bm-abaya-009", name: "عباية قطيفة بترولي بتطريز دوائر", category: "abayas", image: "/images/abayas/1000507811.jpg", imageAlt: "عباية بترولي واسعة بتطريز دوائر وزخارف بيج وأبيض", hidden: true },
+  { id: "bm-abaya-010", name: "عباية قطيفة بمبي بتطريز رمادي", category: "abayas", image: "/images/abayas/1000507814.jpg", imageAlt: "عباية قطيفة وردي فاتح بأكمام منفوخة وتطريز رمادي على الصدر" },
+  { id: "bm-abaya-011", name: "عباية قطيفة كحلي بتطريز ذهبي وحزام", category: "abayas", image: "/images/abayas/1000507817.jpg", imageAlt: "عباية قطيفة كحلي بتطريز ذهبي على الصدر والأطراف وحزام مضفور بشراشيب" },
+  { id: "bm-abaya-012", name: "عباية قطيفة كحلي بتطريز ورد كريمي", category: "abayas", image: "/images/abayas/1000507820.jpg", imageAlt: "عباية قطيفة كحلي بتطريز ورود كريمي على الصدر والأكمام" },
+  { id: "bm-abaya-013", name: "عباية قطيفة سوداء بتطريز ذهبي", category: "abayas", image: "/images/abayas/1000507822.jpg", imageAlt: "عباية قطيفة سوداء بتطريز ذهبي على الصدر والأكمام وزخارف على الجانبين" },
+  { id: "bm-abaya-014", name: "عباية قطيفة خضراء زمردي بتطريز ذهبي", category: "abayas", image: "/images/abayas/1000507824.jpg", imageAlt: "عباية قطيفة خضراء غامقة بتطريز ذهبي على الصدر والأكمام", hidden: true },
+  { id: "bm-abaya-015", name: "عباية قطيفة سوداء بتطريز ذهبي وفضي", category: "abayas", image: "/images/abayas/1000507828.jpg", imageAlt: "عباية قطيفة سوداء واسعة بتطريز ذهبي وفضي كثيف على الصدر والأكمام" },
+  { id: "bm-abaya-016", name: "عباية قطيفة بتطريز هندسي (بترولي / بني)", category: "abayas", image: "/images/abayas/1000507829.jpg", imageAlt: "عباية قطيفة بتطريز هندسي أبيض بلونين بترولي وبني", hidden: true },
+
+  // ── أرواب ──
+  { id: "bm-robe-001", name: "روب فرو مورد فوشيا بغطاء رأس", category: "robes", image: "/images/robe/floral-fuchsia-robe.jpg", imageAlt: "روب فرو طويل بغطاء رأس بطبعة ورود وردية ونبيتي كبيرة وحزام" },
+  { id: "bm-robe-002", name: "روب فرو سماوي بورد أبيض", category: "robes", image: "/images/robe/floral-sky-robe.jpg", imageAlt: "روب فرو طويل أزرق سماوي بغطاء رأس مطبوع عليه زهور بيضاء كبيرة" },
+  { id: "bm-robe-003", name: "روب فرو بطبعة نمر", category: "robes", image: "/images/robe/1000508109.png", imageAlt: "روب فرو طويل بطبعة جلد النمر بغطاء رأس وحزام مربوط وجيوب أمامية" },
+  { id: "bm-robe-004", name: "روب سماوي منقط بنفسجي", category: "robes", image: "/images/robe/1000508110.png", imageAlt: "روب طويل أزرق بغطاء رأس مطبوع عليه بقع بنفسجية مع حزام وجيبين" },
+  { id: "bm-robe-005", name: "روب فرو تركواز بطبعة دباديب", category: "robes", image: "/images/robe/1000508107.jpg", imageAlt: "روب فرو طويل تركواز بغطاء رأس وحزام مطبوع عليه دباديب", hidden: true },
+
+  // ── بيجامات ──
+  { id: "bm-winter-pajama-001", name: "بيجاما بطبعة دب", category: "winter-pajamas", image: "/images/bejama/pink-gray-bear-print-pajama-set.jpg", imageAlt: "تيشيرت وردي عليه رسمة دب رمادي وبنطلون رمادي بطبعة دببة بيضاء" },
+  { id: "bm-winter-pajama-002", name: "بيجاما بطبعة بقرة", category: "winter-pajamas", image: "/images/bejama/brown-cow-print-pajamas.jpg", imageAlt: "تيشيرت بني بجيب مطبوع وبنطلون أبيض بطبعة بقرة" },
+  { id: "bm-winter-pajama-003", name: "بيجاما كريمي بطبعة دب", category: "winter-pajamas", image: "/images/bejama/cream-bear-print-pajamas.jpg", imageAlt: "بيجاما كريمية عليها رسمة دبدوب وبالونات وبنطلون مقلم بورود صغيرة" },
+  { id: "bm-winter-pajama-004", name: "بيجاما رمادي بطبعة قطط وفيونكات", category: "winter-pajamas", image: "/images/bejama/gray-bow-print-pajama-set.jpg", imageAlt: "تيشيرت رمادي عليه قطتين سوداوين وبنطلون واسع مطبوع عليه فيونكات سوداء" },
+  { id: "bm-winter-pajama-005", name: "بيجاما وردية بطبعة فيونكات", category: "winter-pajamas", image: "/images/bejama/pink-bow-print-pajama-set.jpg", imageAlt: "بيجاما فليس وردية، تيشيرت بجيب عليه فيونكة وبنطلون مطبوع عليه فيونكات فوشيا" },
+  { id: "bm-winter-pajama-006", name: "بيجاما زرقاء بطبعة كوالا", category: "winter-pajamas", image: "/images/bejama/blue-koala-print-pajama-set.jpg", imageAlt: "بيجاما زرقاء رمادية، التيشيرت عليه رسمة كوالا والبنطلون مطبوع عليه وجوه كوالا" },
+  { id: "bm-winter-pajama-007", name: "بيجاما رمادي فيونكات بفيونكة على الصدر", category: "winter-pajamas", image: "/images/bejama/1000508030.jpg", imageAlt: "بيجاما رمادية مطبوع عليها فيونكات سوداء صغيرة برقبة V وفيونكة سوداء على الصدر" },
+  { id: "bm-winter-pajama-008", name: "بيجاما فرو وردي بفيونكة نبيتي", category: "winter-pajamas", image: "/images/bejama/1000507687.jpg", imageAlt: "بلوفر فرو وردي بكابشون وفيونكة نبيتي كبيرة وبنطلون نبيتي باستك عند الكاحل" },
+  { id: "bm-winter-pajama-009", name: "بيجاما فرو أبيض بفيونكة زرقاء", category: "winter-pajamas", image: "/images/bejama/1000507702.jpg", imageAlt: "بلوفر فرو أبيض بفيونكة زرقاء كبيرة وبنطلون قطيفة مضلع أزرق", hidden: true },
+  { id: "bm-winter-pajama-010", name: "بيجاما مضلعة سمايل", category: "winter-pajamas", image: "/images/bejama/1000508032.jpg", imageAlt: "بيجاما مضلعة باللون الأخضر النعناعي، التيشيرت عليه وجه ضاحك مطرز" },
+  { id: "bm-winter-pajama-011", name: "طقم بيتي مضلع كاميل بسوستة", category: "winter-pajamas", image: "/images/bejama/1000507695.jpg", imageAlt: "طقم قطيفة مضلع بلون الكاميل، بلوزة برقبة عالية وسوستة وبنطلون واسع" },
+  { id: "bm-winter-pajama-012", name: "بيجاما فليس زرقاء بطبعة ورود", category: "winter-pajamas", image: "/images/bejama/1000508651.jpg", imageAlt: "بيجاما فليس زرقاء، التيشيرت بجيب والبنطلون مطبوع عليه ورود صغيرة" },
+  { id: "bm-winter-pajama-013", name: "بيجاما فليس موف بطبعة ورود", category: "winter-pajamas", image: "/images/bejama/1000508653.jpg", imageAlt: "بيجاما فليس موف، التيشيرت بجيب والبنطلون الواسع مطبوع عليه ورود" },
+  { id: "bm-winter-pajama-014", name: "بيجاما قطيفة حمراء بحواف بيضاء", category: "winter-pajamas", image: "/images/abayas/1000507835.jpg", imageAlt: "بيجاما قطيفة حمراء بقميص بزراير وحواف بيضاء", hidden: true },
+  { id: "bm-winter-pajama-015", name: "بيجاما فرو كريمي بفيونكة وردي", category: "winter-pajamas", image: "/images/bejama/1000507690.jpg", imageAlt: "عبوة بيجاما عليها بلوفر فرو كريمي بفيونكة وردية وبنطلون فرو وردي", hidden: true },
+  { id: "bm-winter-pajama-016", name: "طقم فرو بكابشون", category: "winter-pajamas", image: "/images/bejama/1000508037.jpg", imageAlt: "عبوة طقم فرو بكابشون وبنطلون من نفس الخامة", hidden: true },
+  { id: "bm-winter-pajama-017", name: "بيجاما بيضاء بطبعة قطط وقلوب", category: "winter-pajamas", image: "/images/bejama/1000508040.jpg", imageAlt: "عبوة بيجاما بيضاء برقبة دانتيل مطبوع عليها قطط وقلوب", hidden: true },
+  { id: "bm-winter-pajama-018", name: "بيجاما بنفسجي ببنطلون مطبوع ورق شجر", category: "winter-pajamas", image: "/images/abayas/1000507713.jpg", imageAlt: "عبوة بيجاما بنفسجي ببنطلون مطبوع ورق شجر", hidden: true },
+
+  // ── بلانكيت ──
+  { id: "bm-winter-blanket-001", name: "بلانكيت أسود بغطاء للرأس", category: "wearable-blankets", image: "/images/bejama/black-hooded-blanket-cropped.jpg", imageAlt: "بلانكيت فرو أسود واسع بغطاء للرأس يُلبس فوق الملابس", price: 350 },
+  { id: "bm-winter-blanket-002", name: "بلانكيت هودي بقلوب وودان أرنب", category: "wearable-blankets", image: "/images/bejama/1000507693.jpg", imageAlt: "هودي بطانية واسع من الفرو مطبوع عليه قلوب بيضاء وبكابشون بودان أرنب" },
 ];
+
+export const visibleCatalog = catalog.filter((product) => !product.hidden);
+
+export function findProduct(id: string) {
+  return catalog.find((product) => product.id === id);
+}
+
+export function priceOf(product: CatalogProduct) {
+  return product.price ?? categoryPrices[product.category];
+}
+
+/** Lowest single-piece price among the visible products of a category. */
+export function startingPriceOf(category: CatalogCategory) {
+  const prices = productsIn(category).map(priceOf).filter((price): price is number => price !== null);
+  return prices.length > 0 ? Math.min(...prices) : null;
+}
+
+export function productsIn(category: CatalogCategory) {
+  return visibleCatalog.filter((product) => product.category === category);
+}
 
 export const landingPromotion = {
   price: 1100,
@@ -382,13 +114,15 @@ export const landingPromotion = {
   options: [
     {
       id: "four-pajamas",
-      label: "اختاري ٤ قطع بيجامات شتوية",
+      label: "٤ بيجامات شتوية",
+      description: "اختاري ٤ موديلات مختلفة من البيجامات",
       pajamaCount: 4,
       wearableBlanketCount: 0,
     },
     {
       id: "three-pajamas-and-blanket",
-      label: "اختاري ٣ قطع بيجامات شتوية + قطعة بلانكيت شتوية قابلة للارتداء",
+      label: "٣ بيجامات + بلانكيت",
+      description: "٣ بيجامات شتوية + بلانكيت يُلبس",
       pajamaCount: 3,
       wearableBlanketCount: 1,
     },
@@ -396,3 +130,7 @@ export const landingPromotion = {
 };
 
 export type LandingPromotionOptionId = (typeof landingPromotion.options)[number]["id"];
+
+export function findOffer(id: string) {
+  return landingPromotion.options.find((option) => option.id === id);
+}

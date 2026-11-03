@@ -2,244 +2,158 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ArrowDown, ArrowLeft, Menu, Search, X } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Clock, MessageCircle, ShoppingBag, Truck } from "lucide-react";
+
+import { ProductCard, QuickView } from "@/components/product-card";
+import { AnnouncementBar, CartBar, SiteFooter, SiteHeader } from "@/components/store-chrome";
+import { formatEGP } from "@/lib/format";
 import {
-  landingCategories,
+  categoryInfo,
+  categoryOrder,
+  findProduct,
   landingPromotion,
-  navItems,
-  winterLooks,
+  offerCategories,
+  productsIn,
+  startingPriceOf,
+  type CatalogCategory,
+  type CatalogProduct,
 } from "@/lib/site-data";
 
-const navigation = [
-  { label: navItems[0], href: "#home" },
-  { label: navItems[1], href: "#collections" },
-  { label: navItems[2], href: "#offers" },
-  { label: navItems[3], href: "#collections" },
-  { label: navItems[4], href: "#contact" },
-];
+const heroImages = ["bm-robe-002", "bm-abaya-012", "bm-winter-pajama-005"]
+  .map(findProduct)
+  .filter((product): product is CatalogProduct => product !== undefined);
+
+const categoryCovers: Record<CatalogCategory, string> = {
+  abayas: "bm-abaya-010",
+  robes: "bm-robe-001",
+  "winter-pajamas": "bm-winter-pajama-008",
+  "wearable-blankets": "bm-winter-blanket-001",
+};
 
 export function BlueMoodHome() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [sortBy, setSortBy] = useState("display");
-
-  const filteredLooks = useMemo(() => {
-    const query = searchTerm.trim().toLocaleLowerCase();
-    const matching = winterLooks.filter((look) => {
-      const matchesCategory = selectedCategory === "all" || look.category === selectedCategory;
-      const matchesSearch = `${look.name} ${look.imageAlt}`.toLocaleLowerCase().includes(query);
-      return matchesCategory && matchesSearch;
-    });
-
-    return sortBy === "alphabetical"
-      ? [...matching].sort((a, b) => a.name.localeCompare(b.name, "ar"))
-      : matching;
-  }, [searchTerm, selectedCategory, sortBy]);
+  const [quickView, setQuickView] = useState<CatalogProduct | null>(null);
 
   return (
-    <div className="storefront" dir="rtl">
-      <header className="site-header">
-        <div className="header-inner">
-          <button
-            type="button"
-            className="icon-button menu-toggle"
-            onClick={() => setMobileMenuOpen((open) => !open)}
-            aria-label={mobileMenuOpen ? "إغلاق القائمة" : "فتح القائمة"}
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-
-          <Link href="#home" className="brand" aria-label="Blue Mood — الرئيسية">
-            <Image
-              src="/images/blue-mood-logo.png"
-              alt="شعار Blue Mood Fashion & More"
-              width={84}
-              height={84}
-              priority
-              className="brand-logo"
-            />
-          </Link>
-
-          <nav className="desktop-nav" aria-label="التنقل الرئيسي">
-            {navigation.map((item) => (
-              <a
-                href={item.href}
-                key={item.label}
-                onClick={() => setSelectedCategory(item.label === navItems[3] ? "wearable-blankets" : "all")}
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-
-          <label className="header-search">
-            <Search size={17} aria-hidden="true" />
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="ابحثي في القطع"
-              aria-label="ابحثي في القطع"
-            />
-          </label>
-        </div>
-
-        {mobileMenuOpen && (
-          <nav className="mobile-nav" aria-label="التنقل على الهاتف">
-            {navigation.map((item) => (
-              <a
-                href={item.href}
-                key={item.label}
-                onClick={() => {
-                  setSelectedCategory(item.label === navItems[3] ? "wearable-blankets" : "all");
-                  setMobileMenuOpen(false);
-                }}
-              >
-                {item.label}
-              </a>
-            ))}
-            <label className="mobile-search">
-              <Search size={17} aria-hidden="true" />
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="ابحثي في القطع"
-                aria-label="ابحثي في القطع"
-              />
-            </label>
-          </nav>
-        )}
-      </header>
+    <div className="store" dir="rtl">
+      <AnnouncementBar />
+      <SiteHeader />
 
       <main>
-        <section className="hero-section page-width" id="home">
-          <div className="hero-copy">
-            <span className="eyebrow"><span className="eyebrow-dot" /> Blue Mood · Fashion & More</span>
-            <h1>شتاءٌ دافئ،<br /><em>بلمستكِ الخاصة</em></h1>
-            <p>اكتشفي قطع الشتاء من Blue Mood — بيجامات مريحة وبلانكيت شتوي قابل للارتداء.</p>
-            <a className="primary-link" href="#collections">تصفحي القطع <ArrowLeft size={17} /></a>
-            <a className="text-link" href="#offers">شاهدي العرض <ArrowDown size={15} /></a>
-          </div>
-          <div className="hero-gallery" aria-label="صور من مجموعة ملابس الشتاء">
-            <div className="hero-image hero-image-main">
-              <Image src="/images/pink-bow-print-pajama-set.jpg" alt="بيجاما وردية بطبعة فيونكات" fill priority sizes="(max-width: 760px) 65vw, 34vw" />
+        <section className="hero">
+          <div className="container hero-grid">
+            <div className="hero-copy">
+              <Image src="/images/blue-mood-logo-badge.png" alt="شعار Blue Mood" width={168} height={168} className="hero-badge" preload />
+              <span className="eyebrow">كولكشن شتا ٢٠٢٦</span>
+              <h1>دفا الشتا<br /><span className="hl">بلمسة رقيقة</span></h1>
+              <p>عبايات قطيفة، أرواب فرو، بيجامات وبلانكيت. اختاري اللي يعجبك واطلبي في دقيقة، والتأكيد على واتساب.</p>
+              <div className="hero-actions">
+                <Link href="/#offer" className="btn btn-pink btn-lg">عرض الشتاء بـ {landingPromotion.price} <ArrowLeft size={18} /></Link>
+                <Link href="/#abayas" className="btn btn-outline btn-lg">تسوقي الكولكشن</Link>
+              </div>
+              <ul className="hero-perks">
+                <li><Truck size={17} /> شحن لكل مناطق القاهرة</li>
+                <li><MessageCircle size={17} /> تأكيد سريع على واتساب</li>
+              </ul>
             </div>
-            <div className="hero-image hero-image-top">
-              <Image src="/images/black-hooded-wearable-blanket.jpg" alt="بلانكيت شتوي أسود بغطاء للرأس، يُرتدى كقطعة ملابس" fill sizes="(max-width: 760px) 36vw, 20vw" />
+            <div className="hero-arches" aria-hidden="true">
+              {heroImages.map((product, index) => (
+                <div className={`arch arch-${index + 1}`} key={product.id}>
+                  <Image src={product.image} alt="" fill preload={index === 1} sizes="(max-width: 900px) 33vw, 18vw" />
+                </div>
+              ))}
             </div>
-            <div className="hero-image hero-image-bottom">
-              <Image src="/images/blue-koala-print-pajama-set.jpg" alt="بيجاما زرقاء بطبعة كوالا" fill sizes="(max-width: 760px) 36vw, 20vw" />
-            </div>
-            <span className="gallery-caption">تفاصيل صغيرة، ودفء يرافقكِ</span>
           </div>
         </section>
 
-        <section className="offer-section page-width" id="offers">
-          <div className="section-heading">
-            <span className="eyebrow">لفترة محدودة</span>
-            <h2>عرض الشتاء</h2>
-            <p>اختاري إحدى طريقتي العرض، بالسعر والمدة الموضحين.</p>
-          </div>
-          <div className="offer-art-frame">
-            <Image
-              src="/images/شتوية دافئة بلمسة وردية.png"
-              alt="عرض Blue Mood: أربعة بيجامات شتوية، أو ثلاثة بيجامات شتوية مع بلانكيت شتوي قابل للارتداء. العرض لمدة ثلاثة أيام."
-              width={1242}
-              height={1242}
-              sizes="(max-width: 760px) 100vw, 900px"
-              className="offer-art"
-            />
-          </div>
-          <div className="offer-details">
-            {landingPromotion.options.map((option, index) => (
-              <Link href={`/offer/${option.id}`} className="offer-option" key={option.id}>
-                <span className="offer-option-index">{(index + 1).toLocaleString("ar-EG")}</span>
-                <p>{option.label}</p>
-                <span className="offer-select">اختاري هذا العرض <ArrowLeft size={15} /></span>
+        <section className="container categories" aria-labelledby="categories-title">
+          <h2 id="categories-title" className="sr-only">الأقسام</h2>
+          {categoryOrder.map((category) => {
+            const cover = findProduct(categoryCovers[category]);
+            const from = startingPriceOf(category);
+            return (
+              <Link href={`/#${categoryInfo[category].anchor}`} className="category-card" key={category}>
+                <span className="category-arch">
+                  {cover && <Image src={cover.image} alt="" fill sizes="(max-width: 700px) 45vw, 22vw" />}
+                </span>
+                <strong>{categoryInfo[category].label}</strong>
+                {from !== null && <small>من {formatEGP(from)}</small>}
               </Link>
-            ))}
-            <div className="offer-terms">
-              <div className="offer-price-label">سعر العرض</div>
-              <div className="offer-price">{landingPromotion.price.toLocaleString("en-EG")} <span>{landingPromotion.currency}</span></div>
-              <div className="offer-duration">لمدة {landingPromotion.durationDays.toLocaleString("ar-EG")} أيام فقط</div>
+            );
+          })}
+        </section>
+
+        <section className="offer-section" id="offer" aria-labelledby="offer-title">
+          <div className="container">
+            <div className="offer-head">
+              <span className="offer-timer"><Clock size={16} /> العرض لمدة {landingPromotion.durationDays} أيام بس</span>
+              <h2 id="offer-title">عرض الشتاء</h2>
+              <p>٤ قطع بـ <strong>{formatEGP(landingPromotion.price)}</strong>. اختاري الباقة واختاري الموديلات بنفسك.</p>
+            </div>
+
+            <Link href={`/offer/${landingPromotion.options[0].id}`} className="offer-poster" aria-label="ابدئي عرض الشتاء">
+              <Image
+                src="/images/شتوية دافئة بلمسة وردية.png"
+                alt="عرض واحد يكفي تكملي جهازك أو تجددي دولابك: ٤ بيجامات شتوي، أو ٣ بيجامات شتوي + بلانكيت واحدة. العرض لمدة ٣ أيام فقط."
+                width={1672}
+                height={941}
+                sizes="(max-width: 1240px) 100vw, 1180px"
+              />
+            </Link>
+
+            <div className="offer-options">
+              {landingPromotion.options.map((option) => (
+                <Link href={`/offer/${option.id}`} className="offer-option" key={option.id}>
+                  <span className="offer-option-copy">
+                    <strong>{option.label}</strong>
+                    <small>{option.description}</small>
+                  </span>
+                  <span className="offer-option-price">{formatEGP(landingPromotion.price)}</span>
+                  <span className="btn btn-pink">اختاري القطع <ArrowLeft size={16} /></span>
+                </Link>
+              ))}
             </div>
           </div>
         </section>
 
-        <section className="collection-section page-width" id="collections">
-          <div className="collection-intro">
-            <div className="section-heading">
-              <span className="eyebrow">من صور المجموعة</span>
-              <h2>اختاري إطلالتكِ الشتوية</h2>
-              <p>صور القطع المتاحة في المشروع، بتفاصيلها الظاهرة.</p>
-            </div>
-            <label className="collection-search">
-              <Search size={17} aria-hidden="true" />
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="ابحثي عن قطعة"
-                aria-label="ابحثي عن قطعة"
-              />
-            </label>
-          </div>
+        {categoryOrder.map((category) => {
+          const items = productsIn(category);
+          const info = categoryInfo[category];
+          return (
+            <section className="container catalog-section" id={info.anchor} key={category} aria-labelledby={`${info.anchor}-title`}>
+              <header className="section-head">
+                <span className="section-ornament" aria-hidden="true">✦</span>
+                <h2 id={`${info.anchor}-title`}>{info.label}</h2>
+                <p>{info.tagline} · {items.length} موديل</p>
+                {offerCategories.includes(category) && (
+                  <Link href={`/offer/${category === "wearable-blankets" ? landingPromotion.options[1].id : landingPromotion.options[0].id}`} className="section-offer-link">
+                    كوّني عرض الـ {landingPromotion.price} <ArrowLeft size={15} />
+                  </Link>
+                )}
+              </header>
+              <div className="product-grid">
+                {items.map((product) => <ProductCard key={product.id} product={product} onQuickView={setQuickView} />)}
+              </div>
+              {category === "wearable-blankets" && <p className="coming-soon">موديلات بلانكيت جديدة نازلة قريب ♡</p>}
+            </section>
+          );
+        })}
 
-          <div className="collection-toolbar">
-            <div className="category-filters" aria-label="تصفية حسب الفئة">
-              {landingCategories.map((category) => (
-                <button
-                  type="button"
-                  key={category.slug}
-                  className={selectedCategory === category.slug ? "filter-chip active" : "filter-chip"}
-                  onClick={() => setSelectedCategory(category.slug)}
-                  aria-pressed={selectedCategory === category.slug}
-                >
-                  {category.label}
-                </button>
-              ))}
-            </div>
-            <label className="sort-control">
-              <span>الترتيب</span>
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} aria-label="ترتيب القطع">
-                <option value="display">ترتيب العرض</option>
-                <option value="alphabetical">الاسم أبجدياً</option>
-              </select>
-            </label>
+        <section className="how-it-works" aria-labelledby="how-title">
+          <div className="container">
+            <h2 id="how-title">الطلب في ٣ خطوات</h2>
+            <ol>
+              <li><ShoppingBag size={24} /><strong>اختاري</strong><span>العرض أو أي قطعة لوحدها، وكله بيتجمع في سلة واحدة.</span></li>
+              <li><Truck size={24} /><strong>اكتبي عنوانك</strong><span>الاسم والموبايل والعنوان، وسعر الشحن بيظهر لك على طول.</span></li>
+              <li><MessageCircle size={24} /><strong>أكدي على واتساب</strong><span>الطلب بيتسجل عندنا، وبعدها بتبعتي رسالة التأكيد بضغطة.</span></li>
+            </ol>
           </div>
-
-          {filteredLooks.length > 0 ? (
-            <div className="look-grid">
-              {filteredLooks.map((look) => (
-                <article className="look-card" key={look.slug} id={look.slug}>
-                  <div className="look-image">
-                    <Image src={look.image} alt={look.imageAlt} fill sizes="(max-width: 600px) 90vw, (max-width: 1000px) 45vw, 30vw" />
-                  </div>
-                  <div className="look-caption">
-                    <span>{look.category === "wearable-blankets" ? "ملابس شتوية" : "بيجامات شتوية"}</span>
-                    <h3>{look.name}</h3>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="empty-state">لم نعثر على قطعة بهذا الاسم.</p>
-          )}
         </section>
       </main>
 
-      <footer className="site-footer" id="contact">
-        <div className="footer-inner page-width">
-          <Image src="/images/blue-mood-logo.png" alt="Blue Mood Fashion & More" width={72} height={72} className="footer-logo" />
-          <p>ملابس شتوية من Blue Mood</p>
-          <a href="#home">العودة إلى الأعلى ↑</a>
-        </div>
-      </footer>
-
+      <SiteFooter />
+      <CartBar />
+      <QuickView product={quickView} onClose={() => setQuickView(null)} />
     </div>
   );
 }

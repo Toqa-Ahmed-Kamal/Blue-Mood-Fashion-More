@@ -1,3 +1,5 @@
+import type { CatalogCategory } from "./site-data.ts";
+
 export type OfferModelCategory = "winter-pajamas" | "wearable-blankets";
 
 export type BundleEntry = {
@@ -8,6 +10,15 @@ export type BundleEntry = {
 };
 
 export const pajamaFitLabel = "One Size – مقاس واحد";
+
+export function categoryDetailLabel(category: CatalogCategory) {
+  switch (category) {
+    case "winter-pajamas": return pajamaFitLabel;
+    case "wearable-blankets": return "بلانكيت شتوي قابل للارتداء";
+    case "abayas": return "عباية";
+    case "robes": return "روب";
+  }
+}
 
 export function normalizePhoneDigits(value: string) {
   return value
@@ -84,18 +95,18 @@ export type WhatsAppOrderMessage = {
     address: string;
     notes: string;
   };
-  offerLabel: string;
-  items: BundleEntry[];
-  offerPrice: number;
+  offer: { label: string; price: number; items: { name: string; category: CatalogCategory }[] } | null;
+  items: { name: string; quantity: number; unitPrice: number }[];
+  subtotal: number;
   shipping: number | null;
   total: number | null;
 };
 
-export function calculateOrderTotals(offerPrice: number, shipping: number | null) {
+export function calculateOrderTotals(subtotal: number, shipping: number | null) {
   return {
-    offerPrice,
+    subtotal,
     shipping,
-    total: shipping === null ? null : offerPrice + shipping,
+    total: shipping === null ? null : subtotal + shipping,
   };
 }
 
@@ -106,10 +117,20 @@ export function createOrderReference(createdAt: Date, uuid: string) {
 }
 
 export function buildWhatsAppOrderText(order: WhatsAppOrderMessage) {
-  const itemLines = order.items.map((item) => {
-    const detail = item.category === "winter-pajamas" ? pajamaFitLabel : "بلانكيت شتوي قابل للارتداء";
-    return `• ${item.name}\n  ${detail}`;
-  }).join("\n");
+  const offerLines = order.offer
+    ? [
+        `عرض الشتاء: ${order.offer.label} — ${order.offer.price} جنيه`,
+        ...order.offer.items.map((item) => `• ${item.name}\n  ${categoryDetailLabel(item.category)}`),
+        "",
+      ]
+    : [];
+  const singleLines = order.items.length > 0
+    ? [
+        "قطع منفردة:",
+        ...order.items.map((item) => `• ${item.name} × ${item.quantity} — ${item.unitPrice * item.quantity} جنيه`),
+        "",
+      ]
+    : [];
 
   return [
     "طلب جديد إلى Blue Mood",
@@ -125,16 +146,14 @@ export function buildWhatsAppOrderText(order: WhatsAppOrderMessage) {
     `العنوان: ${order.customer.address}`,
     `ملاحظات: ${order.customer.notes || "لا توجد"}`,
     "",
-    `العرض: ${order.offerLabel}`,
-    "الموديلات:",
-    itemLines,
-    "",
-    `سعر العرض: ${order.offerPrice} جنيه`,
+    ...offerLines,
+    ...singleLines,
+    `المجموع قبل الشحن: ${order.subtotal} جنيه`,
     order.shipping === null
       ? "الشحن: غير مؤكد — تكلفة الشحن تحتاج إلى تأكيد لاحقًا."
       : `الشحن التقديري (الأسعار الحالية مبدئية وقابلة للتعديل): ${order.shipping} جنيه`,
     order.total === null
-      ? `الإجمالي النهائي غير متاح حتى تأكيد الشحن (سعر العرض قبل الشحن: ${order.offerPrice} جنيه).`
+      ? `الإجمالي النهائي غير متاح حتى تأكيد الشحن (المجموع قبل الشحن: ${order.subtotal} جنيه).`
       : `الإجمالي التقديري (وفق سعر الشحن المبدئي): ${order.total} جنيه`,
   ].join("\n");
 }
