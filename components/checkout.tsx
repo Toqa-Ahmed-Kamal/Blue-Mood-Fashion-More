@@ -14,7 +14,7 @@ import {
   createWhatsAppUrl,
   normalizePhoneDigits,
 } from "@/lib/order-flow";
-import { findShippingRate, shippingAreasFor, shippingGovernorates } from "@/lib/shipping-rates";
+import { findShippingRate, isValidShippingArea, shippingAreasFor, shippingGovernorates } from "@/lib/shipping-rates";
 import { landingPromotion, priceOf, visibleCatalog } from "@/lib/site-data";
 import { SiteHeader } from "@/components/store-chrome";
 
@@ -42,8 +42,7 @@ const emptyCustomer: CustomerDetails = {
   name: "",
   phone: "",
   alternatePhone: "",
-  // Delivery currently covers one governorate, so preselect it.
-  governorate: shippingGovernorates.length === 1 ? shippingGovernorates[0] : "",
+  governorate: "",
   area: "",
   address: "",
   notes: "",
@@ -59,7 +58,9 @@ function validate(customer: CustomerDetails): FieldErrors {
   if (phone.length < 8 || phone.length > 15) errors.phone = "رقم الموبايل لازم يكون من ٨ لـ ١٥ رقم.";
   if (customer.alternatePhone.trim() && (alternate.length < 8 || alternate.length > 15)) errors.alternatePhone = "راجعي الرقم البديل أو سيبيه فاضي.";
   if (!customer.governorate) errors.governorate = "اختاري المحافظة.";
-  if (!shippingAreasFor(customer.governorate).includes(customer.area)) errors.area = "اختاري المنطقة.";
+  if (customer.governorate && !isValidShippingArea(customer.governorate, customer.area)) {
+    errors.area = shippingAreasFor(customer.governorate).length > 0 ? "اختاري المنطقة." : "اكتبي المدينة أو المنطقة.";
+  }
   if (customer.address.trim().length < 5) errors.address = "اكتبي العنوان بالتفصيل (الشارع، رقم العمارة، الدور).";
   return errors;
 }
@@ -71,6 +72,8 @@ export function Checkout() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [placed, setPlaced] = useState<PlacedOrder | null>(null);
+  // Direct WhatsApp link offered when the order could not be saved, so the sale is not lost.
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const attemptRef = useRef<{ submissionId: string; fingerprint: string } | null>(null);
 
   if (placed) return <OrderPlaced order={placed} />;
@@ -82,6 +85,7 @@ export function Checkout() {
   function update(field: keyof CustomerDetails, value: string) {
     setCustomer((current) => ({ ...current, [field]: value, ...(field === "governorate" ? { area: "" } : {}) }));
     setSubmitError("");
+    setFallbackUrl(null);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -102,8 +106,37 @@ export function Checkout() {
       attemptRef.current = { submissionId: crypto.randomUUID(), fingerprint };
     }
 
+    const cartSnapshot = resolved.cart;
+    const whatsAppUrlFor = (order: { reference: string; createdAt: string; subtotal: number; shipping: number | null; total: number | null }) => {
+      try {
+        return createWhatsAppUrl(buildWhatsAppOrderText({
+          ...order,
+          customer: snapshot,
+          offer: cartSnapshot.offer && {
+            label: cartSnapshot.offer.option.label,
+            price: cartSnapshot.offer.price,
+            items: cartSnapshot.offer.products.map((product) => ({ name: product.name, category: product.category })),
+          },
+          items: cartSnapshot.items.map((line) => ({ name: line.product.name, quantity: line.quantity, unitPrice: line.unitPrice })),
+        }));
+      } catch {
+        return null;
+      }
+    };
+    const offerDirectWhatsApp = () => {
+      const totalsNow = calculateOrderTotals(cartSnapshot.subtotal, shippingFee);
+      setFallbackUrl(whatsAppUrlFor({
+        reference: "لم يُسجل على الموقع",
+        createdAt: new Date().toISOString(),
+        subtotal: totalsNow.subtotal,
+        shipping: totalsNow.shipping,
+        total: totalsNow.total,
+      }));
+    };
+
     setIsSubmitting(true);
     setSubmitError("");
+    setFallbackUrl(null);
     try {
       const response = await fetch("/api/orders", {
         method: "POST",
@@ -112,37 +145,27 @@ export function Checkout() {
       });
       const result = await response.json().catch(() => null) as OrderApiResponse | null;
       if (!response.ok || result?.success !== true || !result.order) {
-        setSubmitError(result?.error?.message || "معرفناش نأكد تسجيل الطلب. جربي تاني، رقم الطلب مش هيتغير.");
+        setSubmitError(result?.error?.message || "معرفناش نسجل الطلب دلوقتي. ابعتيه لنا على واتساب مباشرة، أو جربي تاني.");
+        if (response.status >= 500 || !result) offerDirectWhatsApp();
         return;
       }
 
       const order = result.order;
-      let whatsAppUrl: string | null = null;
-      try {
-        whatsAppUrl = createWhatsAppUrl(buildWhatsAppOrderText({
-          reference: order.orderId,
-          createdAt: order.createdAt,
-          customer: snapshot,
-          offer: resolved.cart.offer && {
-            label: resolved.cart.offer.option.label,
-            price: resolved.cart.offer.price,
-            items: resolved.cart.offer.products.map((product) => ({ name: product.name, category: product.category })),
-          },
-          items: resolved.cart.items.map((line) => ({ name: line.product.name, quantity: line.quantity, unitPrice: line.unitPrice })),
-          subtotal: order.subtotal,
-          shipping: order.shippingCost,
-          total: order.total,
-        }));
-      } catch {
-        whatsAppUrl = null;
-      }
+      const whatsAppUrl = whatsAppUrlFor({
+        reference: order.orderId,
+        createdAt: order.createdAt,
+        subtotal: order.subtotal,
+        shipping: order.shippingCost,
+        total: order.total,
+      });
 
       attemptRef.current = null;
       updateCart(() => emptyCart);
       setPlaced({ orderId: order.orderId, whatsAppUrl, total: order.total });
       window.scrollTo({ top: 0 });
     } catch {
-      setSubmitError("مفيش اتصال بالإنترنت أو السيرفر مش بيرد. جربي تاني، رقم الطلب مش هيتغير.");
+      setSubmitError("مفيش اتصال بالإنترنت أو السيرفر مش بيرد. جربي تاني، أو ابعتي الطلب على واتساب مباشرة.");
+      offerDirectWhatsApp();
     } finally {
       setIsSubmitting(false);
     }
@@ -165,6 +188,7 @@ export function Checkout() {
   }
 
   const totals = calculateOrderTotals(resolved.cart.subtotal, shippingFee);
+  const areaOptions = shippingAreasFor(customer.governorate);
   const fieldError = (field: keyof CustomerDetails) => showErrors ? errors[field] : undefined;
   const missingUpsells = upsellProducts.filter((product) => !cart.items.some((item) => item.productId === product.id));
 
@@ -214,14 +238,20 @@ export function Checkout() {
                     {shippingGovernorates.map((governorate) => <option key={governorate} value={governorate}>{governorate}</option>)}
                   </select>
                 </Field>
-                <Field label="المنطقة" error={fieldError("area")} wide>
-                  <select value={customer.area} disabled={!customer.governorate} onChange={(e) => update("area", e.target.value)} aria-invalid={!!fieldError("area")}>
-                    <option value="">{customer.governorate ? "اختاري المنطقة" : "اختاري المحافظة الأول"}</option>
-                    {shippingAreasFor(customer.governorate).map((area) => {
-                      const fee = findShippingRate(customer.governorate, area)?.fee;
-                      return <option key={area} value={area}>{area}{fee != null ? ` — شحن ${fee} ج.م` : ""}</option>;
-                    })}
-                  </select>
+                <Field label={areaOptions.length > 0 ? "المنطقة" : "المدينة / المنطقة"} error={fieldError("area")} wide>
+                  {!customer.governorate ? (
+                    <select disabled defaultValue=""><option value="">اختاري المحافظة الأول</option></select>
+                  ) : areaOptions.length > 0 ? (
+                    <select value={customer.area} onChange={(e) => update("area", e.target.value)} aria-invalid={!!fieldError("area")}>
+                      <option value="">اختاري المنطقة</option>
+                      {areaOptions.map((area) => {
+                        const fee = findShippingRate(customer.governorate, area)?.fee;
+                        return <option key={area} value={area}>{area}{fee != null ? ` — شحن ${fee} ج.م` : ""}</option>;
+                      })}
+                    </select>
+                  ) : (
+                    <input autoComplete="address-level2" maxLength={120} placeholder="مثلاً: المنصورة، طنطا، سموحة" value={customer.area} onChange={(e) => update("area", e.target.value)} aria-invalid={!!fieldError("area")} />
+                  )}
                 </Field>
                 <Field label="العنوان بالتفصيل" error={fieldError("address")} wide>
                   <textarea rows={3} maxLength={500} autoComplete="street-address" placeholder="الشارع، رقم العمارة، الدور، علامة مميزة" value={customer.address} onChange={(e) => update("address", e.target.value)} aria-invalid={!!fieldError("address")} />
@@ -250,6 +280,11 @@ export function Checkout() {
               </dl>
               <p className="fine-print">أسعار الشحن مبدئية وممكن تتعدل. الدفع عند الاستلام.</p>
               {submitError && <p className="form-error" role="alert">{submitError}</p>}
+              {fallbackUrl && (
+                <a href={fallbackUrl} target="_blank" rel="noreferrer" className="btn btn-whatsapp btn-lg btn-block fallback-whatsapp">
+                  ابعتي الطلب على واتساب مباشرة <ArrowLeft size={18} />
+                </a>
+              )}
               <button type="submit" form="checkout-form" className="btn btn-primary btn-lg btn-block" disabled={isSubmitting} aria-busy={isSubmitting}>
                 {isSubmitting ? "بنسجل طلبك…" : <>تأكيد الطلب <ArrowLeft size={18} /></>}
               </button>

@@ -1,4 +1,4 @@
-import type { GoogleAppsScriptOrderFields } from "@/lib/google-apps-script";
+import type { OrderRecord } from "@/lib/order-record";
 
 const TELEGRAM_API_BASE = "https://api.telegram.org";
 const TELEGRAM_MESSAGE_LIMIT = 4096;
@@ -48,7 +48,7 @@ function fitToTelegramLimit(text: string) {
   return text.length <= TELEGRAM_MESSAGE_LIMIT ? text : `${text.slice(0, TELEGRAM_MESSAGE_LIMIT - 1)}…`;
 }
 
-export function buildTelegramOrderMessage(order: GoogleAppsScriptOrderFields) {
+export function buildTelegramOrderMessage(order: OrderRecord) {
   const lines = [
     "🛍️ طلب جديد — Blue Mood",
     `رقم الطلب: ${order.orderId}`,
@@ -75,10 +75,6 @@ export function buildTelegramOrderMessage(order: GoogleAppsScriptOrderFields) {
   ];
 
   return fitToTelegramLimit(lines.join("\n"));
-}
-
-export function buildSheetFailureAlert(orderId: string, failureCode: string) {
-  return `⚠️ الطلب ${orderId} لم يُسجَّل في Google Sheet (${failureCode}). الرسالة السابقة هي النسخة الوحيدة؛ أضيفيه للشيت يدويًا.`;
 }
 
 export async function sendTelegramMessage(

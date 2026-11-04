@@ -52,7 +52,7 @@ export function BlueMoodHome() {
                 <Link href="/#abayas" className="btn btn-outline btn-lg">تسوقي الكولكشن</Link>
               </div>
               <ul className="hero-perks">
-                <li><Truck size={17} /> شحن لكل مناطق القاهرة</li>
+                <li><Truck size={17} /> شحن لكل محافظات مصر</li>
                 <li><MessageCircle size={17} /> تأكيد سريع على واتساب</li>
               </ul>
             </div>
