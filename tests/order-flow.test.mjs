@@ -68,7 +68,7 @@ test("offer completion requires four unique pajamas or three unique pajamas and 
 
 test("pajamas use the single One Size label and carry no per-item size or weight fields", () => {
   const pajama = model("bm-winter-pajama-003");
-  assert.equal(pajamaFitLabel, "One Size – مقاس واحد");
+  assert.equal(pajamaFitLabel, "One Size – مقاس واحد يناسب لحد 85–90 كيلو");
   assert.equal("size" in pajama, false);
   assert.equal("weightGuide" in pajama, false);
 });
@@ -135,7 +135,7 @@ test("WhatsApp text names pajama styles without technical ids or false size sele
   assert.equal(url.pathname, "/201022590557");
   assert.equal(url.searchParams.get("text"), message);
   assert.match(message, /بيجاما بطبعة دب/);
-  assert.match(message, /One Size – مقاس واحد/);
+  assert.match(message, /One Size – مقاس واحد يناسب لحد 85–90 كيلو/);
   assert.doesNotMatch(message, /bm-winter-pajama-001|1000505866|كود الموديل|الوزن الإرشادي/);
   assert.match(message, /عرض الشتاء: ٤ بيجامات شتوية — 1100 جنيه/);
   assert.match(message, /الشحن التقديري \(الأسعار الحالية مبدئية وقابلة للتعديل\): 30 جنيه/);
@@ -193,4 +193,22 @@ test("WhatsApp text lists single pieces with quantity and line totals next to th
   assert.match(message, /عباية قطيفة كحلي بتطريز ورد كريمي × 2 — 700 جنيه/);
   assert.match(message, /المجموع قبل الشحن: 700 جنيه/);
   assert.match(message, /730 جنيه/);
+});
+
+test("shipping covers every governorate: Cairo by area, the rest by free-text city", async () => {
+  const { isShippingGovernorate, isValidShippingArea, shippingAreasFor, shippingGovernorates } = await import("../lib/shipping-rates.ts");
+
+  assert.equal(shippingGovernorates.length, 27);
+  assert.equal(new Set(shippingGovernorates).size, 27);
+  for (const governorate of shippingGovernorates) {
+    assert.ok(findShippingRate(governorate, "أي مدينة") || shippingAreasFor(governorate).length > 0, governorate);
+  }
+
+  assert.equal(isShippingGovernorate("الإسكندرية"), true);
+  assert.equal(isShippingGovernorate("محافظة وهمية"), false);
+  assert.equal(isValidShippingArea("القاهرة", "المطرية"), true);
+  assert.equal(isValidShippingArea("القاهرة", "منطقة مكتوبة يدويًا"), false);
+  assert.equal(isValidShippingArea("الدقهلية", "المنصورة"), true);
+  assert.equal(isValidShippingArea("الدقهلية", " "), false);
+  assert.equal(findShippingRate("الدقهلية", "المنصورة").fee, null);
 });

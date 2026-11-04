@@ -538,6 +538,18 @@ h1, h2, h3 { font-family: var(--font-display); }
   flex: 1;
 }
 .price-tag { font-size: 18px; font-weight: 800; color: var(--brand); }
+.fit-note {
+  align-self: start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.pick-toggle .fit-note { margin-inline: 4px; justify-self: start; }
 .price-tag.offer-only {
   align-self: start;
   font-size: 12.5px;
@@ -546,7 +558,7 @@ h1, h2, h3 { font-family: var(--font-display); }
   padding: 3px 10px;
   border-radius: 999px;
 }
-.product-body .btn { margin-top: 2px; }
+.product-body .btn { margin-top: 2px; padding-inline: 10px; gap: 6px; }
 .offer-hint {
   align-self: center;
   margin-top: 2px;
@@ -1131,3 +1143,5 @@ h1, h2, h3 { font-family: var(--font-display); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+.fallback-whatsapp { margin-bottom: 12px; }

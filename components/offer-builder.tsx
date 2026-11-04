@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, Check, ChevronRight, Expand, X } from "lucide-react";
 
-import { QuickView } from "@/components/product-card";
+import { FitNote, QuickView } from "@/components/product-card";
 import { SiteHeader } from "@/components/store-chrome";
 import { setCartOffer } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
@@ -168,6 +168,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
                     <span className="pick-check" aria-hidden="true">{isSelected ? order : <Check size={16} />}</span>
                   </span>
                   <span className="pick-name">{product.name}</span>
+                  <FitNote product={product} />
                   <span className="pick-state">{isSelected ? "مختارة · دوسي للإلغاء" : tabFull ? "العدد كمل" : "دوسي للاختيار"}</span>
                 </button>
                 <button type="button" className="pick-zoom" onClick={() => setQuickView(product)} aria-label={`عرض صورة ${product.name} بالكامل`}>

@@ -9,7 +9,12 @@ export type BundleEntry = {
   image: string;
 };
 
-export const pajamaFitLabel = "One Size – مقاس واحد";
+export const pajamaFitLabel = "One Size – مقاس واحد يناسب لحد 85–90 كيلو";
+
+/** Short size note for product cards, or null when the category has no size claim. */
+export function fitNoteFor(category: CatalogCategory) {
+  return category === "winter-pajamas" ? "One Size · لحد 85–90 كيلو" : null;
+}
 
 export function categoryDetailLabel(category: CatalogCategory) {
   switch (category) {

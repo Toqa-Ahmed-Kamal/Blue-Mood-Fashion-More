@@ -8,6 +8,7 @@ import { ArrowLeft, Check, Expand, Minus, Plus, X } from "lucide-react";
 import { addCartItem, setCartItemQuantity, MAX_ITEM_QUANTITY } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
+import { fitNoteFor } from "@/lib/order-flow";
 import { categoryInfo, landingPromotion, offerCategories, priceOf, type CatalogProduct } from "@/lib/site-data";
 
 function offerLinkFor(product: CatalogProduct) {
@@ -51,6 +52,11 @@ export function ProductAction({ product }: { product: CatalogProduct }) {
   );
 }
 
+export function FitNote({ product }: { product: CatalogProduct }) {
+  const note = fitNoteFor(product.category);
+  return note ? <span className="fit-note">{note}</span> : null;
+}
+
 export function PriceTag({ product }: { product: CatalogProduct }) {
   const price = priceOf(product);
   return price === null
@@ -78,6 +84,7 @@ export function ProductCard({ product, onQuickView }: { product: CatalogProduct;
       <div className="product-body">
         <span className="product-kicker">{categoryInfo[product.category].singular}</span>
         <h3>{product.name}</h3>
+        <FitNote product={product} />
         <PriceTag product={product} />
         <ProductAction product={product} />
         <OfferHint product={product} />
@@ -118,6 +125,7 @@ export function QuickView({ product, onClose, action }: {
           <div className="quick-view-body">
             <span className="product-kicker">{categoryInfo[product.category].singular}</span>
             <h2>{product.name}</h2>
+            <FitNote product={product} />
             <PriceTag product={product} />
             <p>{product.imageAlt}.</p>
             {action ?? <><ProductAction product={product} /><OfferHint product={product} /></>}

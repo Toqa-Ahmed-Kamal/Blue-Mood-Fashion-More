@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 
 import {
   TelegramError,
-  buildSheetFailureAlert,
   buildTelegramOrderMessage,
   isValidTelegramBotToken,
   sendTelegramMessage,
 } from "../lib/telegram.ts";
+import { createStableOrderId } from "../lib/order-record.ts";
 
 const mockToken = "123456789:mock-token-for-unit-test-only";
 
@@ -26,7 +26,7 @@ const baseFields = {
       modelId: "bm-winter-pajama-001",
       name: "بيجاما بطبعة دب",
       category: "winter-pajamas",
-      fit: "One Size – مقاس واحد",
+      fit: "One Size – مقاس واحد يناسب لحد 85–90 كيلو",
       quantity: 1,
       unitPrice: null,
     },
@@ -72,11 +72,12 @@ test("very long messages are trimmed to Telegram's limit", () => {
   assert.ok(message.length <= 4096);
 });
 
-test("the sheet failure alert names the order and failure code", () => {
-  const alert = buildSheetFailureAlert("BM-TEST-ORDER-001", "GOOGLE_SCRIPT_TIMEOUT");
+test("a retry with the same submission ID keeps the same order number", () => {
+  const submissionId = "12345678-1234-4234-8234-123456789abc";
 
-  assert.match(alert, /BM-TEST-ORDER-001/);
-  assert.match(alert, /GOOGLE_SCRIPT_TIMEOUT/);
+  assert.equal(createStableOrderId(submissionId), createStableOrderId(submissionId));
+  assert.notEqual(createStableOrderId(submissionId), createStableOrderId("22345678-1234-4234-8234-123456789abc"));
+  assert.match(createStableOrderId(submissionId), /^BM-[A-F\d]{20}$/);
 });
 
 test("bot token shape is validated before use", () => {

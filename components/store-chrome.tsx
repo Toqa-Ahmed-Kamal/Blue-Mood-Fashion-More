@@ -108,7 +108,7 @@ export function SiteFooter() {
             <Image src="/images/blue-mood-logo-badge.png" alt="شعار Blue Mood" width={96} height={96} />
             <BrandWordmark className="wordmark-light" />
           </div>
-          <p>عبايات، أرواب، بيجامات وبلانكيت — شحن داخل القاهرة والطلب بيتأكد على واتساب.</p>
+          <p>عبايات، أرواب، بيجامات وبلانكيت — شحن لكل المحافظات والطلب بيتأكد على واتساب.</p>
         </div>
         <nav aria-label="روابط الأقسام">
           {navLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
