@@ -10,6 +10,7 @@ import { FitNote, QuickView } from "@/components/product-card";
 import { SiteHeader } from "@/components/store-chrome";
 import { setCartOffer } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
+import { trackAddOfferToCart } from "@/lib/meta-pixel";
 import { formatEGP } from "@/lib/format";
 import {
   findOffer,
@@ -99,6 +100,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
   function confirm() {
     if (!isComplete) return;
     updateCart((current) => setCartOffer(current, { offerId, productIds: selectedIds }));
+    trackAddOfferToCart(offerId, selectedIds);
     router.push("/checkout");
   }
 

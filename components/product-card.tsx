@@ -8,6 +8,7 @@ import { ArrowLeft, Check, Expand, Minus, Plus, X } from "lucide-react";
 import { addCartItem, setCartItemQuantity, MAX_ITEM_QUANTITY } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
+import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
 import { categoryInfo, landingPromotion, offerCategories, priceOf, type CatalogProduct } from "@/lib/site-data";
 
@@ -31,9 +32,13 @@ export function ProductAction({ product }: { product: CatalogProduct }) {
   }
 
   const quantity = cart.items.find((item) => item.productId === product.id)?.quantity ?? 0;
+  const add = () => {
+    updateCart((current) => addCartItem(current, product.id));
+    trackAddToCart(product);
+  };
   if (quantity === 0) {
     return (
-      <button type="button" className="btn btn-dark btn-block" onClick={() => updateCart((current) => addCartItem(current, product.id))}>
+      <button type="button" className="btn btn-dark btn-block" onClick={add}>
         <Plus size={17} /> أضيفي للسلة
       </button>
     );
@@ -41,7 +46,7 @@ export function ProductAction({ product }: { product: CatalogProduct }) {
 
   return (
     <div className="stepper" role="group" aria-label={`كمية ${product.name}`}>
-      <button type="button" onClick={() => updateCart((current) => addCartItem(current, product.id))} disabled={quantity >= MAX_ITEM_QUANTITY} aria-label="زيادة">
+      <button type="button" onClick={add} disabled={quantity >= MAX_ITEM_QUANTITY} aria-label="زيادة">
         <Plus size={16} />
       </button>
       <span aria-live="polite"><Check size={14} /> {quantity} في السلة</span>

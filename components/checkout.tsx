@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, Check, ChevronRight, Copy, Minus, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 
 import { addCartItem, emptyCart, MAX_ITEM_QUANTITY, resolveCart, setCartItemQuantity, setCartOffer, type ResolvedCart } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
+import { trackAddToCart, trackInitiateCheckout, trackPurchase } from "@/lib/meta-pixel";
 import {
   buildWhatsAppOrderText,
   calculateOrderTotals,
@@ -75,6 +76,17 @@ export function Checkout() {
   // Direct WhatsApp link offered when the order could not be saved, so the sale is not lost.
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const attemptRef = useRef<{ submissionId: string; fingerprint: string } | null>(null);
+  const checkoutTrackedRef = useRef(false);
+  const cartKey = JSON.stringify(cart);
+
+  // Meta Pixel InitiateCheckout: once per checkout visit, as soon as the saved cart has loaded.
+  useEffect(() => {
+    if (checkoutTrackedRef.current) return;
+    const current = resolveCart(JSON.parse(cartKey));
+    if ("error" in current) return;
+    checkoutTrackedRef.current = true;
+    trackInitiateCheckout(current.cart, cartKey);
+  }, [cartKey]);
 
   if (placed) return <OrderPlaced order={placed} />;
 
@@ -159,6 +171,8 @@ export function Checkout() {
         total: order.total,
       });
 
+      // The server only answers success after the order was saved, so Purchase is never sent for a failed order.
+      trackPurchase(cartSnapshot, order);
       attemptRef.current = null;
       updateCart(() => emptyCart);
       setPlaced({ orderId: order.orderId, whatsAppUrl, total: order.total });
@@ -211,7 +225,7 @@ export function Checkout() {
                     <div className="upsell-item" key={product.id}>
                       <div className="upsell-media"><Image src={product.image} alt={product.imageAlt} fill sizes="120px" /></div>
                       <span className="upsell-name">{product.name}</span>
-                      <button type="button" className="btn btn-outline btn-sm" disabled={isSubmitting} onClick={() => updateCart((current) => addCartItem(current, product.id))}>
+                      <button type="button" className="btn btn-outline btn-sm" disabled={isSubmitting} onClick={() => { updateCart((current) => addCartItem(current, product.id)); trackAddToCart(product); }}>
                         <Plus size={14} /> {formatEGP(priceOf(product)!)}
                       </button>
                     </div>
@@ -352,7 +366,7 @@ function CartLines({ cart, disabled }: { cart: ResolvedCart; disabled: boolean }
                 <small>{formatEGP(line.unitPrice)} للقطعة</small>
               </span>
               <span className="line-qty" role="group" aria-label={`كمية ${line.product.name}`}>
-                <button type="button" disabled={disabled || line.quantity >= MAX_ITEM_QUANTITY} onClick={() => updateCart((current) => setCartItemQuantity(current, line.product.id, line.quantity + 1))} aria-label="زيادة"><Plus size={14} /></button>
+                <button type="button" disabled={disabled || line.quantity >= MAX_ITEM_QUANTITY} onClick={() => { updateCart((current) => setCartItemQuantity(current, line.product.id, line.quantity + 1)); trackAddToCart(line.product); }} aria-label="زيادة"><Plus size={14} /></button>
                 <span>{line.quantity}</span>
                 <button type="button" disabled={disabled} onClick={() => updateCart((current) => setCartItemQuantity(current, line.product.id, line.quantity - 1))} aria-label={line.quantity === 1 ? "حذف" : "تقليل"}>
                   {line.quantity === 1 ? <Trash2 size={14} /> : <Minus size={14} />}
