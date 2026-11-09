@@ -11,6 +11,8 @@ export type OrderRecordProduct = {
   quantity: number;
   /** null for pieces included in the offer price. */
   unitPrice: number | null;
+  /** Absolute link to the product photo, so the store can recognise the piece. */
+  link?: string | null;
 };
 
 /** The saved copy of an order, as sent to the store's Telegram chat. */

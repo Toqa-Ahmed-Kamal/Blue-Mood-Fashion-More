@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowLeft, Check, Expand, Minus, Plus, X } from "lucide-react";
 
+import { SocialProof } from "@/components/promo";
 import { addCartItem, setCartItemQuantity, MAX_ITEM_QUANTITY } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
@@ -89,6 +90,7 @@ export function ProductCard({ product, onQuickView }: { product: CatalogProduct;
       <div className="product-body">
         <span className="product-kicker">{categoryInfo[product.category].singular}</span>
         <h3>{product.name}</h3>
+        <SocialProof product={product} />
         <FitNote product={product} />
         <PriceTag product={product} />
         <ProductAction product={product} />
@@ -130,6 +132,7 @@ export function QuickView({ product, onClose, action }: {
           <div className="quick-view-body">
             <span className="product-kicker">{categoryInfo[product.category].singular}</span>
             <h2>{product.name}</h2>
+            <SocialProof product={product} />
             <FitNote product={product} />
             <PriceTag product={product} />
             <p>{product.imageAlt}.</p>

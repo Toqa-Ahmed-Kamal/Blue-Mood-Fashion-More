@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, Menu, ShoppingBag, X } from "lucide-react";
 
+import { OfferCountdown, useOfferIsRunning } from "@/components/promo";
 import { cartPieceCount, resolveCart } from "@/lib/cart";
 import { useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
@@ -25,9 +26,11 @@ export function BrandWordmark({ className = "" }: { className?: string }) {
 }
 
 export function AnnouncementBar() {
+  const running = useOfferIsRunning();
   return (
     <Link href="/#offer" className="announcement">
-      <span>❄ عرض الشتاء: ٤ قطع بـ {formatEGP(landingPromotion.price)} · لمدة {landingPromotion.durationDays} أيام بس</span>
+      <span>❄ عرض الشتاء: ٤ قطع بـ {formatEGP(landingPromotion.price)}</span>
+      {running && <OfferCountdown variant="bar" />}
       <ArrowLeft size={14} aria-hidden="true" />
     </Link>
   );

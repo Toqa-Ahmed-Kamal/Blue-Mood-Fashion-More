@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ArrowLeft, Check, ChevronRight, Expand, X } from "lucide-react";
 
 import { FitNote, QuickView } from "@/components/product-card";
+import { OfferCountdown } from "@/components/promo";
 import { SiteHeader } from "@/components/store-chrome";
 import { setCartOffer } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
@@ -118,6 +119,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
           <span className="eyebrow">عرض الشتاء · {formatEGP(landingPromotion.price)}</span>
           <h1>كوّني عرضك</h1>
           <p>اختاري الباقة، وبعدين دوسي على القطع اللي عاجباكي. كل موديل مرة واحدة بس.</p>
+          <OfferCountdown />
         </header>
 
         <div className="segmented" role="radiogroup" aria-label="نوع الباقة">

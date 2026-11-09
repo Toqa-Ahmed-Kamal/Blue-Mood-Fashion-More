@@ -89,6 +89,18 @@ export function isBundleComplete(bundle: BundleEntry[], requirements: OfferRequi
     counts.wearableBlankets === requirements.wearableBlanketCount;
 }
 
+/**
+ * Absolute link to a product's photo, added next to its name in the Telegram
+ * and WhatsApp order messages so the store can see exactly which piece it is.
+ */
+export function productLink(origin: string, image: string) {
+  try {
+    return new URL(encodeURI(image), origin).toString();
+  } catch {
+    return null;
+  }
+}
+
 export const blueMoodWhatsAppNumber = "201022590557";
 
 export type WhatsAppOrderMessage = {
@@ -103,8 +115,8 @@ export type WhatsAppOrderMessage = {
     address: string;
     notes: string;
   };
-  offer: { label: string; price: number; items: { name: string; category: CatalogCategory; maxWeightKg?: number }[] } | null;
-  items: { name: string; quantity: number; unitPrice: number }[];
+  offer: { label: string; price: number; items: { name: string; category: CatalogCategory; maxWeightKg?: number; link?: string | null }[] } | null;
+  items: { name: string; quantity: number; unitPrice: number; link?: string | null }[];
   subtotal: number;
   shipping: number | null;
   total: number | null;
@@ -124,18 +136,20 @@ export function createOrderReference(createdAt: Date, uuid: string) {
   return `BM-${datePart}-${uniquePart}`;
 }
 
+const linkLine = (link?: string | null) => (link ? `\n  🔗 ${link}` : "");
+
 export function buildWhatsAppOrderText(order: WhatsAppOrderMessage) {
   const offerLines = order.offer
     ? [
         `عرض الشتاء: ${order.offer.label} — ${order.offer.price} جنيه`,
-        ...order.offer.items.map((item) => `• ${item.name}\n  ${categoryDetailLabel(item.category, item.maxWeightKg)}`),
+        ...order.offer.items.map((item) => `• ${item.name}\n  ${categoryDetailLabel(item.category, item.maxWeightKg)}${linkLine(item.link)}`),
         "",
       ]
     : [];
   const singleLines = order.items.length > 0
     ? [
         "قطع منفردة:",
-        ...order.items.map((item) => `• ${item.name} × ${item.quantity} — ${item.unitPrice * item.quantity} جنيه`),
+        ...order.items.map((item) => `• ${item.name} × ${item.quantity} — ${item.unitPrice * item.quantity} جنيه${linkLine(item.link)}`),
         "",
       ]
     : [];

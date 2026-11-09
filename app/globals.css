@@ -169,6 +169,8 @@ h1, h2, h3 { font-family: var(--font-display); }
   font-size: 13.5px;
   font-weight: 700;
   text-align: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 
 .site-header {
@@ -389,18 +391,6 @@ h1, h2, h3 { font-family: var(--font-display); }
     linear-gradient(var(--blush), #fbeef2);
 }
 .offer-head { text-align: center; }
-.offer-timer {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--paper);
-  color: var(--pink);
-  font-weight: 800;
-  font-size: 14px;
-  box-shadow: var(--shadow-sm);
-}
 .offer-head h2 {
   margin-top: 14px;
   font-size: clamp(38px, 9vw, 64px);
@@ -1213,4 +1203,104 @@ h1, h2, h3 { font-family: var(--font-display); }
 @media (max-width: 420px) {
   .admin-card strong { font-size: 1.3rem; }
   .admin-panel { padding: 12px; }
+}
+
+/* ───────────── Offer countdown + social proof ───────────── */
+.countdown {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 10px;
+  font-weight: 800;
+}
+.countdown-title { display: inline-flex; align-items: center; gap: 6px; }
+.countdown-units { display: inline-flex; gap: 6px; }
+.countdown-unit { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.countdown-unit b {
+  display: inline-block;
+  min-width: 2ch;
+  font-variant-numeric: tabular-nums;
+  animation: countdown-tick 0.45s ease-out;
+}
+.countdown-unit small { font-size: 10.5px; font-weight: 700; opacity: 0.85; }
+
+.countdown-chip {
+  padding: 8px 16px;
+  border-radius: 18px;
+  background: var(--paper);
+  color: var(--pink);
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.countdown-chip .countdown-unit b {
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: var(--pink);
+  color: #fff;
+  font-size: 18px;
+}
+.countdown-chip .countdown-unit small { margin-top: 3px; color: var(--pink-dark); }
+
+.countdown-bar { gap: 4px 6px; font-size: 13px; flex-wrap: nowrap; }
+.countdown-bar .countdown-units { gap: 4px; }
+.countdown-bar .countdown-unit { flex-direction: row; gap: 2px; align-items: baseline; }
+.countdown-bar .countdown-unit b {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.22);
+}
+.countdown-bar .countdown-unit small { font-size: 11px; }
+.builder-head .countdown { margin-top: 12px; }
+@media (max-width: 520px) {
+  .announcement { font-size: 12.5px; padding: 6px 10px; column-gap: 6px; }
+  .announcement > svg { display: none; }
+  .countdown-bar .countdown-unit small { font-size: 10px; }
+}
+
+@keyframes countdown-tick {
+  from { transform: translateY(-35%); opacity: 0.2; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.social-proof {
+  position: relative;
+  overflow: hidden;
+  align-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--pink-soft);
+  color: var(--pink-dark);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.6;
+  animation: social-proof-pop 0.6s ease-out both;
+}
+.social-proof::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.75) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: social-proof-shine 3.2s ease-in-out 1s infinite;
+  pointer-events: none;
+}
+.social-proof-icon { flex: none; color: var(--pink); transform-origin: 50% 90%; animation: flame-flicker 1.4s ease-in-out infinite; }
+
+@keyframes social-proof-pop {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes social-proof-shine {
+  0%, 55% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+@keyframes flame-flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  30% { transform: scale(1.18) rotate(-6deg); }
+  60% { transform: scale(0.94) rotate(4deg); }
 }

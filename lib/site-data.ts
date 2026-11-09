@@ -13,6 +13,11 @@ export type CatalogProduct = {
   hidden?: boolean;
   /** Pajamas only: overrides the default One Size weight note (85–90 kg). */
   maxWeightKg?: number;
+  /**
+   * Real number of times this piece was sold before. Shown on the card as
+   * "اتطلبت +N مرة" — only put real numbers here (fake counts are misleading ads).
+   */
+  soldCount?: number;
 };
 
 /**
@@ -113,6 +118,11 @@ export const landingPromotion = {
   price: 1100,
   currency: "EGP",
   durationDays: 3,
+  /**
+   * When the offer ends (Cairo time). The site counts down to it and hides the
+   * timer once it passes — move this date to extend or restart the offer.
+   */
+  endsAt: "2026-11-11T23:59:59+02:00",
   options: [
     {
       id: "four-pajamas",

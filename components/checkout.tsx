@@ -15,6 +15,7 @@ import {
   calculateOrderTotals,
   createWhatsAppUrl,
   normalizePhoneDigits,
+  productLink,
 } from "@/lib/order-flow";
 import { findShippingRate, isValidShippingArea, shippingAreasFor, shippingGovernorates } from "@/lib/shipping-rates";
 import { landingPromotion, priceOf, visibleCatalog } from "@/lib/site-data";
@@ -128,9 +129,9 @@ export function Checkout() {
           offer: cartSnapshot.offer && {
             label: cartSnapshot.offer.option.label,
             price: cartSnapshot.offer.price,
-            items: cartSnapshot.offer.products.map((product) => ({ name: product.name, category: product.category, maxWeightKg: product.maxWeightKg })),
+            items: cartSnapshot.offer.products.map((product) => ({ name: product.name, category: product.category, maxWeightKg: product.maxWeightKg, link: productLink(window.location.origin, product.image) })),
           },
-          items: cartSnapshot.items.map((line) => ({ name: line.product.name, quantity: line.quantity, unitPrice: line.unitPrice })),
+          items: cartSnapshot.items.map((line) => ({ name: line.product.name, quantity: line.quantity, unitPrice: line.unitPrice, link: productLink(window.location.origin, line.product.image) })),
         }));
       } catch {
         return null;

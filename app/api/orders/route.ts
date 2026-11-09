@@ -8,6 +8,7 @@ import {
   calculateOrderTotals,
   categoryDetailLabel,
   normalizePhoneDigits,
+  productLink,
 } from "@/lib/order-flow";
 import { createStableOrderId, type OrderRecord, type OrderRecordProduct } from "@/lib/order-record";
 import {
@@ -163,6 +164,7 @@ export async function POST(request: Request) {
   // when an ambiguous request is retried, so duplicates are easy to spot.
   const orderId = createStableOrderId(body.submissionId);
   const createdAt = new Date().toISOString();
+  const origin = new URL(request.url).origin;
   const productRows: OrderRecordProduct[] = [
     ...(cart.offer?.products ?? []).map((product) => ({
       modelId: product.id,
@@ -171,6 +173,7 @@ export async function POST(request: Request) {
       fit: categoryDetailLabel(product.category, product.maxWeightKg),
       quantity: 1,
       unitPrice: null,
+      link: productLink(origin, product.image),
     })),
     ...cart.items.map((line) => ({
       modelId: line.product.id,
@@ -179,6 +182,7 @@ export async function POST(request: Request) {
       fit: categoryDetailLabel(line.product.category, line.product.maxWeightKg),
       quantity: line.quantity,
       unitPrice: line.unitPrice,
+      link: productLink(origin, line.product.image),
     })),
   ];
   const shippingNote = shippingCost === null

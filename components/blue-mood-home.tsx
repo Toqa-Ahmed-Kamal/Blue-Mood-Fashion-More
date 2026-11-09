@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, Clock, MessageCircle, ShoppingBag, Truck } from "lucide-react";
+import { ArrowLeft, MessageCircle, ShoppingBag, Truck } from "lucide-react";
 
 import { ProductCard, QuickView } from "@/components/product-card";
+import { OfferCountdown } from "@/components/promo";
 import { AnnouncementBar, CartBar, SiteFooter, SiteHeader } from "@/components/store-chrome";
 import { formatEGP } from "@/lib/format";
 import {
@@ -86,7 +87,7 @@ export function BlueMoodHome() {
         <section className="offer-section" id="offer" aria-labelledby="offer-title">
           <div className="container">
             <div className="offer-head">
-              <span className="offer-timer"><Clock size={16} /> العرض لمدة {landingPromotion.durationDays} أيام بس</span>
+              <OfferCountdown />
               <h2 id="offer-title">عرض الشتاء</h2>
               <p>٤ قطع بـ <strong>{formatEGP(landingPromotion.price)}</strong>. اختاري الباقة واختاري الموديلات بنفسك.</p>
             </div>

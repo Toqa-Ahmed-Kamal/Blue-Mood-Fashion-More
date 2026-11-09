@@ -224,3 +224,23 @@ test("pajamas with their own weight limit show it; others keep the default note"
   assert.equal(detail("winter-pajamas"), "One Size – مقاس واحد يناسب لحد 85–90 كيلو");
   assert.equal(note("abayas", 70), null);
 });
+
+test("productLink builds an absolute photo link and the WhatsApp text includes it", async () => {
+  const { productLink } = await import("../lib/order-flow.ts");
+  assert.equal(productLink("https://shop.example", "/images/bejama/1000508030.jpg"), "https://shop.example/images/bejama/1000508030.jpg");
+  assert.equal(productLink("https://shop.example", "/images/صورة 1.png"), "https://shop.example/images/%D8%B5%D9%88%D8%B1%D8%A9%201.png");
+  assert.equal(productLink("not a url", "/x.jpg"), null);
+
+  const message = buildWhatsAppOrderText({
+    reference: "BM-20261109-ABCDEFGH",
+    createdAt: "2026-11-09T10:20:00.000Z",
+    customer: { name: "اسم", phone: "01000000000", alternatePhone: "", governorate: "القاهرة", area: "المطرية", address: "عنوان", notes: "" },
+    offer: { label: "٤ بيجامات شتوية", price: 1100, items: [{ name: "بيجاما بطبعة دب", category: "winter-pajamas", link: "https://shop.example/images/a.jpg" }] },
+    items: [{ name: "عباية", quantity: 1, unitPrice: 350, link: "https://shop.example/images/b.jpg" }],
+    subtotal: 1450,
+    shipping: 30,
+    total: 1480,
+  });
+  assert.match(message, /بيجاما بطبعة دب[\s\S]*?🔗 https:\/\/shop\.example\/images\/a\.jpg/);
+  assert.match(message, /عباية × 1 — 350 جنيه\n  🔗 https:\/\/shop\.example\/images\/b\.jpg/);
+});

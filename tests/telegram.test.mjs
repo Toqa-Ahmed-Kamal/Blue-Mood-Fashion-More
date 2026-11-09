@@ -150,3 +150,12 @@ test("non-JSON Telegram replies are not treated as delivered", async () => {
     (error) => error instanceof TelegramError && error.code === "NON_JSON_RESPONSE",
   );
 });
+
+test("the Telegram message shows each product's photo link under its name", () => {
+  const message = buildTelegramOrderMessage({
+    ...baseFields,
+    products: [{ ...baseFields.products[0], link: "https://shop.example/images/bejama/pink-gray-bear-print-pajama-set.jpg" }],
+  });
+  assert.match(message, /1\. بيجاما بطبعة دب .*\n   🔗 https:\/\/shop\.example\/images\/bejama\/pink-gray-bear-print-pajama-set\.jpg/);
+  assert.doesNotMatch(buildTelegramOrderMessage(baseFields), /🔗/);
+});

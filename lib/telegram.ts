@@ -65,7 +65,8 @@ export function buildTelegramOrderMessage(order: OrderRecord) {
     ...order.products.map((product, index) => {
       const quantity = product.quantity > 1 ? ` × ${product.quantity}` : "";
       const price = product.unitPrice === null ? "" : ` — ${formatPrice(product.unitPrice * product.quantity)}`;
-      return `${index + 1}. ${product.name}${quantity} (${product.modelId}) — ${product.fit}${price}`;
+      const link = product.link ? `\n   🔗 ${product.link}` : "";
+      return `${index + 1}. ${product.name}${quantity} (${product.modelId}) — ${product.fit}${price}${link}`;
     }),
     "",
     ...(order.offerPrice > 0 ? [`سعر العرض: ${formatPrice(order.offerPrice)}`] : []),
