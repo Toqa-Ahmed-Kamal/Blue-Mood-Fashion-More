@@ -128,7 +128,7 @@ export function Checkout() {
           offer: cartSnapshot.offer && {
             label: cartSnapshot.offer.option.label,
             price: cartSnapshot.offer.price,
-            items: cartSnapshot.offer.products.map((product) => ({ name: product.name, category: product.category })),
+            items: cartSnapshot.offer.products.map((product) => ({ name: product.name, category: product.category, maxWeightKg: product.maxWeightKg })),
           },
           items: cartSnapshot.items.map((line) => ({ name: line.product.name, quantity: line.quantity, unitPrice: line.unitPrice })),
         }));

@@ -42,7 +42,9 @@ const rawPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim() ?? "";
 const metaPixelId = /^\d{5,20}$/.test(rawPixelId) ? rawPixelId : null;
 
 // Meta Pixel base code. The __bmPixelInit flag makes init + the first PageView run once per page load.
+// The private /admin pages never load the Pixel.
 const metaPixelBaseCode = metaPixelId && `
+if (!window.location.pathname.startsWith('/admin')) {
 !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
 n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
@@ -53,6 +55,7 @@ if (!window.__bmPixelInit) {
   fbq('init', ${JSON.stringify(metaPixelId)});
   fbq('track', 'PageView');
   window.__bmPixelLastPath = window.location.pathname;
+}
 }`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

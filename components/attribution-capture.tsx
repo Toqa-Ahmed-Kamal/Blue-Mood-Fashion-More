@@ -10,6 +10,8 @@ export function AttributionCapture() {
   const pathname = usePathname();
 
   useEffect(() => {
+    // The owner's dashboard is not store traffic.
+    if (pathname.startsWith("/admin")) return;
     captureAttribution();
   }, [pathname]);
 

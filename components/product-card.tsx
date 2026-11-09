@@ -58,7 +58,7 @@ export function ProductAction({ product }: { product: CatalogProduct }) {
 }
 
 export function FitNote({ product }: { product: CatalogProduct }) {
-  const note = fitNoteFor(product.category);
+  const note = fitNoteFor(product.category, product.maxWeightKg);
   return note ? <span className="fit-note">{note}</span> : null;
 }
 

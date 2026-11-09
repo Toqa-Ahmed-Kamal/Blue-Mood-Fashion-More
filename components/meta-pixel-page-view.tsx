@@ -20,7 +20,7 @@ export function MetaPixelPageView() {
     const pixelWindow = window as PixelWindow;
     // Base code hasn't run yet: it will record this first page itself.
     if (!pixelWindow.fbq || pixelWindow.__bmPixelLastPath === undefined) return;
-    if (pixelWindow.__bmPixelLastPath === pathname) return;
+    if (pixelWindow.__bmPixelLastPath === pathname || pathname.startsWith("/admin")) return;
 
     pixelWindow.__bmPixelLastPath = pathname;
     pixelWindow.fbq("track", "PageView");

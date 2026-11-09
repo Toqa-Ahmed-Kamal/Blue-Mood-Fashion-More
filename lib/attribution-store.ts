@@ -1,5 +1,5 @@
 // Browser-only storage for marketing attribution; imported by client components.
-import { hasMarketingSignal, sanitizeAttribution, touchFromVisit, type OrderAttribution } from "@/lib/attribution";
+import { hasMarketingSignal, sanitizeAttribution, touchFromVisit, type OrderAttribution, type Touch } from "@/lib/attribution";
 
 /** First/last touch survive refreshes and return visits for this long. */
 const ATTRIBUTION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
@@ -52,7 +52,36 @@ export function captureAttribution() {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     }
     window.sessionStorage.setItem(SESSION_KEY, href);
+
+    // One dashboard visit per browsing session; a new campaign link mid-session starts a new one.
+    if (isNewSession || signal) reportVisit(touch, signal && !isNewSession);
   } catch {
     // Storage blocked (private mode etc.): attribution is best-effort and must never break the store.
+  }
+}
+
+const VISITOR_KEY = "blue-mood-visitor-v1";
+const VISIT_SESSION_KEY = "blue-mood-visit-session-v1";
+
+/** Random, anonymous ID kept in this browser; used only to count unique visitors. */
+function storedId(storage: Storage, storageKey: string, rotate = false) {
+  let id = rotate ? null : storage.getItem(storageKey);
+  if (!id) {
+    id = crypto.randomUUID();
+    storage.setItem(storageKey, id);
+  }
+  return id;
+}
+
+function reportVisit(touch: Touch, newSession: boolean) {
+  try {
+    const body = JSON.stringify({
+      sessionId: storedId(window.sessionStorage, VISIT_SESSION_KEY, newSession),
+      visitorId: storedId(window.localStorage, VISITOR_KEY),
+      touch,
+    });
+    void fetch("/api/track/visit", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  } catch {
+    // Counting is best-effort.
   }
 }

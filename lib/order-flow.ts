@@ -11,14 +11,17 @@ export type BundleEntry = {
 
 export const pajamaFitLabel = "One Size – مقاس واحد يناسب لحد 85–90 كيلو";
 
+const weightLimit = (maxWeightKg?: number) => (maxWeightKg ? `${maxWeightKg}` : "85–90");
+
 /** Short size note for product cards, or null when the category has no size claim. */
-export function fitNoteFor(category: CatalogCategory) {
-  return category === "winter-pajamas" ? "One Size · لحد 85–90 كيلو" : null;
+export function fitNoteFor(category: CatalogCategory, maxWeightKg?: number) {
+  return category === "winter-pajamas" ? `One Size · لحد ${weightLimit(maxWeightKg)} كيلو` : null;
 }
 
-export function categoryDetailLabel(category: CatalogCategory) {
+/** maxWeightKg: per-product override of the default pajama weight note. */
+export function categoryDetailLabel(category: CatalogCategory, maxWeightKg?: number) {
   switch (category) {
-    case "winter-pajamas": return pajamaFitLabel;
+    case "winter-pajamas": return maxWeightKg ? `One Size – مقاس واحد يناسب لحد ${maxWeightKg} كيلو` : pajamaFitLabel;
     case "wearable-blankets": return "بلانكيت شتوي قابل للارتداء";
     case "abayas": return "عباية";
     case "robes": return "روب";
@@ -100,7 +103,7 @@ export type WhatsAppOrderMessage = {
     address: string;
     notes: string;
   };
-  offer: { label: string; price: number; items: { name: string; category: CatalogCategory }[] } | null;
+  offer: { label: string; price: number; items: { name: string; category: CatalogCategory; maxWeightKg?: number }[] } | null;
   items: { name: string; quantity: number; unitPrice: number }[];
   subtotal: number;
   shipping: number | null;
@@ -125,7 +128,7 @@ export function buildWhatsAppOrderText(order: WhatsAppOrderMessage) {
   const offerLines = order.offer
     ? [
         `عرض الشتاء: ${order.offer.label} — ${order.offer.price} جنيه`,
-        ...order.offer.items.map((item) => `• ${item.name}\n  ${categoryDetailLabel(item.category)}`),
+        ...order.offer.items.map((item) => `• ${item.name}\n  ${categoryDetailLabel(item.category, item.maxWeightKg)}`),
         "",
       ]
     : [];

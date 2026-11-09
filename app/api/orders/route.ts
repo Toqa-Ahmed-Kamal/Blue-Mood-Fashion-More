@@ -1,4 +1,8 @@
+import { after } from "next/server";
+
 import { sanitizeAttribution } from "@/lib/attribution";
+import { saveOrder, toAnalyticsOrder } from "@/lib/analytics-store";
+import { RedisUnavailableError } from "@/lib/redis";
 import { resolveCart, type CartError } from "@/lib/cart";
 import {
   calculateOrderTotals,
@@ -164,7 +168,7 @@ export async function POST(request: Request) {
       modelId: product.id,
       name: product.name,
       category: product.category,
-      fit: categoryDetailLabel(product.category),
+      fit: categoryDetailLabel(product.category, product.maxWeightKg),
       quantity: 1,
       unitPrice: null,
     })),
@@ -172,7 +176,7 @@ export async function POST(request: Request) {
       modelId: line.product.id,
       name: line.product.name,
       category: line.product.category,
-      fit: categoryDetailLabel(line.product.category),
+      fit: categoryDetailLabel(line.product.category, line.product.maxWeightKg),
       quantity: line.quantity,
       unitPrice: line.unitPrice,
     })),
@@ -213,6 +217,19 @@ export async function POST(request: Request) {
     });
     return errorResponse(502, "ORDER_NOT_SAVED", ORDER_NOT_SAVED_MESSAGE);
   }
+
+  // Dashboard copy, saved only after Telegram accepted the order and after the customer got her answer.
+  // Best-effort: a Redis problem is logged and never affects the order.
+  after(async () => {
+    try {
+      await saveOrder(toAnalyticsOrder(order, order.attribution ?? null));
+    } catch (error) {
+      console.error("[analytics] order not saved to dashboard storage", {
+        orderId,
+        reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED",
+      });
+    }
+  });
 
   return Response.json({
     success: true,
