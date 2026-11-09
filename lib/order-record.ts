@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import type { OrderAttribution } from "@/lib/attribution";
 import type { CatalogCategory } from "@/lib/site-data";
 
 export type OrderRecordProduct = {
@@ -31,6 +32,8 @@ export type OrderRecord = {
   shippingCost: number | null;
   total: number | null;
   notes: string;
+  /** Where the customer came from (first/last touch); null when the browser sent none. */
+  attribution?: OrderAttribution | null;
 };
 
 /** Same submission UUID → same order number, so a retried request is recognisable. */

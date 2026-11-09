@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Cairo, El_Messiri, Great_Vibes, Playfair_Display } from "next/font/google";
 import Script from "next/script";
 
+import { AttributionCapture } from "@/components/attribution-capture";
 import { MetaPixelPageView } from "@/components/meta-pixel-page-view";
 import "./globals.css";
 
@@ -59,6 +60,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="ar" dir="rtl" className={`${cairo.variable} ${messiri.variable} ${playfair.variable} ${greatVibes.variable}`}>
       <body>
         {children}
+        <AttributionCapture />
         {metaPixelBaseCode && (
           <>
             <Script id="meta-pixel-base" strategy="afterInteractive">{metaPixelBaseCode}</Script>

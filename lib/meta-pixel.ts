@@ -4,7 +4,7 @@ import type { ResolvedCart } from "@/lib/cart";
 
 type PixelWindow = Window & { fbq?: (...args: unknown[]) => void };
 
-type PixelEvent = "AddToCart" | "InitiateCheckout" | "Purchase";
+type PixelEvent = "AddToCart" | "InitiateCheckout" | "Lead";
 
 const CURRENCY = "EGP";
 
@@ -76,11 +76,15 @@ export function trackInitiateCheckout(cart: ResolvedCart, cartKey: string) {
   });
 }
 
-/** Call only after the server confirmed the order was saved. The order ID doubles as Meta's dedup eventID. */
-export function trackPurchase(cart: ResolvedCart, order: { orderId: string; subtotal: number; total: number | null }) {
-  once(`purchase:${order.orderId}`, () => {
+/**
+ * Call only after the server confirmed the order was saved. A submitted order is a Lead, not a sale:
+ * the customer still has to confirm on WhatsApp, so Purchase is not sent from the site.
+ * The order ID doubles as Meta's dedup eventID.
+ */
+export function trackLead(cart: ResolvedCart, order: { orderId: string; subtotal: number; total: number | null }) {
+  once(`lead:${order.orderId}`, () => {
     track(
-      "Purchase",
+      "Lead",
       { ...cartContents(cart), content_type: "product", value: order.total ?? order.subtotal, currency: CURRENCY, order_id: order.orderId },
       order.orderId,
     );

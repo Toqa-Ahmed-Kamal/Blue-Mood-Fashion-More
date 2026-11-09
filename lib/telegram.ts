@@ -1,3 +1,4 @@
+import { formatAttributionLines } from "./attribution.ts";
 import type { OrderRecord } from "@/lib/order-record";
 
 const TELEGRAM_API_BASE = "https://api.telegram.org";
@@ -72,6 +73,8 @@ export function buildTelegramOrderMessage(order: OrderRecord) {
     `الشحن: ${formatPrice(order.shippingCost)}`,
     `الإجمالي: ${formatPrice(order.total)}`,
     ...(order.notes ? ["", `📝 ${order.notes}`] : []),
+    "",
+    ...formatAttributionLines(order.attribution),
   ];
 
   return fitToTelegramLimit(lines.join("\n"));

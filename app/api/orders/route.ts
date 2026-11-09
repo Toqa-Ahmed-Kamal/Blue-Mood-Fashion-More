@@ -1,3 +1,4 @@
+import { sanitizeAttribution } from "@/lib/attribution";
 import { resolveCart, type CartError } from "@/lib/cart";
 import {
   calculateOrderTotals,
@@ -198,6 +199,8 @@ export async function POST(request: Request) {
     shippingCost,
     total: totals.total,
     notes,
+    // Optional and best-effort: a missing or malformed value never blocks the order.
+    attribution: sanitizeAttribution(body.attribution),
   };
 
   try {

@@ -8,7 +8,8 @@ import { ArrowLeft, Check, ChevronRight, Copy, Minus, Pencil, Plus, ShieldCheck,
 import { addCartItem, emptyCart, MAX_ITEM_QUANTITY, resolveCart, setCartItemQuantity, setCartOffer, type ResolvedCart } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
-import { trackAddToCart, trackInitiateCheckout, trackPurchase } from "@/lib/meta-pixel";
+import { readAttribution } from "@/lib/attribution-store";
+import { trackAddToCart, trackInitiateCheckout, trackLead } from "@/lib/meta-pixel";
 import {
   buildWhatsAppOrderText,
   calculateOrderTotals,
@@ -153,7 +154,7 @@ export function Checkout() {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...requestBody, submissionId: attemptRef.current.submissionId }),
+        body: JSON.stringify({ ...requestBody, submissionId: attemptRef.current.submissionId, attribution: readAttribution() }),
       });
       const result = await response.json().catch(() => null) as OrderApiResponse | null;
       if (!response.ok || result?.success !== true || !result.order) {
@@ -171,8 +172,8 @@ export function Checkout() {
         total: order.total,
       });
 
-      // The server only answers success after the order was saved, so Purchase is never sent for a failed order.
-      trackPurchase(cartSnapshot, order);
+      // A saved order is a Lead (not yet a sale): Purchase is reserved for orders confirmed with the customer.
+      trackLead(cartSnapshot, order);
       attemptRef.current = null;
       updateCart(() => emptyCart);
       setPlaced({ orderId: order.orderId, whatsAppUrl, total: order.total });

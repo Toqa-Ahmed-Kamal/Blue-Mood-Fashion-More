@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:order": "node --experimental-strip-types --experimental-default-type=module --test tests/order-flow.test.mjs tests/telegram.test.mjs tests/cart.test.mjs"
+    "test:order": "node --experimental-strip-types --experimental-default-type=module --test tests/order-flow.test.mjs tests/telegram.test.mjs tests/cart.test.mjs tests/attribution.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.65.0",
