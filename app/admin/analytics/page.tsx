@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AnalyticsDashboard } from "@/components/admin/analytics-dashboard";
+import { CatalogSync } from "@/components/catalog-sync";
+import { loadCustomProducts } from "@/lib/custom-products-store";
 import { ADMIN_COOKIE, isValidAdminSessionToken } from "@/lib/admin-auth";
 
 export const metadata: Metadata = {
@@ -13,5 +15,11 @@ export const metadata: Metadata = {
 export default async function AdminAnalyticsPage() {
   // Checked here too, not only in proxy.ts.
   if (!isValidAdminSessionToken((await cookies()).get(ADMIN_COOKIE)?.value)) redirect("/admin/login");
-  return <AnalyticsDashboard />;
+  // Fresh read: the admin must see a product right after adding it.
+  const products = await loadCustomProducts().catch(() => []);
+  return (
+    <CatalogSync products={products}>
+      <AnalyticsDashboard />
+    </CatalogSync>
+  );
 }

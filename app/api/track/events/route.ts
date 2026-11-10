@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { clientIp, hashIp, recordEvents } from "@/lib/analytics-store";
 import { sanitizeBatchId, sanitizeJourneyEvents } from "@/lib/journey";
 import { RedisUnavailableError } from "@/lib/redis";
+import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
   if (typeof sessionId !== "string" || !UUID_PATTERN.test(sessionId) || typeof visitorId !== "string" || !UUID_PATTERN.test(visitorId)) {
     return done();
   }
+  await ensureCustomProducts();
   const events = sanitizeJourneyEvents(rawEvents);
   if (events.length === 0) return done();
 

@@ -2,6 +2,7 @@ import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
 import { sanitizeProductCost } from "@/lib/finance";
 import { saveProductCost } from "@/lib/finance-store";
 import { RedisUnavailableError } from "@/lib/redis";
+import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,7 @@ export async function PUT(request: Request, context: { params: Promise<{ product
   if (!isAdminRequest(request)) return unauthorized();
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   const { productId } = await context.params;
+  await ensureCustomProducts();
   let body: unknown;
   try {
     body = await request.json();

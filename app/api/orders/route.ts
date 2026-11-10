@@ -24,6 +24,7 @@ import {
   isValidTelegramBotToken,
   sendTelegramMessage,
 } from "@/lib/telegram";
+import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
 
@@ -154,6 +155,8 @@ export async function POST(request: Request) {
     return errorResponse(400, "INVALID_SUBMISSION_ID", "تعذر إنشاء مرجع آمن للطلب. أعيدي المحاولة.");
   }
 
+  // Products added from the admin must be known before the cart is priced.
+  await ensureCustomProducts();
   const cartResult = resolveCart(body.cart);
   if ("error" in cartResult) return errorResponse(400, cartResult.error, cartErrorMessages[cartResult.error]);
   const cart = cartResult.cart;

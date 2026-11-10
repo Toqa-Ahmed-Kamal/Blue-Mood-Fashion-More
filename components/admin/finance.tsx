@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { ImageOff, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ImageOff, ImagePlus, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 
 import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory, type FinanceReport } from "@/lib/finance";
 import { formatEGP } from "@/lib/format";
-import type { CatalogCategory } from "@/lib/site-data";
+import { categoryInfo, categoryOrder, categoryPrices, type CatalogCategory } from "@/lib/site-data";
 
 type ProductRow = {
   productId: string;
@@ -18,8 +18,14 @@ type ProductRow = {
   factory: string;
   cost: number | null;
   costUpdatedAt: string | null;
+  /** Added from the admin (editable here); built-in products live in the code. */
+  custom: boolean;
+  imageAlt: string;
+  /** The product's own price (null = the category price / offer only). */
+  price: number | null;
+  maxWeightKg: number | null;
 };
-type Data = { report: FinanceReport; products: ProductRow[]; expenses: Expense[]; vaultConfigured: boolean; unreadableOldOrders: number };
+type Data = { report: FinanceReport; products: ProductRow[]; expenses: Expense[]; factories: string[]; vaultConfigured: boolean; unreadableOldOrders: number };
 
 const cairoDay = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(date);
 const today = () => cairoDay(new Date());
@@ -108,6 +114,11 @@ export function FinanceTab() {
                 {report.counts.returnedOrders > 0 && <div><span className="admin-flag info">مرتجع</span> {report.counts.returnedOrders} أوردر مرتجع ({money(report.returnedValue)}) مش محسوب في المبيعات ولا التكلفة. شحن المرتجع يتسجل مصروف &quot;شحن المرتجعات&quot;.</div>}
               </div>
             )}
+            {report.totals.stockPurchases > 0 && (
+              <p className="admin-fin-stock">
+                شراء بضاعة من المصنع في الفترة: <strong>{money(report.totals.stockPurchases)}</strong> — متسجلة للمتابعة ومش مخصومة من صافي المكسب، لأن سعر المصنع لكل قطعة اتباعت مخصوم في &quot;تكلفة المنتجات&quot; (علشان نفس البضاعة ما تتخصمش مرتين).
+              </p>
+            )}
             <div className="admin-fin-categories">
               {report.expensesByCategory.filter((row) => row.amount > 0).map((row) => <span key={row.category}>{row.label}: <strong>{money(row.amount)}</strong></span>)}
             </div>
@@ -117,7 +128,7 @@ export function FinanceTab() {
 
       {data && (
         <>
-          <ProductsPricing products={data.products} onSaved={load} />
+          <ProductsPricing products={data.products} factories={data.factories} onSaved={load} />
           <Expenses expenses={data.expenses} range={range} onChanged={load} />
           {report && <OrdersProfit report={report} />}
         </>
@@ -128,8 +139,23 @@ export function FinanceTab() {
 
 // ── Products & Pricing ────────────────────────────────────────────────────
 
-function ProductsPricing({ products, onSaved }: { products: ProductRow[]; onSaved: () => Promise<void> }) {
+function ProductsPricing({ products, factories, onSaved }: { products: ProductRow[]; factories: string[]; onSaved: () => Promise<void> }) {
   const api = useFinanceApi();
+  const [dialog, setDialog] = useState<{ mode: "add" } | { mode: "edit"; product: ProductRow } | null>(null);
+
+  /** Adds a factory to the list (asked by name), then reloads; returns the name or null. */
+  async function newFactory() {
+    const name = window.prompt("اسم المصنع الجديد:")?.replace(/\s+/g, " ").trim();
+    if (!name) return null;
+    try {
+      await api("/api/admin/finance/factories", { method: "POST", body: JSON.stringify({ name }) });
+      await onSaved();
+      return name;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نضيف المصنع.");
+      return null;
+    }
+  }
   const [query, setQuery] = useState("");
   const [showHidden, setShowHidden] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, { factory: string; cost: string }>>({});
@@ -168,6 +194,7 @@ function ProductsPricing({ products, onSaved }: { products: ProductRow[]; onSave
     <section className="admin-panel">
       <div className="admin-panel-head">
         <h2>المنتجات والأسعار · Products &amp; Pricing ({priced} من {products.length} ليهم سعر مصنع)</h2>
+        <button type="button" className="admin-primary" onClick={() => setDialog({ mode: "add" })}><Plus size={15} /> إضافة منتج</button>
       </div>
       <div className="admin-filters">
         <input type="search" className="admin-search" placeholder="بحث باسم المنتج أو الكود" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="بحث" />
@@ -198,12 +225,27 @@ function ProductsPricing({ products, onSaved }: { products: ProductRow[]; onSave
                     </span>
                   </td>
                   <td dir="ltr" className="mono">{product.productId}</td>
-                  <td><input className="admin-inline-input" value={factory} placeholder="اسم المصنع" onChange={(event) => edit({ factory: event.target.value })} aria-label={`مصنع ${product.name}`} /></td>
+                  <td>
+                    <select
+                      className="admin-inline-input"
+                      value={factory}
+                      onChange={async (event) => {
+                        if (event.target.value !== "__new") return edit({ factory: event.target.value });
+                        const name = await newFactory();
+                        if (name) edit({ factory: name });
+                      }}
+                      aria-label={`مصنع ${product.name}`}
+                    >
+                      {[...new Set([...factories, factory])].map((name) => <option key={name} value={name}>{name}</option>)}
+                      <option value="__new">＋ مصنع جديد…</option>
+                    </select>
+                  </td>
                   <td><input className="admin-inline-input narrow" type="number" min={0} inputMode="decimal" value={costText} placeholder="—" onChange={(event) => edit({ cost: event.target.value })} aria-label={`سعر المصنع ${product.name}`} /></td>
                   <td>{product.salePrice === null ? <span className="admin-muted">ضمن العرض بس</span> : money(product.salePrice)}</td>
                   <td>{margin === null ? "—" : <span className={margin < 0 ? "admin-negative" : ""}>{money(margin)}</span>}</td>
                   <td className="actions">
                     {draft && <button type="button" disabled={busy === product.productId} onClick={() => void save(product)}><Save size={14} /> حفظ</button>}
+                    {product.custom && <button type="button" onClick={() => setDialog({ mode: "edit", product })}><Pencil size={14} /> تعديل المنتج</button>}
                   </td>
                 </tr>
               );
@@ -211,7 +253,16 @@ function ProductsPricing({ products, onSaved }: { products: ProductRow[]; onSave
           </tbody>
         </table>
       </div>
-      <p className="admin-muted small">المنتجات هي نفسها منتجات كتالوج الموقع ومربوطة بالكود. سعر البيع هو السعر الحالي على الموقع (بيتعدل من بيانات المنتج)؛ قطع البيجامات والبلانكيت جوه العرض بتتباع بسعر العرض. سعر المصنع بيتحفظ مع كل أوردر وقت تأكيده، فتغييره بعد كده مش بيغيّر أرباح الأوردرات المؤكدة قبل كده.</p>
+      {dialog && (
+        <ProductDialog
+          product={dialog.mode === "edit" ? dialog.product : null}
+          factories={factories}
+          onNewFactory={newFactory}
+          onClose={() => setDialog(null)}
+          onSaved={async () => { setDialog(null); await onSaved(); }}
+        />
+      )}
+      <p className="admin-muted small">المنتجات هي نفسها منتجات كتالوج الموقع ومربوطة بالكود. المنتج اللي بتضيفيه من هنا بيظهر على الموقع للبيع خلال ثواني، وبيتعدل من زرار &quot;تعديل المنتج&quot;؛ منتجات الموقع الأساسية بتتعدل من الكود. المصنع الافتراضي لكل المنتجات &quot;مصنع القاهرة&quot;. سعر البيع هو السعر الحالي على الموقع (بيتعدل من بيانات المنتج)؛ قطع البيجامات والبلانكيت جوه العرض بتتباع بسعر العرض. سعر المصنع بيتحفظ مع كل أوردر وقت تأكيده، فتغييره بعد كده مش بيغيّر أرباح الأوردرات المؤكدة قبل كده.</p>
     </section>
   );
 }
@@ -361,5 +412,172 @@ function OrdersProfit({ report }: { report: FinanceReport }) {
       )}
       <p className="admin-muted small">التاريخ هو يوم الأوردر. الأوردر اللي موجود في الموقع وفي تيليجرام بيتحسب مرة واحدة من الموقع. &quot;تقديرية&quot; = اتأكد قبل تسجيل سعر المصنع، فمحسوب بالسعر الحالي.</p>
     </section>
+  );
+}
+
+// ── Add / edit a product (shown on the site for sale) ─────────────────────
+
+type ProductForm = { name: string; category: CatalogCategory; price: string; imageAlt: string; maxWeightKg: string; hidden: boolean; factory: string; cost: string };
+
+const MAX_IMAGE_SIDE = 1200;
+const MAX_IMAGE_BASE64 = 850_000;
+
+/** Resizes the chosen photo in the browser to a JPEG small enough to store (≤ ~600 KB). */
+async function photoToBase64(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  for (const [side, quality] of [[MAX_IMAGE_SIDE, 0.85], [1000, 0.8], [800, 0.75], [700, 0.7]] as const) {
+    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const context = canvas.getContext("2d");
+    if (!context) break;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const base64 = canvas.toDataURL("image/jpeg", quality).split(",")[1] ?? "";
+    if (base64.length <= MAX_IMAGE_BASE64) return base64;
+  }
+  throw new Error("الصورة كبيرة جدًا حتى بعد تصغيرها. جربي صورة تانية.");
+}
+
+function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
+  product: ProductRow | null;
+  factories: string[];
+  onNewFactory: () => Promise<string | null>;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const api = useFinanceApi();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const editing = product !== null;
+  const [form, setForm] = useState<ProductForm>(() => ({
+    name: product?.name ?? "",
+    category: product?.category ?? "abayas",
+    price: product?.price != null ? String(product.price) : "",
+    imageAlt: product?.imageAlt ?? "",
+    maxWeightKg: product?.maxWeightKg != null ? String(product.maxWeightKg) : "",
+    hidden: product?.hidden ?? false,
+    factory: product?.factory ?? factories[0] ?? "",
+    cost: product?.cost != null ? String(product.cost) : "",
+  }));
+  const [photo, setPhoto] = useState<{ base64: string; preview: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  const set = <K extends keyof ProductForm>(field: K, value: ProductForm[K]) => setForm((current) => ({ ...current, [field]: value }));
+  const offerOnly = form.category === "winter-pajamas" || form.category === "wearable-blankets";
+  const categoryPrice = categoryPrices[form.category];
+
+  async function choosePhoto(file: File | undefined) {
+    if (!file) return;
+    setError("");
+    try {
+      const base64 = await photoToBase64(file);
+      setPhoto({ base64, preview: `data:image/jpeg;base64,${base64}` });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نقرا الصورة.");
+    }
+  }
+
+  async function save() {
+    if (!editing && !photo) {
+      setError("ارفعي صورة المنتج.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const body = {
+        name: form.name,
+        category: form.category,
+        price: form.price.trim() === "" ? null : Number(form.price),
+        imageAlt: form.imageAlt,
+        maxWeightKg: form.category === "winter-pajamas" && form.maxWeightKg.trim() ? Number(form.maxWeightKg) : null,
+        hidden: form.hidden,
+        ...(photo ? { image: photo.base64 } : {}),
+        ...(!editing ? { factory: form.factory, cost: form.cost.trim() === "" ? null : Number(form.cost) } : {}),
+      };
+      if (editing) await api(`/api/admin/products/${product.productId}`, { method: "PATCH", body: JSON.stringify(body) });
+      else await api("/api/admin/products", { method: "POST", body: JSON.stringify(body) });
+      await onSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ المنتج.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <dialog ref={dialogRef} className="admin-dialog" dir="rtl" aria-labelledby="product-dialog-title" onClose={onClose} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div className="admin-dialog-inner">
+        <header className="admin-dialog-head">
+          <div>
+            <h2 id="product-dialog-title" className="admin-dialog-plain-title">{editing ? `تعديل ${product.name}` : "إضافة منتج جديد للموقع"}</h2>
+            <p className="admin-muted">{editing ? <span dir="ltr">{product.productId}</span> : "المنتج هيظهر على الموقع للبيع (إلا لو علّمتي إخفاء)، وبكود ثابت بيتربط بيه في الأوردرات والحسابات."}</p>
+          </div>
+          <button type="button" className="admin-icon-btn" onClick={onClose} aria-label="إغلاق"><X size={18} /></button>
+        </header>
+
+        <div className="admin-product-form">
+          <label className="admin-photo-pick">
+            {photo || product?.image ? (
+              // eslint-disable-next-line @next/next/no-img-element -- local preview of the chosen photo
+              <img src={photo?.preview ?? product?.image} alt="" />
+            ) : (
+              <span><ImagePlus size={26} aria-hidden="true" /> ارفعي صورة المنتج</span>
+            )}
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void choosePhoto(event.target.files?.[0])} aria-label="صورة المنتج" />
+            {(photo || product?.image) && <small>دوسي لتغيير الصورة</small>}
+          </label>
+
+          <div className="admin-edit-grid">
+            <label className="admin-field wide"><span>اسم المنتج</span><input value={form.name} onChange={(event) => set("name", event.target.value)} placeholder="مثلاً: عباية قطيفة كحلي بتطريز ذهبي" /></label>
+            <label className="admin-field"><span>القسم</span>
+              <select value={form.category} disabled={editing} onChange={(event) => set("category", event.target.value as CatalogCategory)}>
+                {categoryOrder.map((category) => <option key={category} value={category}>{categoryInfo[category].singular}</option>)}
+              </select>
+            </label>
+            <label className="admin-field"><span>سعر البيع للقطعة (ج.م)</span>
+              <input type="number" min={1} inputMode="numeric" value={form.price} onChange={(event) => set("price", event.target.value)} placeholder={offerOnly ? (categoryPrice ? `فاضي = ${categoryPrice}` : "فاضي = ضمن العرض بس") : (categoryPrice ? String(categoryPrice) : "")} />
+            </label>
+            {form.category === "winter-pajamas" && (
+              <label className="admin-field"><span>المقاس: One Size لحد كام كيلو</span>
+                <input type="number" min={30} max={200} inputMode="numeric" value={form.maxWeightKg} onChange={(event) => set("maxWeightKg", event.target.value)} placeholder="فاضي = 85–90" />
+              </label>
+            )}
+            <label className="admin-field wide"><span>وصف الصورة (للي مش شايفة الصورة وللبحث)</span><input value={form.imageAlt} onChange={(event) => set("imageAlt", event.target.value)} placeholder="مثلاً: عباية كحلي طويلة بتطريز ذهبي على الصدر" /></label>
+            {!editing && (
+              <>
+                <label className="admin-field"><span>المصنع</span>
+                  <select value={form.factory} onChange={async (event) => {
+                    if (event.target.value !== "__new") return set("factory", event.target.value);
+                    const name = await onNewFactory();
+                    if (name) set("factory", name);
+                  }}>
+                    {[...new Set([...factories, form.factory].filter(Boolean))].map((name) => <option key={name} value={name}>{name}</option>)}
+                    <option value="__new">＋ مصنع جديد…</option>
+                  </select>
+                </label>
+                <label className="admin-field"><span>سعر المصنع للقطعة (ج.م)</span><input type="number" min={0} inputMode="decimal" value={form.cost} onChange={(event) => set("cost", event.target.value)} placeholder="اختياري" /></label>
+              </>
+            )}
+            <label className="admin-check wide"><input type="checkbox" checked={form.hidden} onChange={(event) => set("hidden", event.target.checked)} /> إخفاء من الموقع (يتحفظ بس مايظهرش للعميلات)</label>
+          </div>
+          {editing && <p className="admin-muted small">المصنع وسعر المصنع بيتعدلوا من جدول المنتجات. القسم ثابت لأن كود المنتج مربوط بيه.</p>}
+        </div>
+
+        {error && <p className="admin-error" role="alert">{error}</p>}
+        <footer className="admin-dialog-actions actions">
+          <button type="button" onClick={onClose}>إلغاء</button>
+          <button type="button" className="admin-primary" disabled={busy} onClick={() => void save()}>{busy ? "جاري الحفظ…" : editing ? "حفظ التعديل" : "إضافة المنتج للموقع"}</button>
+        </footer>
+      </div>
+    </dialog>
   );
 }

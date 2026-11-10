@@ -1496,3 +1496,40 @@ h1, h2, h3 { font-family: var(--font-display); }
   .admin-fin-form { grid-template-columns: minmax(0, 1fr); }
   .admin-fin-form .wide { grid-column: auto; }
 }
+
+/* ── Admin: sections sidebar ── */
+.admin.admin-shell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 20px; max-width: none; }
+.admin-shell.sidebar-open { grid-template-columns: 230px minmax(0, 1fr); }
+.admin-main { min-width: 0; max-width: 1240px; width: 100%; margin-inline: auto; }
+.admin-sidebar { position: sticky; top: 12px; align-self: start; max-height: calc(100dvh - 24px); overflow-y: auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 12px; box-shadow: var(--shadow-sm); }
+.admin-sidebar[hidden] { display: none; }
+.admin-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-inline: 4px; font-size: .9rem; }
+.admin-sidebar nav { display: grid; gap: 4px; }
+.admin-sidebar nav button { display: flex; align-items: center; gap: 10px; width: 100%; font: inherit; font-size: .9rem; font-weight: 700; color: var(--muted); background: transparent; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer; text-align: start; }
+.admin-sidebar nav button span:not(.admin-badge) { flex: 1; }
+.admin-sidebar nav button:hover { background: var(--bg); color: var(--navy); }
+.admin-sidebar nav button.active { background: var(--brand-soft); color: var(--navy); box-shadow: inset 3px 0 0 var(--pink); }
+.admin-sidebar nav button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.admin-icon-btn.small { width: 32px; height: 32px; }
+.admin-header-title { display: flex; align-items: center; gap: 12px; }
+.admin-sidebar-backdrop { display: none; }
+@media (max-width: 900px) {
+  .admin-shell.sidebar-open { grid-template-columns: minmax(0, 1fr); }
+  .admin-sidebar { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 40; width: min(280px, 84vw); max-height: none; border-radius: 0; top: 0; }
+  .admin-sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 30; border: 0; background: rgba(31, 53, 80, .35); }
+}
+.admin-fin-stock { margin: 0 0 10px; font-size: .86rem; color: var(--brand-dark); background: var(--brand-soft); border-radius: var(--radius); padding: 8px 12px; line-height: 1.7; }
+.admin-dialog-plain-title { font-family: var(--font-body) !important; font-size: 1.05rem !important; }
+.admin-product-form { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px; align-items: start; }
+.admin-photo-pick { position: relative; display: grid; place-items: center; gap: 6px; aspect-ratio: 3 / 4; border: 2px dashed var(--line); border-radius: var(--radius); background: var(--bg); color: var(--muted); font-size: .85rem; text-align: center; overflow: hidden; cursor: pointer; }
+.admin-photo-pick span { display: grid; place-items: center; gap: 8px; padding: 12px; }
+.admin-photo-pick img { width: 100%; height: 100%; object-fit: cover; }
+.admin-photo-pick small { position: absolute; inset-inline: 0; bottom: 0; background: rgba(31, 53, 80, .6); color: #fff; padding: 4px; font-size: .72rem; }
+.admin-photo-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.admin-photo-pick:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.admin-check.wide { grid-column: 1 / -1; }
+select.admin-inline-input { width: 160px; }
+@media (max-width: 760px) {
+  .admin-product-form { grid-template-columns: minmax(0, 1fr); }
+  .admin-photo-pick { max-width: 220px; justify-self: center; width: 100%; }
+}

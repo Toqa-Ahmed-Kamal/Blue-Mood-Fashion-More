@@ -758,3 +758,25 @@ test("finance store: costs and expenses are saved, read back, edited and deleted
   assert.equal(await finance.deleteExpense(expense.id), false);
   assert.deepEqual(await finance.loadExpenses(), []);
 });
+
+test("added products: saved with their photo, read back, loaded into the server catalog; photo served from storage", async () => {
+  store.clear();
+  const productsStore = await import("../lib/custom-products-store.ts");
+  const { toCatalogProduct } = await import("../lib/custom-products.ts");
+  const { findProduct, setCustomProducts } = await import("../lib/site-data.ts");
+  try {
+    const product = toCatalogProduct("bm-robe-n00test1", { name: "روب اختبار", category: "robes", price: 320, imageAlt: "روب", maxWeightKg: null, hidden: false }, "/api/product-images/img-test0001");
+    const photo = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString("base64");
+    const saved = await productsStore.saveCustomProduct(product, { id: "img-test0001", type: "image/jpeg", data: photo });
+    assert.deepEqual(saved, product);
+    assert.equal(findProduct(product.id), undefined, "not in this instance's catalog until loaded");
+    await productsStore.ensureCustomProducts(true);
+    assert.equal(findProduct(product.id)?.name, "روب اختبار");
+    const image = await productsStore.loadProductImage("img-test0001");
+    assert.equal(image.type, "image/jpeg");
+    assert.deepEqual([...image.data.subarray(0, 3)], [0xff, 0xd8, 0xff]);
+    assert.equal(await productsStore.loadProductImage("img-missing1"), null);
+  } finally {
+    setCustomProducts([]);
+  }
+});

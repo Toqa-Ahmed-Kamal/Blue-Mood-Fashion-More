@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ExternalLink, Eye, LogOut, RefreshCw, RotateCcw, Undo2, X, XCircle } from "lucide-react";
+import { Archive, ChartColumn, CheckCircle2, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -56,13 +56,15 @@ const PRESETS = [
 ] as const;
 
 const TABS = [
-  { id: "traffic", label: "الزيارات" },
-  { id: "journey", label: "رحلة العميلة والمنتجات" },
-  { id: "orders", label: "الأوردرات" },
-  { id: "old", label: "الأوردرات القديمة" },
-  { id: "quantities", label: "حصر كميات المصنع" },
-  { id: "finance", label: "الإدارة المالية" },
+  { id: "traffic", label: "الزيارات", icon: ChartColumn },
+  { id: "journey", label: "رحلة العميلة والمنتجات", icon: Route },
+  { id: "orders", label: "الأوردرات", icon: ShoppingBag },
+  { id: "old", label: "الأوردرات القديمة", icon: Archive },
+  { id: "quantities", label: "حصر كميات المصنع", icon: Package },
+  { id: "finance", label: "الإدارة المالية", icon: Wallet },
 ] as const;
+const SIDEBAR_KEY = "bm-admin-sidebar";
+const isNarrow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
 type TabId = (typeof TABS)[number]["id"];
 
 const integer = new Intl.NumberFormat("en-US");
@@ -86,6 +88,39 @@ export function AnalyticsDashboard() {
   const [tab, setTab] = useState<TabId>("traffic");
   // Old Orders stays mounted once opened, so an import preview is not lost when switching tabs.
   const [oldOpened, setOldOpened] = useState(false);
+  // Sections sidebar: open by default on wide screens, closed on phones; the choice is remembered.
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    let saved: string | null = null;
+    try {
+      saved = window.localStorage.getItem(SIDEBAR_KEY);
+    } catch {
+      saved = null;
+    }
+    // Reading the saved choice after mount keeps server and browser markup identical.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSidebarOpen(isNarrow() ? false : saved !== "closed");
+  }, []);
+
+  function toggleSidebar() {
+    setSidebarOpen((open) => {
+      if (!isNarrow()) {
+        try {
+          window.localStorage.setItem(SIDEBAR_KEY, open ? "closed" : "open");
+        } catch {
+          // Not remembered; still toggles.
+        }
+      }
+      return !open;
+    });
+  }
+
+  function chooseTab(id: TabId) {
+    setTab(id);
+    if (id === "old") setOldOpened(true);
+    if (isNarrow()) setSidebarOpen(false);
+  }
 
   const load = useCallback(async (from: string, to: string) => {
     setLoading(true);
@@ -135,11 +170,53 @@ export function AnalyticsDashboard() {
   }
 
   return (
-    <div className="admin" dir="rtl">
+    <div className={`admin admin-shell${sidebarOpen ? " sidebar-open" : ""}`} dir="rtl">
+      <aside className="admin-sidebar" id="admin-sidebar" aria-label="أقسام الداشبورد" hidden={!sidebarOpen}>
+        <div className="admin-sidebar-head">
+          <strong>الأقسام</strong>
+          <button type="button" className="admin-icon-btn small" onClick={toggleSidebar} aria-label="قفل القائمة"><PanelRightClose size={16} /></button>
+        </div>
+        <nav role="tablist" aria-orientation="vertical" aria-label="أقسام الداشبورد">
+          {TABS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`tab-${item.id}`}
+                aria-selected={tab === item.id}
+                aria-controls={`panel-${item.id}`}
+                className={tab === item.id ? "active" : ""}
+                onClick={() => chooseTab(item.id)}
+              >
+                <Icon size={17} aria-hidden="true" />
+                <span>{item.label}</span>
+                {item.id === "orders" && report && report.totals.pending > 0 && <span className="admin-badge">{report.totals.pending}</span>}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+      {sidebarOpen && <button type="button" className="admin-sidebar-backdrop" aria-label="قفل القائمة" onClick={() => setSidebarOpen(false)} />}
+
+      <div className="admin-main">
       <header className="admin-header">
-        <div>
-          <p className="admin-kicker">Blue Mood · Private</p>
-          <h1>Analytics</h1>
+        <div className="admin-header-title">
+          <button
+            type="button"
+            className="admin-icon-btn"
+            onClick={toggleSidebar}
+            aria-label={sidebarOpen ? "قفل قائمة الأقسام" : "فتح قائمة الأقسام"}
+            aria-expanded={sidebarOpen}
+            aria-controls="admin-sidebar"
+          >
+            <Menu size={18} />
+          </button>
+          <div>
+            <p className="admin-kicker">Blue Mood · Private · {TABS.find((item) => item.id === tab)?.label}</p>
+            <h1>Analytics</h1>
+          </div>
         </div>
         <div className="admin-header-actions">
           <button type="button" className="admin-icon-btn" onClick={() => void load(range.from, range.to)} disabled={loading} aria-label="تحديث">
@@ -164,23 +241,6 @@ export function AnalyticsDashboard() {
       {report && (
         <>
           <OverviewCards report={report} />
-          <nav className="admin-tabs" role="tablist" aria-label="أقسام الداشبورد">
-            {TABS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                id={`tab-${item.id}`}
-                aria-selected={tab === item.id}
-                aria-controls={`panel-${item.id}`}
-                className={tab === item.id ? "active" : ""}
-                onClick={() => { setTab(item.id); if (item.id === "old") setOldOpened(true); }}
-              >
-                {item.label}
-                {item.id === "orders" && report.totals.pending > 0 && <span className="admin-badge">{report.totals.pending}</span>}
-              </button>
-            ))}
-          </nav>
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
             {tab === "traffic" && <TrafficTab report={report} />}
             {tab === "journey" && <JourneyTab report={report} />}
@@ -191,6 +251,7 @@ export function AnalyticsDashboard() {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

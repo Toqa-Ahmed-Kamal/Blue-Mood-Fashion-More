@@ -3,6 +3,7 @@ import { MAX_OLD_ORDERS_PER_REQUEST, sanitizeOldOrder } from "@/lib/old-orders";
 import { OldOrdersNotPersistedError, VaultNotConfiguredError, importOldOrders, loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
+import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    await ensureCustomProducts();
     const result = await importOldOrders(orders.filter((order) => order !== null));
     // Visible in the Vercel logs: proof that an import reached storage (IDs only, no customer data).
     console.info("[admin] old orders imported", { imported: result.imported.length, duplicates: result.duplicates.length, backfilled: result.backfilled.length, totalSaved: result.totalSaved });

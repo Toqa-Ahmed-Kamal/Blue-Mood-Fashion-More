@@ -3,12 +3,26 @@
 // Keys (prefix bm:{prod|preview|dev}:v1:)
 //   finance:costs      HASH  productId → JSON ProductCost (factory name + factory price per piece)
 //   finance:expenses   HASH  expenseId → JSON Expense
+//   finance:factories  SET   factory names added by the admin (DEFAULT_FACTORY is always there)
 // No customer data is stored here.
-import type { Expense, ProductCost } from "./finance.ts";
+import { DEFAULT_FACTORY, type Expense, type ProductCost } from "./finance.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 
 const COSTS = () => `${keyPrefix()}finance:costs`;
 const EXPENSES = () => `${keyPrefix()}finance:expenses`;
+const FACTORIES = () => `${keyPrefix()}finance:factories`;
+
+/** Factory names: the default, every one added by the admin, and any already used on a product. */
+export async function loadFactories(costs: Record<string, ProductCost> = {}) {
+  const [members] = await redisPipeline([["SMEMBERS", FACTORIES()]], "read");
+  const names = new Set([DEFAULT_FACTORY, ...(Array.isArray(members) ? members.map(String) : []), ...Object.values(costs).map((cost) => cost.factory).filter(Boolean)]);
+  return [...names].toSorted((a, b) => (a === DEFAULT_FACTORY ? -1 : b === DEFAULT_FACTORY ? 1 : a.localeCompare(b, "ar")));
+}
+
+export async function addFactory(name: string) {
+  const [, present] = await redisPipeline([["SADD", FACTORIES(), name], ["SISMEMBER", FACTORIES(), name]], "write");
+  return Number(present) === 1;
+}
 
 function parseHash<T>(flat: unknown): T[] {
   const list = Array.isArray(flat) ? flat : [];

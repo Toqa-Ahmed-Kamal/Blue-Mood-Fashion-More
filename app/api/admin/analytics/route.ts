@@ -1,6 +1,7 @@
 import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
 import { MAX_REPORT_DAYS, cairoDay, daysBetween, loadReport } from "@/lib/analytics-store";
 import { RedisUnavailableError, isRedisConfigured } from "@/lib/redis";
+import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
   if (!isRedisConfigured("read")) return json(503, { success: false, error: { code: "STORAGE_NOT_CONFIGURED", message: "مفاتيح Upstash مش موجودة على السيرفر." } });
 
   try {
+    await ensureCustomProducts();
     return json(200, { success: true, report: await loadReport(days) });
   } catch (error) {
     console.error("[admin] analytics read failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });

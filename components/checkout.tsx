@@ -52,7 +52,6 @@ const emptyCustomer: CustomerDetails = {
   notes: "",
 };
 
-const upsellProducts = visibleCatalog.filter((product) => priceOf(product) !== null);
 
 function validate(customer: CustomerDetails): FieldErrors {
   const errors: FieldErrors = {};
@@ -211,6 +210,8 @@ export function Checkout() {
   const totals = calculateOrderTotals(resolved.cart.subtotal, shippingFee);
   const areaOptions = shippingAreasFor(customer.governorate);
   const fieldError = (field: keyof CustomerDetails) => showErrors ? errors[field] : undefined;
+  // Computed on render: products added from the admin join the catalog when the page loads.
+  const upsellProducts = visibleCatalog.filter((product) => priceOf(product) !== null);
   const missingUpsells = upsellProducts.filter((product) => !cart.items.some((item) => item.productId === product.id));
 
   return (

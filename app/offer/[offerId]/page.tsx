@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
+import { CatalogSync } from "@/components/catalog-sync";
 import { OfferBuilder } from "@/components/offer-builder";
+import { loadCustomProductsForPage } from "@/lib/custom-products-store";
 import { landingPromotion } from "@/lib/site-data";
 
 type OfferPageProps = {
@@ -13,5 +15,10 @@ export default async function OfferPage({ params }: OfferPageProps) {
 
   if (!offer) notFound();
 
-  return <OfferBuilder initialOfferId={offer.id} />;
+  const products = await loadCustomProductsForPage();
+  return (
+    <CatalogSync products={products}>
+      <OfferBuilder initialOfferId={offer.id} />
+    </CatalogSync>
+  );
 }

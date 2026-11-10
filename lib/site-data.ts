@@ -94,7 +94,24 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-blanket-002", name: "بلانكيت هودي بقلوب وودان أرنب", category: "wearable-blankets", image: "/images/bejama/1000507693.jpg", imageAlt: "هودي بطانية واسع من الفرو مطبوع عليه قلوب بيضاء وبكابشون بودان أرنب" },
 ];
 
-export const visibleCatalog = catalog.filter((product) => !product.hidden);
+export const visibleCatalog: CatalogProduct[] = catalog.filter((product) => !product.hidden);
+
+// ── Products added from the admin (stored in Redis) ──
+// They are inserted into the same `catalog` / `visibleCatalog` arrays every module already uses,
+// so the store, cart, orders and dashboards see them without special cases.
+const BUILT_IN_COUNT = catalog.length;
+const builtInIds = new Set(catalog.map((product) => product.id));
+
+export function isBuiltInProduct(id: string) {
+  return builtInIds.has(id);
+}
+
+/** Replaces the admin-added products (idempotent; called by the server and on each store page). */
+export function setCustomProducts(products: readonly CatalogProduct[]) {
+  const valid = products.filter((product) => !builtInIds.has(product.id) && product.category in categoryInfo);
+  catalog.splice(BUILT_IN_COUNT, catalog.length - BUILT_IN_COUNT, ...valid);
+  visibleCatalog.splice(0, visibleCatalog.length, ...catalog.filter((product) => !product.hidden));
+}
 
 export function findProduct(id: string) {
   return catalog.find((product) => product.id === id);

@@ -14,7 +14,11 @@ import { confirmedValueOf, type AnalyticsOrder, type CostSnapshot, type OrderSta
 import { oldOrderValue, type OldOrder } from "./old-orders.ts";
 import { catalog } from "./site-data.ts";
 
+/** Factory of every product that has none saved yet (all products at launch come from it). */
+export const DEFAULT_FACTORY = "مصنع القاهرة";
+
 export const EXPENSE_CATEGORIES = [
+  { id: "stock-purchase", label: "شراء بضاعة من المصنع (منتجات)" },
   { id: "factory-shipping", label: "شحن من المصنع" },
   { id: "order-shipping", label: "شحن الأوردرات للعميلات (شركة الشحن)" },
   { id: "returns-shipping", label: "شحن المرتجعات" },
@@ -24,6 +28,13 @@ export const EXPENSE_CATEGORIES = [
   { id: "other", label: "مصروفات أخرى" },
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]["id"];
+
+/**
+ * Paying the factory for stock is recorded and shown on its own but NOT deducted from net profit:
+ * the factory cost of every piece sold is already deducted (products cost), so deducting the stock
+ * purchase too would count the same goods twice.
+ */
+export const NOT_DEDUCTED_CATEGORIES: readonly ExpenseCategory[] = ["stock-purchase"];
 
 export type ProductCost = {
   productId: string;
@@ -117,7 +128,8 @@ export type FinanceOrderRow = {
 
 export type FinanceReport = {
   range: { from: string | null; to: string | null };
-  totals: { sales: number; productsCost: number; expenses: number; netProfit: number };
+  /** expenses = deducted expenses only; stockPurchases = factory stock payments (recorded, not deducted). */
+  totals: { sales: number; productsCost: number; expenses: number; stockPurchases: number; netProfit: number };
   counts: { confirmedOrders: number; returnedOrders: number; estimatedOrders: number; missingCostOrders: number; expenses: number };
   /** Value of returned orders (information only, not deducted anywhere). */
   returnedValue: number;
@@ -216,11 +228,13 @@ export function buildFinanceReport(input: {
   }
 
   const expenses = input.expenses.filter((expense) => inRange(expense.date));
-  const expensesTotal = round(expenses.reduce((sum, expense) => sum + expense.amount, 0));
+  const deducted = expenses.filter((expense) => !NOT_DEDUCTED_CATEGORIES.includes(expense.category));
+  const expensesTotal = round(deducted.reduce((sum, expense) => sum + expense.amount, 0));
+  const stockPurchases = round(expenses.filter((expense) => NOT_DEDUCTED_CATEGORIES.includes(expense.category)).reduce((sum, expense) => sum + expense.amount, 0));
   const confirmed = rows.filter((row) => row.status === "confirmed");
   return {
     range: { from, to },
-    totals: { sales: round(sales), productsCost: round(productsCost), expenses: expensesTotal, netProfit: round(sales - productsCost - expensesTotal) },
+    totals: { sales: round(sales), productsCost: round(productsCost), expenses: expensesTotal, stockPurchases, netProfit: round(sales - productsCost - expensesTotal) },
     counts: {
       confirmedOrders: confirmed.length,
       returnedOrders: rows.length - confirmed.length,

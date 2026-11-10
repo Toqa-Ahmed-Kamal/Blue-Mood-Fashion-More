@@ -4,6 +4,7 @@ import { loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { buildQuantitySummary } from "@/lib/quantity-summary";
 import { RedisUnavailableError } from "@/lib/redis";
+import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
   const includeArchived = new URL(request.url).searchParams.get("archived") === "include";
   try {
+    await ensureCustomProducts();
     const vault = isOrderVaultConfigured();
     // Old orders are encrypted: without the key they cannot be read (site orders still count).
     const [live, old] = await Promise.all([loadAllOrdersForSummary(), vault ? loadOldOrders() : Promise.resolve({ orders: [], unreadable: 0 })]);
