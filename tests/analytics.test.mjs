@@ -56,7 +56,7 @@ function fakeRedis(command) {
       store.set(key, zset);
       return 1;
     }
-    case "ZRANGE": { const [key, min, max] = args; return [...(get(key) ?? new Map())].filter(([, s]) => s >= Number(min) && s <= Number(max)).sort((a, b) => a[1] - b[1]).map(([m]) => m); }
+    case "ZRANGE": { const [key, min, max] = args; const score = (v) => (v === "-inf" ? -Infinity : v === "+inf" ? Infinity : Number(v)); return [...(get(key) ?? new Map())].filter(([, s]) => s >= score(min) && s <= score(max)).sort((a, b) => a[1] - b[1]).map(([m]) => m); }
     case "ZREMRANGEBYSCORE": return 0;
     case "MGET": return args.map((key) => get(key) ?? null);
     case "RPUSH": { const list = get(args[0]) ?? []; list.push(...args.slice(1)); store.set(args[0], list); return list.length; }
@@ -654,4 +654,44 @@ test("journey batches: a batch re-sent after a reload is stored once; malformed 
   ]);
   assert.equal(batches.length, 1, "max 3 batches checked; bad IDs and empty batches dropped");
   assert.deepEqual(sanitizeJourneyBatches("nope"), []);
+});
+
+test("factory summary loader: every site order, fit from the order or its encrypted details, never customer data", async () => {
+  store.clear();
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  try {
+    const withDetails = { ...orderRecord, orderId: "BM-33333333333333333333" };
+    const plain = { ...orderRecord, orderId: "BM-44444444444444444444" };
+    // An older stored order (before fit was saved with it): fit only inside the encrypted details.
+    const older = analytics.toAnalyticsOrder(withDetails, null);
+    older.products = older.products.map((product) => ({ modelId: product.modelId, category: product.category, quantity: product.quantity }));
+    await analytics.saveOrder(older, { sealedDetails: vault.sealOrderDetails(vault.orderDetailsOf(withDetails)) });
+    await analytics.saveOrder(analytics.toAnalyticsOrder(plain, null));
+    calls.length = 0;
+    const all = await analytics.loadAllOrdersForSummary();
+    assert.ok(calls.every((call) => call.token === READ_TOKEN));
+    assert.equal(all.length, 2);
+    const byId = Object.fromEntries(all.map((item) => [item.order.orderId, item]));
+    assert.deepEqual(byId[withDetails.orderId].fits, withDetails.products.map((product) => product.fit));
+    assert.deepEqual(byId[plain.orderId].fits, plain.products.map((product) => product.fit), "new orders carry their fit");
+    assert.equal(JSON.stringify(all).includes(orderRecord.customerName), false);
+    assert.equal(JSON.stringify(all).includes(orderRecord.phone), false);
+  } finally {
+    delete process.env.ORDER_DATA_KEY;
+  }
+});
+
+test("journey is shown in the order the steps happened, even when requests arrived out of order", async () => {
+  const { parseJourney } = await import("../lib/journey.ts");
+  const stored = [
+    { e: "visit", at: "2026-11-10T15:00:00.800Z", s: "Facebook Ads" },
+    { e: "page", at: "2026-11-10T15:00:00.300Z", l: "/" },
+    { e: "page", at: "2026-11-10T15:00:20.000Z", l: "/checkout" },
+    { e: "checkout", at: "2026-11-10T15:00:20.050Z" },
+    // This batch reached the server after the checkout batch.
+    { e: "view", at: "2026-11-10T15:00:05.000Z", p: "bm-abaya-001" },
+    { e: "add", at: "2026-11-10T15:00:08.000Z", p: "bm-abaya-001", q: 1 },
+    { e: "order", at: "2026-11-10T15:01:00.000Z", o: "BM-AAAAAAAAAAAAAAAAAAAA", v: 350 },
+  ].map((entry) => JSON.stringify(entry));
+  assert.deepEqual(parseJourney(stored).map((entry) => entry.e), ["visit", "page", "view", "add", "page", "checkout", "order"]);
 });

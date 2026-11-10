@@ -143,7 +143,7 @@ test("order messages are parsed completely; chatter and repeated messages are sk
     { modelId: "bm-winter-pajama-012", name: "بيجاما فليس زرقاء بطبعة ورود", size: "One Size – مقاس واحد يناسب لحد 85–90 كيلو", color: "", quantity: 1, unitPrice: null },
     { modelId: "bm-winter-pajama-008", name: "بيجاما فرو وردي بفيونكة نبيتي", size: "One Size – مقاس واحد يناسب لحد 70 كيلو", color: "", quantity: 1, unitPrice: null },
     { modelId: "bm-winter-blanket-002", name: "بلانكيت هودي بقلوب وودان أرنب", size: "", color: "", quantity: 1, unitPrice: null },
-    { modelId: "bm-robe-004", name: "روب سماوي منقط بنفسجي", size: "", color: "", quantity: 2, unitPrice: 250 },
+    { modelId: "bm-robe-004", name: "روب سماوي منقط بنفسجي", size: "", color: "", quantity: 2, unitPrice: 250, image: "/images/robe/1000508110.png" },
   ]);
 
   assert.equal(single.phone, "201100000009");

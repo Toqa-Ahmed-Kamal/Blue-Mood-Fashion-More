@@ -20,6 +20,7 @@ import {
 } from "recharts";
 
 import { OldOrdersTab } from "@/components/admin/old-orders";
+import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
 import { formatEGP } from "@/lib/format";
@@ -58,6 +59,7 @@ const TABS = [
   { id: "journey", label: "رحلة العميلة والمنتجات" },
   { id: "orders", label: "الأوردرات" },
   { id: "old", label: "الأوردرات القديمة" },
+  { id: "quantities", label: "حصر كميات المصنع" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -180,6 +182,7 @@ export function AnalyticsDashboard() {
             {tab === "journey" && <JourneyTab report={report} />}
             {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} />}
             {tab === "old" && <OldOrdersTab />}
+            {tab === "quantities" && <QuantitySummaryTab />}
           </div>
         </>
       )}
@@ -839,7 +842,7 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }:
                       {/* eslint-disable-next-line @next/next/no-img-element -- small admin thumbnail */}
                       <img src={image} alt="" width={56} height={56} loading="lazy" />
                     </a>
-                  ) : <span className="admin-order-thumb" />}
+                  ) : <span className="admin-order-thumb missing" title="الصورة مش متاحة">مفيش صورة</span>}
                   <div>
                     <strong>{product.name}</strong>
                     {product.fit && <small>{product.fit}</small>}
@@ -987,7 +990,7 @@ function OrderDialog({ orderId, row, busy, error, onChange, onClose }: {
                                 <span>{product.name}</span>
                                 <ExternalLink size={12} aria-hidden="true" />
                               </a>
-                            ) : product.name}
+                            ) : <>{product.name} <small className="admin-muted">(الصورة مش متاحة)</small></>}
                           </td>
                           <td className="wrap">{product.fit || "—"}</td>
                           <td>{product.quantity}</td>

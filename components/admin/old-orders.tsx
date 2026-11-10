@@ -18,6 +18,7 @@ import {
   type OldOrderProduct,
   type ParsedOldOrder,
 } from "@/lib/old-orders";
+import { productImage } from "@/lib/quantity-summary";
 import { categoryInfo, findProduct } from "@/lib/site-data";
 import { buildXlsx, type XlsxCell } from "@/lib/xlsx";
 
@@ -394,7 +395,14 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
                         <td className="wrap">
                           <span className="admin-muted">{order.offerName}</span>
                           <br />
-                          {order.products.map((product) => `${product.name}${product.quantity > 1 ? ` × ${product.quantity}` : ""}`).join("، ")}
+                          <ul className="admin-mini-products">
+                            {order.products.map((product, index) => (
+                              <li key={`${product.modelId}-${index}`}>
+                                <ProductThumb modelId={product.modelId} image={product.image} name={product.name} />
+                                <span>{product.name}{product.quantity > 1 ? ` × ${product.quantity}` : ""}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </td>
                         <td>{order.total === null ? `${formatEGP(oldOrderValue(order))} + الشحن` : formatEGP(order.total)}</td>
                         <td>
@@ -439,6 +447,18 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
         />
       )}
     </>
+  );
+}
+
+/** The product's real photo (catalog, else the store photo linked in the message), or a clear "no photo" mark. */
+function ProductThumb({ modelId, image, name }: { modelId: string; image?: string; name: string }) {
+  const src = productImage(modelId, image);
+  if (!src) return <span className="admin-thumb missing" title="الصورة مش متاحة">مفيش صورة</span>;
+  return (
+    <a href={src} target="_blank" rel="noreferrer" className="admin-thumb" aria-label={`صورة ${name}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- tiny admin thumbnail */}
+      <img src={src} alt="" width={36} height={36} loading="lazy" />
+    </a>
   );
 }
 
@@ -648,7 +668,8 @@ function OldOrderEditor({ order, title, onSave, onClose }: { order: OldOrder; ti
                 <tbody>
                   {draft.products.map((product, index) => (
                     <tr key={index}>
-                      <td>
+                      <td className="admin-edit-product">
+                        <ProductThumb modelId={product.modelId} image={product.image} name={product.name} />
                         <input value={product.name} onChange={(event) => setProduct(index, { name: event.target.value })} aria-label="اسم المنتج" />
                         {product.modelId && <small dir="ltr" className="mono">{product.modelId}</small>}
                       </td>

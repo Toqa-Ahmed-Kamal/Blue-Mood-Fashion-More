@@ -243,7 +243,7 @@ export function toAnalyticsOrder(order: OrderRecord, attribution: OrderAttributi
     total: order.total,
     governorate: order.governorate,
     offerName: order.offerName,
-    products: order.products.map((product) => ({ modelId: product.modelId, category: product.category, quantity: product.quantity })),
+    products: order.products.map((product) => ({ modelId: product.modelId, category: product.category, quantity: product.quantity, fit: product.fit })),
     firstTouch,
     lastTouch,
     source,
@@ -451,6 +451,47 @@ export async function loadReport(days: string[]) {
   }
 
   return buildReport({ days, visits, uniqueVisitors, orders, products, funnel, uniqueAdders });
+}
+
+// ── Every site order, for the factory quantity summary (read-only token) ──
+
+/**
+ * All stored site orders with each product line's fit note: from the order itself (saved from the
+ * quantity-summary version on) or, for older orders, from its encrypted details. Only the fit note
+ * is taken from the details; no customer data leaves this function.
+ */
+export async function loadAllOrdersForSummary() {
+  const [ids] = await redisPipeline([["ZRANGE", key("orders"), "-inf", "+inf", "BYSCORE"]], "read", 5000);
+  const orderIds = (ids as string[] | null) ?? [];
+  const result: { order: AnalyticsOrder; fits: (string | null)[] }[] = [];
+  for (let start = 0; start < orderIds.length; start += 200) {
+    const chunk = orderIds.slice(start, start + 200);
+    const [orders, sealed] = await redisPipeline([
+      ["MGET", ...chunk.map((id) => key(`order:${id}`))],
+      ["MGET", ...chunk.map((id) => key(`orderdetails:${id}`))],
+    ], "read", 8000);
+    chunk.forEach((id, index) => {
+      const raw = (orders as (string | null)[] | null)?.[index];
+      if (typeof raw !== "string") return;
+      let order: AnalyticsOrder;
+      try {
+        order = JSON.parse(raw) as AnalyticsOrder;
+      } catch {
+        return;
+      }
+      const blob = (sealed as (string | null)[] | null)?.[index];
+      const detailProducts = typeof blob === "string" && order.products.some((product) => product.fit === undefined)
+        ? openOrderDetails(id, blob)?.products ?? null
+        : null;
+      const fits = order.products.map((product, position) => {
+        if (product.fit !== undefined) return product.fit;
+        const match = detailProducts?.[position];
+        return match && match.modelId === product.modelId ? match.fit : null;
+      });
+      result.push({ order, fits });
+    });
+  }
+  return result;
 }
 
 // ── Login throttling ──────────────────────────────────────────────────────

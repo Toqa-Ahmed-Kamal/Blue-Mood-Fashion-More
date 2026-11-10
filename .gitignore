@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Telegram chat exports hold customer names, phones and addresses: never commit them (the repo is public).
+/app/**/*.html
+messages*.html
+ChatExport*/
+# Spreadsheets exported from the admin can hold customer data.
+*.xlsx
+*.csv

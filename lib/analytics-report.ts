@@ -34,7 +34,8 @@ export type AnalyticsOrder = {
   total: number | null;
   governorate: string;
   offerName: string;
-  products: { modelId: string; category: string; quantity: number }[];
+  /** `fit`: size / category note sent with the order (saved from this version on; no personal data). */
+  products: { modelId: string; category: string; quantity: number; fit?: string }[];
   firstTouch: Touch | null;
   /** Last non-direct touch (falls back to the direct visit when there never was another one). */
   lastTouch: Touch | null;

@@ -6,7 +6,7 @@
 // them again with `sanitizeOldOrder` and stores them encrypted. Nothing is guessed: a field the
 // message does not contain stays empty.
 import { ORDER_STATUSES, type OrderStatus } from "./analytics-report.ts";
-import { categoryDetailLabel } from "./order-flow.ts";
+import { categoryDetailLabel, fitNoteFor } from "./order-flow.ts";
 import type { OrderDetails } from "./order-vault.ts";
 import { findProduct, type CatalogCategory } from "./site-data.ts";
 
@@ -25,6 +25,8 @@ export type OldOrderProduct = {
   quantity: number;
   /** null for pieces included in the offer price. */
   unitPrice: number | null;
+  /** Photo path from the message's 🔗 link (/images/…), used only when the product is not in the catalog. */
+  image?: string;
 };
 
 export type OldOrder = {
@@ -110,6 +112,41 @@ function money(text: string) {
 const ITEM_PATTERN = /^\d+\.\s+(.+?)(?:\s+×\s+(\d+))?\s+\(([a-z\d-]+)\)\s+—\s+(.+?)(?:\s+—\s+([\d,.]+)\s*ج\.م)?$/;
 const SIZE_PATTERN = /size|مقاس/i;
 
+/** The size part of a product's fit note ("" for abaya / robe / blanket notes, which name the category). */
+export function sizeFromFit(fit: string | undefined | null) {
+  return fit && SIZE_PATTERN.test(fit) ? fit.trim() : "";
+}
+
+/** "One Size – مقاس واحد يناسب لحد 70 كيلو" → "One Size · لحد 70 كيلو"; other text is kept as is. */
+export function shortSize(size: string) {
+  const limit = /لحد\s+([\d–\-]+)\s*كيلو/.exec(size);
+  if (/one size/i.test(size) && limit) return `One Size · لحد ${limit[1]} كيلو`;
+  return size.trim();
+}
+
+/**
+ * Size used for factory counts. A catalog pajama is One Size with the weight limit from the product
+ * data (the current, corrected value — older order messages may carry a weight note that was later
+ * corrected), so all its pieces count on one line. Any other piece keeps the size recorded in its order.
+ */
+export function factorySize(productId: string, recordedSize: string) {
+  const product = productId ? findProduct(productId) : undefined;
+  if (product?.category === "winter-pajamas") return fitNoteFor(product.category, product.maxWeightKg) ?? "";
+  return shortSize(recordedSize);
+}
+
+/** Only the store's own photo paths are kept (never an outside URL). */
+export function sanitizeImagePath(value: unknown) {
+  if (typeof value !== "string") return "";
+  let path = value.trim();
+  try {
+    if (/^https?:\/\//i.test(path)) path = new URL(path).pathname;
+  } catch {
+    return "";
+  }
+  return /^\/images\/[\w\-./%]+\.(jpe?g|png|webp)$/i.test(path) && !path.includes("..") ? path : "";
+}
+
 function parseItem(line: string, warnings: string[]): OldOrderProduct {
   const match = ITEM_PATTERN.exec(line);
   if (!match) {
@@ -124,7 +161,7 @@ function parseItem(line: string, warnings: string[]): OldOrderProduct {
     modelId,
     name: name.trim(),
     // Abaya / robe / blanket lines carry the category name, not a size.
-    size: SIZE_PATTERN.test(fit) ? fit.trim() : "",
+    size: sizeFromFit(fit),
     color: "",
     quantity,
     unitPrice: lineTotal === null ? null : Math.round((lineTotal / quantity) * 100) / 100,
@@ -197,7 +234,11 @@ export function parseTelegramOrderText(text: string, sentAt: string | null, now 
     else if (/^\d+\.\s/.test(line)) {
       block = null;
       order.products.push(parseItem(line, warnings));
-    } else if (line.startsWith("🔗")) continue;
+    } else if (line.startsWith("🔗")) {
+      const image = sanitizeImagePath(line.replace(/^🔗\s*/, ""));
+      const last = order.products.at(-1);
+      if (image && last && !last.image) last.image = image;
+    }
     else if (line.startsWith("سعر العرض:")) order.offerPrice = money(line) ?? 0;
     else if (line.startsWith("القطع المنفردة:")) order.itemsTotal = money(line) ?? 0;
     else if (line.startsWith("الشحن:")) order.shippingCost = money(line);
@@ -277,6 +318,7 @@ export function sanitizeOldOrder(raw: unknown, now = new Date()): OldOrder | nul
       color: text(product.color, 60),
       quantity,
       unitPrice: amount(product.unitPrice),
+      ...(sanitizeImagePath(product.image) ? { image: sanitizeImagePath(product.image) } : {}),
     }];
   });
   return {
@@ -369,7 +411,8 @@ export function aggregateQuantities(orders: OldOrder[]): QuantityRow[] {
   for (const order of orders) {
     for (const product of order.products) {
       const id = product.modelId || product.name;
-      const groupKey = `${id}|${product.size}|${product.color}`;
+      const size = factorySize(product.modelId, product.size);
+      const groupKey = `${id}|${size}|${product.color}`;
       let row = rows.get(groupKey);
       if (!row) {
         const catalogProduct = product.modelId ? findProduct(product.modelId) : undefined;
@@ -377,7 +420,7 @@ export function aggregateQuantities(orders: OldOrder[]): QuantityRow[] {
           modelId: product.modelId,
           name: catalogProduct?.name ?? product.name,
           category: catalogProduct?.category ?? "",
-          size: product.size,
+          size,
           color: product.color,
           quantity: 0,
           orders: 0,

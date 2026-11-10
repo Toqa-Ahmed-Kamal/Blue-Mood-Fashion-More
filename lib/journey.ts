@@ -80,7 +80,17 @@ export function sanitizeJourneyEvents(raw: unknown): ClientJourneyEvent[] {
   return events;
 }
 
-/** Parses stored journey entries, skipping anything malformed. */
+/**
+ * A visit is stamped when the server receives it, slightly after the page it started on (whose time
+ * comes from the browser's own clock offset). It is treated as this much earlier, so it stays first.
+ */
+const VISIT_LEAD_MS = 5_000;
+const sortTime = (entry: JourneyEntry) => (Date.parse(entry.at) || 0) - (entry.e === "visit" ? VISIT_LEAD_MS : 0);
+
+/**
+ * Parses stored journey entries, skipping anything malformed, in the order the steps happened
+ * (requests from the browser can arrive out of order; each step keeps its real time).
+ */
 export function parseJourney(raw: unknown): JourneyEntry[] {
   const list = Array.isArray(raw) ? raw : [];
   const entries: JourneyEntry[] = [];
@@ -102,5 +112,5 @@ export function parseJourney(raw: unknown): JourneyEntry[] {
     else if (item.e === "checkout") entries.push(item as JourneyEntry);
     else if (item.e === "order" && typeof item.o === "string") entries.push(item as JourneyEntry);
   }
-  return entries;
+  return entries.toSorted((a, b) => sortTime(a) - sortTime(b));
 }
