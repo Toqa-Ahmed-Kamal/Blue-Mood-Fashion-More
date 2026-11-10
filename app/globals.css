@@ -1405,3 +1405,47 @@ h1, h2, h3 { font-family: var(--font-display); }
   30% { transform: scale(1.18) rotate(-6deg); }
   60% { transform: scale(0.94) rotate(4deg); }
 }
+
+/* ── Admin: Old Orders (Telegram import) + journey details ── */
+.admin-import { display: grid; gap: 4px; }
+.admin-upload { display: inline-flex; align-items: center; gap: 10px; justify-self: start; position: relative; font-weight: 700; font-size: .92rem; color: var(--brand-dark); background: var(--brand-soft); border: 1px dashed var(--brand); border-radius: var(--radius); padding: 12px 16px; cursor: pointer; }
+.admin-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.admin-upload.disabled { opacity: .55; cursor: default; }
+.admin-upload:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.admin-success { color: #157a3e; background: #e2f5ea; border-radius: 8px; padding: 8px 12px; font-size: .88rem; }
+.admin-import-summary { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 10px; font-size: .88rem; color: var(--muted); }
+.admin-import-summary strong { color: var(--navy); }
+.admin-import-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.admin-panel-head .admin-import-actions { margin-top: 0; }
+.admin-primary { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .88rem; font-weight: 700; color: #fff; background: var(--navy); border: 0; border-radius: 10px; padding: 8px 16px; min-height: 40px; cursor: pointer; }
+.admin-primary:disabled { opacity: .5; cursor: default; }
+.admin-chip { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .84rem; color: var(--navy); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
+.admin-chip:disabled { opacity: .5; cursor: default; }
+.admin-flags { display: flex; flex-wrap: wrap; gap: 4px; }
+.admin-flag { display: inline-block; font-size: .74rem; line-height: 1.5; border-radius: 8px; padding: 2px 8px; white-space: normal; }
+.admin-flag.warn { background: #fff3dc; color: #8a5a10; }
+.admin-flag.info { background: var(--brand-soft); color: var(--brand-dark); }
+.admin-flag.ok { background: #e2f5ea; color: #157a3e; }
+.admin-search { font: inherit; font-size: .85rem; color: var(--navy); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-height: 36px; flex: 1 1 260px; min-width: 0; }
+.admin-check { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); margin-bottom: 10px; }
+.admin-table a { color: var(--brand-dark); }
+.admin-table tfoot td { font-weight: 700; border-top: 2px solid var(--line); }
+.admin-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; margin-bottom: 10px; }
+.admin-field { display: grid; gap: 4px; font-size: .78rem; color: var(--muted); min-width: 0; }
+.admin-field.wide { grid-column: 1 / -1; }
+.admin-field input, .admin-field select, .admin-field textarea, .admin-edit-table input { font: inherit; font-size: .88rem; color: var(--navy); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-height: 36px; width: 100%; min-width: 0; }
+.admin-field textarea { resize: vertical; }
+.admin-edit-table td { vertical-align: top; }
+.admin-edit-table input { min-width: 120px; }
+.admin-edit-table input.narrow { min-width: 0; width: 90px; }
+.admin-edit-table small { display: block; margin-top: 2px; }
+.admin-touch { display: grid; gap: 4px; font-weight: 500; }
+.admin-touch code { background: var(--bg); padding: 2px 6px; border-radius: 6px; font-size: .78rem; overflow-wrap: anywhere; font-weight: 500; }
+.admin-journey li.step-remove::before { background: var(--danger); }
+.admin-journey li.step-checkout::before { background: var(--gold); }
+.admin-journey li.step-page::before { background: var(--peri); width: 6px; height: 6px; inset-inline-start: 5px; top: 13px; }
+@media (max-width: 760px) {
+  .admin-edit-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.admin-table td.wrap-actions { flex-wrap: wrap; min-width: 200px; max-width: 280px; }
+.admin-table td.mono small { font-family: var(--font-body); color: var(--muted); }

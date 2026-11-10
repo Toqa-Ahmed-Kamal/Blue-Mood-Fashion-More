@@ -19,6 +19,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { OldOrdersTab } from "@/components/admin/old-orders";
+import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
 import { formatEGP } from "@/lib/format";
 import type { JourneyEntry } from "@/lib/journey";
@@ -55,6 +57,7 @@ const TABS = [
   { id: "traffic", label: "الزيارات" },
   { id: "journey", label: "رحلة العميلة والمنتجات" },
   { id: "orders", label: "الأوردرات" },
+  { id: "old", label: "الأوردرات القديمة" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -176,6 +179,7 @@ export function AnalyticsDashboard() {
             {tab === "traffic" && <TrafficTab report={report} />}
             {tab === "journey" && <JourneyTab report={report} />}
             {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} />}
+            {tab === "old" && <OldOrdersTab />}
           </div>
         </>
       )}
@@ -809,13 +813,14 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }:
               <div><dt>المحافظة / المنطقة</dt><dd>{details.governorate} — {details.area}</dd></div>
               <div className="wide"><dt>العنوان</dt><dd>{details.address}</dd></div>
               {details.notes && <div className="wide"><dt>ملاحظات</dt><dd className="pre">{details.notes}</dd></div>}
+              {details.importedFrom === "telegram" && <div className="wide"><dd className="admin-muted">البيانات دي اتكملت من رسالة تيليجرام</dd></div>}
             </dl>
           ) : details === undefined ? (
             <p className="admin-muted">جاري تحميل بيانات العميلة…</p>
           ) : (
             <p className="admin-muted small">
               {vaultConfigured
-                ? "بيانات العميلة مش متخزنة للأوردر ده (اتسجل قبل تفعيل الحفظ). تلاقيها في تيليجرام برقم الطلب."
+                ? "بيانات العميلة مش متخزنة للأوردر ده (اتسجل قبل تفعيل الحفظ). ارفعي ملف تيليجرام في تبويب \"الأوردرات القديمة\" وهتتكمل تلقائيًا."
                 : "بيانات العميلة مش بتتخزن لسه لأن ORDER_DATA_KEY مش متضاف على Vercel. تلاقيها في تيليجرام برقم الطلب."}
               {" "}المحافظة: {row.governorate}
             </p>
@@ -840,7 +845,7 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }:
                     {product.fit && <small>{product.fit}</small>}
                   </div>
                   <span className="qty">× {product.quantity}</span>
-                  <span className="price">{product.unitPrice === null ? (details ? "ضمن العرض" : "") : formatEGP(product.unitPrice * product.quantity)}</span>
+                  <span className="price">{!details ? "" : product.unitPrice === null ? "ضمن العرض" : formatEGP(product.unitPrice * product.quantity)}</span>
                 </li>
               );
             })}
@@ -951,6 +956,7 @@ function OrderDialog({ orderId, row, busy, error, onChange, onClose }: {
                   <div><dt>المنطقة</dt><dd>{details.area}</dd></div>
                   <div className="wide"><dt>العنوان</dt><dd>{details.address}</dd></div>
                   {details.notes && <div className="wide"><dt>ملاحظات</dt><dd className="pre">{details.notes}</dd></div>}
+                  {details.importedFrom === "telegram" && <div className="wide"><dd className="admin-muted">البيانات دي اتكملت من رسالة تيليجرام (الأوردر اتسجل قبل حفظ بيانات العميلة).</dd></div>}
                 </dl>
               ) : (
                 <p className="admin-note">
@@ -958,7 +964,7 @@ function OrderDialog({ orderId, row, busy, error, onChange, onClose }: {
                     ? "بيانات العميلة متخزنة بس مش قادرين نفكها بالمفتاح الحالي (ORDER_DATA_KEY اتغير). تلاقيها في رسالة تيليجرام برقم الطلب."
                     : !data.vaultConfigured
                       ? "بيانات العميلة مش بتتخزن لسه لأن ORDER_DATA_KEY مش متضاف على Vercel. تلاقيها في رسالة تيليجرام برقم الطلب."
-                      : "الأوردر ده اتسجل قبل تفعيل حفظ بيانات العميلة. تلاقيها في رسالة تيليجرام برقم الطلب."}
+                      : "الأوردر ده اتسجل قبل تفعيل حفظ بيانات العميلة. ارفعي ملف تيليجرام في تبويب \"الأوردرات القديمة\" وبياناتها هتتكمل هنا تلقائيًا."}
                 </p>
               )}
             </section>
@@ -985,8 +991,8 @@ function OrderDialog({ orderId, row, busy, error, onChange, onClose }: {
                           </td>
                           <td className="wrap">{product.fit || "—"}</td>
                           <td>{product.quantity}</td>
-                          <td>{product.unitPrice === null ? "ضمن العرض" : formatEGP(product.unitPrice)}</td>
-                          <td>{product.unitPrice === null ? "—" : formatEGP(product.unitPrice * product.quantity)}</td>
+                          <td>{!details ? "—" : product.unitPrice === null ? "ضمن العرض" : formatEGP(product.unitPrice)}</td>
+                          <td>{!details || product.unitPrice === null ? "—" : formatEGP(product.unitPrice * product.quantity)}</td>
                         </tr>
                       );
                     })}
@@ -1009,6 +1015,8 @@ function OrderDialog({ orderId, row, busy, error, onChange, onClose }: {
                 <div><dt>الحملة</dt><dd>{data.order.campaign || "—"}</dd></div>
                 <div><dt>Ad Content</dt><dd>{data.order.adContent || "—"}</dd></div>
                 <div><dt>Landing Page</dt><dd dir="ltr">{data.order.landingPage || "—"}</dd></div>
+                <TouchDetails label="آخر زيارة (اللي اتحسب لها الطلب)" touch={data.order.lastTouch} />
+                {data.order.firstTouch && data.order.firstTouch.at !== data.order.lastTouch?.at && <TouchDetails label="أول زيارة" touch={data.order.firstTouch} />}
               </dl>
             </section>
 
@@ -1028,19 +1036,57 @@ function OrderDialog({ orderId, row, busy, error, onChange, onClose }: {
   );
 }
 
+function TouchDetails({ label, touch }: { label: string; touch: Touch | null }) {
+  if (!touch) return null;
+  const tags = [
+    touch.utmSource && `utm_source=${touch.utmSource}`,
+    touch.utmMedium && `utm_medium=${touch.utmMedium}`,
+    touch.utmCampaign && `utm_campaign=${touch.utmCampaign}`,
+    touch.utmContent && `utm_content=${touch.utmContent}`,
+    touch.utmTerm && `utm_term=${touch.utmTerm}`,
+  ].filter(Boolean);
+  return (
+    <div className="wide">
+      <dt>{label}</dt>
+      <dd className="admin-touch">
+        <span>{touch.channel}{touch.at && <> · <time dir="ltr">{cairoTime(touch.at)}</time></>}</span>
+        {tags.length > 0 && <code dir="ltr">{tags.join(" | ")}</code>}
+        <span className="admin-muted">
+          Facebook Click ID (fbclid): {touch.fbclid ? <code dir="ltr" title={touch.fbclid}>{touch.fbclid.length > 24 ? `${touch.fbclid.slice(0, 24)}…` : touch.fbclid}</code> : "مفيش"}
+          {touch.landingPage && <> · صفحة الدخول <code dir="ltr">{touch.landingPage}</code></>}
+          {touch.referrer && <> · جاي من <code dir="ltr">{touch.referrer}</code></>}
+        </span>
+      </dd>
+    </div>
+  );
+}
+
+const PAGE_NAMES: Record<string, string> = { "/": "الصفحة الرئيسية", "/checkout": "صفحة الطلب" };
+
+function pageName(path: string) {
+  if (PAGE_NAMES[path]) return PAGE_NAMES[path];
+  if (path.startsWith("/offer/")) return "صفحة اختيار قطع العرض";
+  return path;
+}
+
 function journeyText(entry: JourneyEntry) {
   switch (entry.e) {
-    case "visit": return `دخلت الموقع من ${entry.s}${entry.c ? ` · حملة ${entry.c}` : ""}${entry.l ? ` · ${entry.l}` : ""}`;
+    case "visit": {
+      const tags = [entry.u && `source=${entry.u}`, entry.m && `medium=${entry.m}`, entry.n && `content=${entry.n}`].filter(Boolean).join(" | ");
+      return `دخلت الموقع من ${entry.s}${entry.c ? ` · حملة ${entry.c}` : ""}${tags ? ` · ${tags}` : ""}${entry.f ? " · fbclid" : ""}${entry.r ? ` · جاية من ${entry.r}` : ""}${entry.l ? ` · أول صفحة ${entry.l}` : ""}`;
+    }
+    case "page": return `فتحت ${pageName(entry.l)}`;
     case "view": return `فتحت ${productName(entry.p)}`;
     case "add": return `أضافت ${productName(entry.p)} للسلة${entry.q > 1 ? ` × ${entry.q}` : ""}`;
-    case "checkout": return "فتحت صفحة الطلب";
+    case "remove": return `شالت ${productName(entry.p)} من السلة${entry.q > 1 ? ` × ${entry.q}` : ""}`;
+    case "checkout": return "بدأت إتمام الطلب (Initiate Checkout)";
     case "order": return `بعتت الطلب ${entry.o} · ${formatEGP(entry.v)}`;
   }
 }
 
 function JourneyTimeline({ entries }: { entries: JourneyEntry[] }) {
   if (entries.length <= 1) {
-    return <p className="admin-muted small">مفيش خطوات متسجلة قبل الطلب (أوردر قديم، أو المتصفح مانع التتبع).</p>;
+    return <p className="admin-muted small">مفيش خطوات متسجلة قبل الطلب. تسجيل الرحلة بدأ مع تحديث الداشبورد، فالأوردرات اللي قبله مالهاش رحلة، وكمان لو المتصفح مانع التتبع.</p>;
   }
   return (
     <ol className="admin-journey">

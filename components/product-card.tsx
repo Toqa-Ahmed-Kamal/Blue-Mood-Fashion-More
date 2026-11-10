@@ -9,7 +9,7 @@ import { SocialProof } from "@/components/promo";
 import { addCartItem, setCartItemQuantity, MAX_ITEM_QUANTITY } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
-import { trackProductView } from "@/lib/journey-tracker";
+import { trackCartRemove, trackProductView } from "@/lib/journey-tracker";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
 import { categoryInfo, landingPromotion, offerCategories, priceOf, type CatalogProduct } from "@/lib/site-data";
@@ -52,7 +52,7 @@ export function ProductAction({ product }: { product: CatalogProduct }) {
         <Plus size={16} />
       </button>
       <span aria-live="polite"><Check size={14} /> {quantity} في السلة</span>
-      <button type="button" onClick={() => updateCart((current) => setCartItemQuantity(current, product.id, quantity - 1))} aria-label="تقليل">
+      <button type="button" onClick={() => { updateCart((current) => setCartItemQuantity(current, product.id, quantity - 1)); trackCartRemove(product.id); }} aria-label="تقليل">
         <Minus size={16} />
       </button>
     </div>

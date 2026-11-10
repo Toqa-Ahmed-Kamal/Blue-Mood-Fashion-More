@@ -9,6 +9,7 @@ import { addCartItem, emptyCart, MAX_ITEM_QUANTITY, resolveCart, setCartItemQuan
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
 import { currentVisitIds, readAttribution } from "@/lib/attribution-store";
+import { takePendingJourney, trackCartRemove } from "@/lib/journey-tracker";
 import { trackAddToCart, trackInitiateCheckout, trackLead } from "@/lib/meta-pixel";
 import {
   buildWhatsAppOrderText,
@@ -156,7 +157,8 @@ export function Checkout() {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...requestBody, submissionId: attemptRef.current.submissionId, attribution: readAttribution(), visit: currentVisitIds() }),
+        // Journey steps not sent yet travel with the order, so its journey is complete.
+        body: JSON.stringify({ ...requestBody, submissionId: attemptRef.current.submissionId, attribution: readAttribution(), visit: currentVisitIds(), journey: takePendingJourney() }),
       });
       const result = await response.json().catch(() => null) as OrderApiResponse | null;
       if (!response.ok || result?.success !== true || !result.order) {
@@ -348,7 +350,7 @@ function CartLines({ cart, disabled }: { cart: ResolvedCart; disabled: boolean }
             </div>
             <div className="cart-offer-actions">
               <Link href={`/offer/${cart.offer.option.id}`} className="icon-text-btn"><Pencil size={15} /> تعديل</Link>
-              <button type="button" className="icon-text-btn danger" disabled={disabled} onClick={() => updateCart((current) => setCartOffer(current, null))}><Trash2 size={15} /> حذف</button>
+              <button type="button" className="icon-text-btn danger" disabled={disabled} onClick={() => { cart.offer?.products.forEach((product) => trackCartRemove(product.id)); updateCart((current) => setCartOffer(current, null)); }}><Trash2 size={15} /> حذف</button>
             </div>
           </div>
           <ul className="cart-offer-items">
@@ -374,7 +376,7 @@ function CartLines({ cart, disabled }: { cart: ResolvedCart; disabled: boolean }
               <span className="line-qty" role="group" aria-label={`كمية ${line.product.name}`}>
                 <button type="button" disabled={disabled || line.quantity >= MAX_ITEM_QUANTITY} onClick={() => { updateCart((current) => setCartItemQuantity(current, line.product.id, line.quantity + 1)); trackAddToCart(line.product); }} aria-label="زيادة"><Plus size={14} /></button>
                 <span>{line.quantity}</span>
-                <button type="button" disabled={disabled} onClick={() => updateCart((current) => setCartItemQuantity(current, line.product.id, line.quantity - 1))} aria-label={line.quantity === 1 ? "حذف" : "تقليل"}>
+                <button type="button" disabled={disabled} onClick={() => { updateCart((current) => setCartItemQuantity(current, line.product.id, line.quantity - 1)); trackCartRemove(line.product.id); }} aria-label={line.quantity === 1 ? "حذف" : "تقليل"}>
                   {line.quantity === 1 ? <Trash2 size={14} /> : <Minus size={14} />}
                 </button>
               </span>

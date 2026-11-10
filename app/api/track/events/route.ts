@@ -1,7 +1,7 @@
 import { after } from "next/server";
 
 import { clientIp, hashIp, recordEvents } from "@/lib/analytics-store";
-import { sanitizeJourneyEvents } from "@/lib/journey";
+import { sanitizeBatchId, sanitizeJourneyEvents } from "@/lib/journey";
 import { RedisUnavailableError } from "@/lib/redis";
 
 export const runtime = "nodejs";
@@ -13,7 +13,7 @@ const MAX_BODY_LENGTH = 4_000;
 // Always 204, like /api/track/visit: tracking never reports back and never blocks the store.
 const done = () => new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
 
-/** Product views, add-to-cart and checkout steps for the customer-journey dashboard. */
+/** Pages, product views, cart adds / removals and checkout steps for the customer-journey dashboard. */
 export async function POST(request: Request) {
   if (BOT_PATTERN.test(request.headers.get("user-agent") ?? "")) return done();
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     return done();
   }
   if (typeof body !== "object" || body === null) return done();
-  const { sessionId, visitorId, events: rawEvents } = body as Record<string, unknown>;
+  const { sessionId, visitorId, batchId, events: rawEvents } = body as Record<string, unknown>;
   if (typeof sessionId !== "string" || !UUID_PATTERN.test(sessionId) || typeof visitorId !== "string" || !UUID_PATTERN.test(visitorId)) {
     return done();
   }
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const ipHash = hashIp(clientIp(request));
   after(async () => {
     try {
-      await recordEvents({ sessionId: sessionId.toLowerCase(), visitorId: visitorId.toLowerCase(), events, ipHash });
+      await recordEvents({ sessionId: sessionId.toLowerCase(), visitorId: visitorId.toLowerCase(), events, ipHash, batchId: sanitizeBatchId(batchId) });
     } catch (error) {
       console.error("[analytics] journey events not recorded", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
     }

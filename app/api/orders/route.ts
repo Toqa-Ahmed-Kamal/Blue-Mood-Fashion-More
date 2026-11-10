@@ -1,7 +1,8 @@
 import { after } from "next/server";
 
 import { sanitizeAttribution } from "@/lib/attribution";
-import { saveOrder, toAnalyticsOrder, type OrderVisitIds } from "@/lib/analytics-store";
+import { clientIp, hashIp, recordEvents, saveOrder, toAnalyticsOrder, type OrderVisitIds } from "@/lib/analytics-store";
+import { sanitizeJourneyBatches } from "@/lib/journey";
 import { orderDetailsOf, sealOrderDetails } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
 import { resolveCart, type CartError } from "@/lib/cart";
@@ -234,7 +235,19 @@ export async function POST(request: Request) {
   // Best-effort: a Redis problem is logged and never affects the order.
   // Customer details are stored only encrypted; without ORDER_DATA_KEY they are not stored at all.
   const visit = readVisitIds(body.visit);
+  // Last journey steps the browser had not sent yet (e.g. a piece removed right before ordering).
+  const pendingJourney = visit.sessionId && visit.visitorId ? sanitizeJourneyBatches(body.journey) : [];
+  const ipHash = pendingJourney.length > 0 ? hashIp(clientIp(request)) : "";
   after(async () => {
+    if (pendingJourney.length > 0 && visit.sessionId && visit.visitorId) {
+      try {
+        for (const batch of pendingJourney) {
+          await recordEvents({ sessionId: visit.sessionId, visitorId: visit.visitorId, events: batch.events, batchId: batch.batchId, ipHash });
+        }
+      } catch (error) {
+        console.error("[analytics] journey events not recorded", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+      }
+    }
     try {
       const sealedDetails = sealOrderDetails(orderDetailsOf(order));
       if (!sealedDetails) console.warn("[analytics] ORDER_DATA_KEY missing or invalid: customer details not stored for the dashboard", { orderId });

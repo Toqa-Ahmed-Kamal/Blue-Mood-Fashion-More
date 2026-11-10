@@ -41,6 +41,12 @@ function fakeRedis(command) {
       return hash[args[1]];
     }
     case "HGETALL": return Object.entries(get(args[0]) ?? {}).flat().map(String);
+    case "HGET": return (get(args[0]) ?? {})[args[1]] ?? null;
+    case "HEXISTS": return args[1] in (get(args[0]) ?? {}) ? 1 : 0;
+    case "HSET": { const hash = get(args[0]) ?? {}; const added = args[1] in hash ? 0 : 1; hash[args[1]] = args[2]; store.set(args[0], hash); return added; }
+    case "HSETNX": { const hash = get(args[0]) ?? {}; if (args[1] in hash) return 0; hash[args[1]] = args[2]; store.set(args[0], hash); return 1; }
+    case "HDEL": { const hash = get(args[0]) ?? {}; const had = args[1] in hash; delete hash[args[1]]; return had ? 1 : 0; }
+    case "EXISTS": return store.has(args[0]) ? 1 : 0;
     case "PFADD": { const set = get(args[0]) ?? new Set(); const before = set.size; args.slice(1).forEach((v) => set.add(v)); store.set(args[0], set); return set.size > before ? 1 : 0; }
     case "PFCOUNT": return new Set(args.flatMap((key) => [...(get(key) ?? [])])).size;
     case "ZADD": {
@@ -67,7 +73,7 @@ globalThis.fetch = async (url, options) => {
   const commands = JSON.parse(options.body);
   calls.push({ token, commands });
   // Like real Redis ACLs, PFCOUNT counts as a write command, so the read-only token is refused.
-  const isWrite = commands.some(([name]) => !["GET", "HGETALL", "ZRANGE", "MGET", "LRANGE"].includes(name.toUpperCase()));
+  const isWrite = commands.some(([name]) => !["GET", "HGET", "HGETALL", "ZRANGE", "MGET", "LRANGE", "EXISTS"].includes(name.toUpperCase()));
   if (token === READ_TOKEN && isWrite) return new Response(JSON.stringify({ error: "NOPERM" }), { status: 403 });
   return new Response(JSON.stringify(commands.map((command) => {
     const result = fakeRedis(command);
@@ -346,9 +352,9 @@ test("journey events accept only real catalog products and known event types", (
     "junk",
   ]);
   assert.deepEqual(events, [
-    { type: "view", productId: "bm-abaya-001" },
-    { type: "add", productId: "bm-abaya-001", quantity: 10 },
-    { type: "checkout" },
+    { type: "view", productId: "bm-abaya-001", ago: 0 },
+    { type: "add", productId: "bm-abaya-001", quantity: 10, ago: 0 },
+    { type: "checkout", ago: 0 },
   ]);
   assert.deepEqual(sanitizeJourneyEvents("nope"), []);
 });
@@ -456,4 +462,196 @@ test("the orders list loads decrypted details for many orders at once (read-only
   } finally {
     delete process.env.ORDER_DATA_KEY;
   }
+});
+
+// ── Full journey: pages, removals, UTM / fbclid on the visit, real event times ─────────
+test("journey events: pages and cart removals are kept, admin/API paths and junk are dropped", () => {
+  const events = sanitizeJourneyEvents([
+    { type: "page", path: "/offer/four-pajamas?utm_source=fb#x", ago: 1500 },
+    { type: "page", path: "/admin/analytics" },
+    { type: "page", path: "/api/orders" },
+    { type: "page", path: "https://evil.example/" },
+    { type: "remove", productId: "bm-robe-001", quantity: 0 },
+    { type: "remove", productId: "nope" },
+    { type: "view", productId: "bm-robe-001", ago: 99_999_999 },
+  ]);
+  assert.deepEqual(events, [
+    { type: "page", path: "/offer/four-pajamas", ago: 1500 },
+    { type: "remove", productId: "bm-robe-001", quantity: 1, ago: 0 },
+    { type: "view", productId: "bm-robe-001", ago: 600000 },
+  ]);
+});
+
+test("journey: Facebook ad visit → pages → product → add → remove → checkout → order, in time order", async () => {
+  store.clear();
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  try {
+    const shopper = { sessionId: randomUUID(), visitorId: randomUUID() };
+    const adTouch = visit("?utm_source=facebook&utm_medium=paid_social&utm_campaign=winter_2026&utm_content=video1&fbclid=IwAR123", "https://m.facebook.com/");
+    const t0 = new Date("2026-11-10T15:00:00Z");
+    await analytics.recordVisit({ ...shopper, touch: adTouch, ipHash: "fb", now: t0 });
+    // One batch sent 3 s after the first event: each keeps its own moment.
+    await analytics.recordEvents({ ...shopper, ipHash: "fb", now: new Date("2026-11-10T15:00:10Z"), events: [
+      { type: "page", path: "/", ago: 9000 },
+      { type: "view", productId: "bm-robe-001", ago: 6000 },
+      { type: "add", productId: "bm-robe-001", quantity: 1, ago: 5000 },
+      { type: "add", productId: "bm-abaya-001", quantity: 1, ago: 4000 },
+    ] });
+    await analytics.recordEvents({ ...shopper, ipHash: "fb", now: new Date("2026-11-10T15:01:00Z"), events: [
+      { type: "page", path: "/checkout", ago: 2000 },
+      { type: "remove", productId: "bm-abaya-001", quantity: 1, ago: 1000 },
+      { type: "checkout", ago: 0 },
+    ] });
+    const record = { ...orderRecord, orderId: "BM-AAAAAAAAAAAAAAAAAAAA", createdAt: "2026-11-10T15:02:00.000Z" };
+    await analytics.saveOrder(analytics.toAnalyticsOrder(record, { firstTouch: adTouch, lastTouch: adTouch }), {
+      sealedDetails: vault.sealOrderDetails(vault.orderDetailsOf(record)),
+      visit: shopper,
+    });
+
+    const view = await analytics.loadOrderDetails(record.orderId);
+    assert.deepEqual(view.journey.map((entry) => entry.e), ["visit", "page", "view", "add", "add", "page", "remove", "checkout", "order"]);
+    const times = view.journey.map((entry) => entry.at);
+    assert.deepEqual(times, times.toSorted(), "chronological");
+    assert.equal(view.journey[1].at, "2026-11-10T15:00:01.000Z", "page time = sent time − ago");
+    const [visitEntry] = view.journey;
+    assert.equal(visitEntry.s, "Facebook Ads");
+    assert.equal(visitEntry.c, "winter_2026");
+    assert.equal(visitEntry.u, "facebook");
+    assert.equal(visitEntry.m, "paid_social");
+    assert.equal(visitEntry.n, "video1");
+    assert.equal(visitEntry.f, 1, "fbclid recorded as present");
+    assert.equal(visitEntry.r, "m.facebook.com");
+    assert.equal(JSON.stringify(view.journey).includes("IwAR123"), false, "the click ID itself stays on the order's attribution only");
+    assert.equal(view.order.lastTouch.fbclid, "IwAR123");
+    assert.equal(view.journey.find((entry) => entry.e === "remove").p, "bm-abaya-001");
+    assert.equal(view.details.customerName, record.customerName);
+
+    const report = await analytics.loadReport(["2026-11-10"]);
+    assert.deepEqual(report.funnel, { sessions: 1, view: 1, add: 1, checkout: 1, order: 1 }, "page / remove never enter the funnel");
+    assert.equal([...store.keys()].some((key) => /funnel:.*:(page|remove)$/.test(key)), false);
+  } finally {
+    delete process.env.ORDER_DATA_KEY;
+  }
+});
+
+// ── Old Orders store (Telegram import) ─────────────────────────────────────
+const oldOrdersStore = await import("../lib/old-orders-store.ts");
+const oldOrdersLib = await import("../lib/old-orders.ts");
+
+function oldOrder(id, extra = {}) {
+  return oldOrdersLib.sanitizeOldOrder({
+    orderId: id,
+    createdAt: "2026-11-08T14:22:47.000Z",
+    customerName: "سارة الاختبار",
+    phone: "01000000001",
+    alternatePhone: "",
+    governorate: "الجيزة",
+    area: "فيصل",
+    address: "شارع التجربة ١",
+    notes: "بعد العصر",
+    offerName: "بدون عرض — قطع منفردة",
+    products: [{ modelId: "bm-robe-001", name: "روب فرو مورد فوشيا بغطاء رأس", size: "", color: "", quantity: 2, unitPrice: 250 }],
+    offerPrice: 0,
+    itemsTotal: 500,
+    shippingCost: null,
+    total: null,
+    ...extra,
+  });
+}
+
+test("old orders: encrypted, imported once, readable back, editable, archivable, deletable", async () => {
+  store.clear();
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  try {
+    const a = oldOrder("BM-0A0A0A0A0A0A0A0A0A0A");
+    const b = oldOrder("BM-0B0B0B0B0B0B0B0B0B0B", { customerName: "نهى التجربة", phone: "01000000002" });
+    const first = await oldOrdersStore.importOldOrders([a, b]);
+    assert.deepEqual(first.imported, [a.orderId, b.orderId]);
+    const again = await oldOrdersStore.importOldOrders([a, { ...b, customerName: "تغيير" }]);
+    assert.deepEqual(again.imported, [], "same file twice → nothing new");
+    assert.deepEqual(again.duplicates, [a.orderId, b.orderId]);
+
+    const everything = JSON.stringify([...store.entries()].map(([k, v]) => [k, v instanceof Set ? [...v] : v instanceof Map ? [...v] : v]));
+    for (const secret of ["سارة الاختبار", "01000000001", "شارع التجربة"]) assert.equal(everything.includes(secret), false, `leaked ${secret}`);
+
+    calls.length = 0;
+    const { orders, unreadable } = await oldOrdersStore.loadOldOrders();
+    assert.ok(calls.every((call) => call.token === READ_TOKEN));
+    assert.equal(unreadable, 0);
+    assert.equal(orders.length, 2);
+    assert.equal(orders.find((order) => order.orderId === b.orderId).customerName, "نهى التجربة", "first import kept, not overwritten");
+
+    const edited = await oldOrdersStore.updateOldOrder({ ...a, status: "confirmed", archived: true, address: "عنوان جديد" });
+    assert.equal(edited.status, "confirmed");
+    const reread = await oldOrdersStore.loadOldOrder(a.orderId);
+    assert.equal(reread.address, "عنوان جديد");
+    assert.equal(reread.archived, true);
+    assert.equal(await oldOrdersStore.updateOldOrder(oldOrder("BM-0C0C0C0C0C0C0C0C0C0C")), null, "editing never creates");
+    assert.equal(await oldOrdersStore.deleteOldOrder(a.orderId), true);
+    assert.equal(await oldOrdersStore.deleteOldOrder(a.orderId), false);
+    assert.equal((await oldOrdersStore.loadOldOrders()).orders.length, 1);
+
+    process.env.ORDER_DATA_KEY = randomBytes(32).toString("base64url");
+    assert.deepEqual(await oldOrdersStore.loadOldOrders(), { orders: [], unreadable: 1 });
+    delete process.env.ORDER_DATA_KEY;
+    await assert.rejects(oldOrdersStore.importOldOrders([a]), oldOrdersStore.VaultNotConfiguredError, "no key → nothing personal is stored");
+  } finally {
+    delete process.env.ORDER_DATA_KEY;
+  }
+});
+
+test("old orders: importing fills in customer details of dashboard orders that have none (never overwrites)", async () => {
+  store.clear();
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  try {
+    const withoutDetails = { ...orderRecord, orderId: "BM-EE583464D00C5E4BC228" };
+    const withDetails = { ...orderRecord, orderId: "BM-11111111111111111111", customerName: "الأصلية" };
+    await analytics.saveOrder(analytics.toAnalyticsOrder(withoutDetails, null));
+    await analytics.saveOrder(analytics.toAnalyticsOrder(withDetails, null), { sealedDetails: vault.sealOrderDetails(vault.orderDetailsOf(withDetails)) });
+    assert.equal((await analytics.loadOrderDetails(withoutDetails.orderId)).detailsState, "not_stored");
+
+    const states = await analytics.liveOrderStates([withoutDetails.orderId, withDetails.orderId, "BM-99999999999999999999"]);
+    assert.deepEqual(states, { [withoutDetails.orderId]: "no_details", [withDetails.orderId]: "details" });
+
+    const result = await oldOrdersStore.importOldOrders([
+      oldOrder(withoutDetails.orderId),
+      oldOrder(withDetails.orderId, { customerName: "من تيليجرام" }),
+      oldOrder("BM-99999999999999999999"),
+    ]);
+    assert.deepEqual(result.backfilled, [withoutDetails.orderId]);
+
+    const filled = await analytics.loadOrderDetails(withoutDetails.orderId);
+    assert.equal(filled.detailsState, "ok");
+    assert.equal(filled.details.customerName, "سارة الاختبار");
+    assert.equal(filled.details.importedFrom, "telegram");
+    assert.equal(filled.details.products[0].unitPrice, 250);
+    assert.equal(filled.details.products[0].fit, "روب");
+    assert.equal((await analytics.loadOrderDetails(withDetails.orderId)).details.customerName, "الأصلية", "existing details untouched");
+    assert.equal(await analytics.loadOrderDetails("BM-99999999999999999999"), null, "no dashboard order is invented");
+  } finally {
+    delete process.env.ORDER_DATA_KEY;
+  }
+});
+
+test("journey batches: a batch re-sent after a reload is stored once; malformed batches are dropped", async () => {
+  store.clear();
+  const { sanitizeJourneyBatches, sanitizeBatchId } = await import("../lib/journey.ts");
+  const ids = { sessionId: randomUUID(), visitorId: randomUUID() };
+  const batchId = randomUUID();
+  const events = [{ type: "add", productId: "bm-abaya-001", quantity: 1, ago: 0 }];
+  assert.equal(await analytics.recordEvents({ ...ids, ipHash: "r", events, batchId }), "recorded");
+  assert.equal(await analytics.recordEvents({ ...ids, ipHash: "r", events, batchId }), "duplicate");
+  assert.equal(await analytics.recordEvents({ ...ids, ipHash: "r", events, batchId: randomUUID() }), "recorded");
+  const journey = store.get(`bm:dev:v1:journey:${ids.visitorId}`).map((entry) => JSON.parse(entry).e);
+  assert.deepEqual(journey, ["add", "add"]);
+  assert.equal(sanitizeBatchId("x"), null);
+  assert.equal(sanitizeBatchId("<script>alert(1)</script>"), null);
+  const batches = sanitizeJourneyBatches([
+    { batchId, events },
+    { batchId: "bad id!", events },
+    { batchId: randomUUID(), events: [{ type: "nope" }] },
+    { batchId: randomUUID(), events }, { batchId: randomUUID(), events }, { batchId: randomUUID(), events },
+  ]);
+  assert.equal(batches.length, 1, "max 3 batches checked; bad IDs and empty batches dropped");
+  assert.deepEqual(sanitizeJourneyBatches("nope"), []);
 });

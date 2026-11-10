@@ -10,11 +10,13 @@
 //   funnel:{day}:{step}   HLL   session IDs that reached view / add / checkout / order         (TTL 400 days)
 //   journey:{visitorId}   LIST  latest steps of one anonymous visitor (JSON JourneyEntry)      (TTL 30 days)
 //   order:{orderId}       STR   JSON AnalyticsOrder, no personal data                         (TTL 730 days)
-//   orderdetails:{id}     STR   customer + items, AES-256-GCM encrypted (lib/order-vault)      (TTL 365 days)
-//   orderjourney:{id}     STR   JSON JourneyEntry[] snapshot taken when the order was placed   (TTL 365 days)
+//   orderdetails:{id}     STR   customer + items, AES-256-GCM encrypted (lib/order-vault)      (TTL 730 days)
+//   orderjourney:{id}     STR   JSON JourneyEntry[] snapshot taken when the order was placed   (TTL 730 days)
+//   oldorders             HASH  orderId → AES-256-GCM encrypted OldOrder (Telegram import)      (no TTL)
 //   orders                ZSET  orderId scored by creation time (old members trimmed on write)
 //   rl:visit:{ipHash}     STR   visit rate limit per hashed IP                                (TTL 1 h)
 //   rl:event:{ipHash}     STR   journey-event rate limit per hashed IP                        (TTL 1 h)
+//   evbatch:{vid}:{batch} STR   journey batch already stored (a re-sent batch is skipped)     (TTL 24 h)
 //   rl:login:{ipHash}     STR   failed-login counter per hashed IP                            (TTL 15 min)
 // IPs are never stored: only a keyed, daily-rotating HMAC is used as a short-lived counter name.
 // Customer name / phone / address exist only inside the encrypted orderdetails blob.
@@ -35,15 +37,16 @@ import { parseJourney, type ClientJourneyEvent, type JourneyEntry } from "./jour
 import type { OrderRecord } from "./order-record.ts";
 import { openOrderDetails, type OrderDetails } from "./order-vault.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
-import { sourceTypeOf, trafficSourceOf } from "./traffic-source.ts";
+import { sourceTypeOf, trafficSourceOf, type TrafficSource } from "./traffic-source.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const VISIT_TTL_SECONDS = 400 * 24 * 60 * 60;
 const ORDER_TTL_SECONDS = 730 * 24 * 60 * 60;
 const SESSION_TTL_SECONDS = 24 * 60 * 60;
-const ORDER_DETAILS_TTL_SECONDS = 365 * 24 * 60 * 60;
+// Customer details and the journey snapshot live exactly as long as the order record itself.
+const ORDER_DETAILS_TTL_SECONDS = ORDER_TTL_SECONDS;
 const JOURNEY_TTL_SECONDS = 30 * 24 * 60 * 60;
-const JOURNEY_MAX_ENTRIES = 40;
+const JOURNEY_MAX_ENTRIES = 80;
 const MAX_EVENT_REQUESTS_PER_IP_PER_HOUR = 300;
 export const MAX_REPORT_DAYS = 400;
 const MAX_VISITS_PER_IP_PER_HOUR = 60;
@@ -122,18 +125,34 @@ export async function recordVisit(input: { sessionId: string; visitorId: string;
     ["EXPIRE", visitsKey, VISIT_TTL_SECONDS],
     ["PFADD", visitorsKey, input.visitorId],
     ["EXPIRE", visitorsKey, VISIT_TTL_SECONDS],
-    ...journeyPush(input.visitorId, [{
-      e: "visit",
-      at: now.toISOString(),
-      s: source,
-      ...(campaign ? { c: campaign } : {}),
-      ...(input.touch.landingPage ? { l: input.touch.landingPage.slice(0, 200) } : {}),
-    }]),
+    ...journeyPush(input.visitorId, [visitEntry(input.touch, source, campaign, now)]),
   ], "write");
   return "counted";
 }
 
 type Command = (string | number)[];
+
+/** Journey step for a new visit, with the campaign tags that brought it (fbclid only as "present"). */
+function visitEntry(touch: Touch, source: TrafficSource, campaign: string, now: Date): JourneyEntry {
+  let referrerHost = "";
+  try {
+    referrerHost = touch.referrer ? new URL(touch.referrer).hostname : "";
+  } catch {
+    referrerHost = "";
+  }
+  return {
+    e: "visit",
+    at: now.toISOString(),
+    s: source,
+    ...(campaign ? { c: campaign } : {}),
+    ...(touch.landingPage ? { l: touch.landingPage.slice(0, 200) } : {}),
+    ...(touch.utmSource ? { u: label(touch.utmSource) } : {}),
+    ...(touch.utmMedium ? { m: label(touch.utmMedium) } : {}),
+    ...(touch.utmContent ? { n: label(touch.utmContent) } : {}),
+    ...(touch.fbclid ? { f: 1 as const } : {}),
+    ...(referrerHost ? { r: referrerHost.slice(0, 100) } : {}),
+  };
+}
 
 /** Appends steps to a visitor's journey list, keeping only the latest ones. */
 function journeyPush(visitorId: string, entries: JourneyEntry[]): Command[] {
@@ -146,21 +165,24 @@ function journeyPush(visitorId: string, entries: JourneyEntry[]): Command[] {
   ];
 }
 
-// ── Journey events (product views, add to cart, checkout) ──────────────────
+// ── Journey events (pages, product views, cart adds / removals, checkout) ──
 
-export type EventsResult = "recorded" | "rate_limited" | "empty";
+export type EventsResult = "recorded" | "rate_limited" | "duplicate" | "empty";
+const EVENT_BATCH_TTL_SECONDS = 24 * 60 * 60;
 
 /** Records one batch of browser events: product counters, funnel steps and the visitor's journey. */
-export async function recordEvents(input: { sessionId: string; visitorId: string; events: ClientJourneyEvent[]; ipHash: string; now?: Date }): Promise<EventsResult> {
+export async function recordEvents(input: { sessionId: string; visitorId: string; events: ClientJourneyEvent[]; ipHash: string; batchId?: string | null; now?: Date }): Promise<EventsResult> {
   if (input.events.length === 0) return "empty";
-  const [count] = await redisPipeline([
+  const [count, , firstTime] = await redisPipeline([
     ["INCR", key(`rl:event:${input.ipHash}`)],
     ["EXPIRE", key(`rl:event:${input.ipHash}`), 3600, "NX"],
+    // The browser re-sends a batch it could not confirm (page closed); store each batch once.
+    ...(input.batchId ? [["SET", key(`evbatch:${input.visitorId}:${input.batchId}`), "1", "NX", "EX", EVENT_BATCH_TTL_SECONDS]] : []),
   ], "write");
   if (Number(count) > MAX_EVENT_REQUESTS_PER_IP_PER_HOUR) return "rate_limited";
+  if (input.batchId && firstTime !== "OK") return "duplicate";
 
   const now = input.now ?? new Date();
-  const at = now.toISOString();
   const day = cairoDay(now);
   const productsKey = key(`products:${day}`);
   const commands: Command[] = [];
@@ -169,8 +191,14 @@ export async function recordEvents(input: { sessionId: string; visitorId: string
   const entries: JourneyEntry[] = [];
 
   for (const event of input.events) {
-    steps.add(event.type);
-    if (event.type === "view" && event.productId) {
+    // The browser batches events: keep the moment each one actually happened.
+    const at = new Date(now.getTime() - (event.ago ?? 0)).toISOString();
+    if ((FUNNEL_STEPS as readonly string[]).includes(event.type)) steps.add(event.type);
+    if (event.type === "page" && event.path) {
+      entries.push({ e: "page", at, l: event.path });
+    } else if (event.type === "remove" && event.productId) {
+      entries.push({ e: "remove", at, p: event.productId, q: event.quantity ?? 1 });
+    } else if (event.type === "view" && event.productId) {
       commands.push(["HINCRBY", productsKey, `v:${event.productId}`, 1]);
       entries.push({ e: "view", at, p: event.productId });
     } else if (event.type === "add" && event.productId) {
@@ -304,6 +332,37 @@ export async function loadOrderDetails(orderId: string): Promise<OrderDetailsVie
     }
   }
   return { order, details, detailsState: typeof sealed !== "string" ? "not_stored" : details ? "ok" : "unreadable", journey };
+}
+
+/** Which of these IDs are dashboard orders, and whether their customer details are stored. */
+export async function liveOrderStates(orderIds: string[]): Promise<Record<string, "details" | "no_details">> {
+  if (orderIds.length === 0) return {};
+  const results = await redisPipeline(
+    orderIds.flatMap((id) => [["EXISTS", key(`order:${id}`)], ["EXISTS", key(`orderdetails:${id}`)]]),
+    "read",
+    5000,
+  );
+  const states: Record<string, "details" | "no_details"> = {};
+  orderIds.forEach((id, index) => {
+    if (Number(results[index * 2]) === 1) states[id] = Number(results[index * 2 + 1]) === 1 ? "details" : "no_details";
+  });
+  return states;
+}
+
+/**
+ * Fills in encrypted customer details for dashboard orders that have none (orders placed before
+ * details were stored). Never overwrites details that exist, and skips IDs that are not orders.
+ */
+export async function backfillOrderDetails(entries: { orderId: string; sealed: string }[]) {
+  const states = await liveOrderStates(entries.map((entry) => entry.orderId));
+  const missing = entries.filter((entry) => states[entry.orderId] === "no_details");
+  if (missing.length === 0) return [];
+  const results = await redisPipeline(
+    missing.map((entry) => ["SET", key(`orderdetails:${entry.orderId}`), entry.sealed, "NX", "EX", ORDER_DETAILS_TTL_SECONDS]),
+    "write",
+    5000,
+  );
+  return missing.filter((_, index) => results[index] === "OK").map((entry) => entry.orderId);
 }
 
 export async function setOrderStatus(orderId: string, status: OrderStatus, confirmedValue: number | null) {
