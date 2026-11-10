@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, ExternalLink, Eye, LogOut, RefreshCw, RotateCcw, X, XCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, LogOut, RefreshCw, RotateCcw, Undo2, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -20,6 +20,7 @@ import {
 } from "recharts";
 
 import { OldOrdersTab } from "@/components/admin/old-orders";
+import { FinanceTab } from "@/components/admin/finance";
 import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
@@ -45,7 +46,7 @@ const SOURCE_COLORS: Record<TrafficSource, string> = {
 
 const TYPE_COLORS: Record<SourceType, string> = { Paid: "#d6246e", Organic: "#1c9d50", Direct: "#1f3550", Unknown: "#b9b3ba" };
 const TYPE_LABELS: Record<SourceType, string> = { Paid: "Paid (إعلانات)", Organic: "Organic (مجاني)", Direct: "Direct (مباشر)", Unknown: "Unknown" };
-const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", cancelled: "اتلغى" };
+const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", cancelled: "اتلغى", returned: "مرتجع" };
 
 const PRESETS = [
   { id: "7", label: "٧ أيام", days: 7 },
@@ -60,6 +61,7 @@ const TABS = [
   { id: "orders", label: "الأوردرات" },
   { id: "old", label: "الأوردرات القديمة" },
   { id: "quantities", label: "حصر كميات المصنع" },
+  { id: "finance", label: "الإدارة المالية" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -185,6 +187,7 @@ export function AnalyticsDashboard() {
             {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} />}
             {oldOpened && <div hidden={tab !== "old"}><OldOrdersTab /></div>}
             {tab === "quantities" && <QuantitySummaryTab />}
+            {tab === "finance" && <FinanceTab />}
           </div>
         </>
       )}
@@ -605,8 +608,11 @@ function StatusActions({ orderId, value, status, busy, onChange }: { orderId: st
       {status !== "confirmed" && (
         <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "confirmed")} title="بيع مؤكد"><CheckCircle2 size={16} /> تأكيد</button>
       )}
-      {status !== "cancelled" && (
+      {status !== "cancelled" && status !== "returned" && (
         <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "cancelled")} title="إلغاء" className="danger"><XCircle size={16} /> إلغاء</button>
+      )}
+      {status === "confirmed" && (
+        <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "returned")} title="الأوردر رجع" className="danger"><Undo2 size={16} /> مرتجع</button>
       )}
       {status !== "submitted" && (
         <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "submitted")} title="رجوع لمستني تأكيد" aria-label="رجوع لمستني تأكيد"><RotateCcw size={15} /></button>

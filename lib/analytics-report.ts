@@ -3,7 +3,11 @@ import type { Touch } from "./attribution.ts";
 import { catalog, categoryInfo } from "./site-data.ts";
 import { SOURCE_TYPES, TRAFFIC_SOURCES, isTrafficSource, sourceTypeOf, type SourceType, type TrafficSource } from "./traffic-source.ts";
 
-export const ORDER_STATUSES = ["submitted", "confirmed", "cancelled"] as const;
+/** "returned": a confirmed order that came back — not a sale, its pieces cost nothing to the store. */
+export const ORDER_STATUSES = ["submitted", "confirmed", "cancelled", "returned"] as const;
+
+/** Factory cost per product line, saved when the order is confirmed (same order as `products`). */
+export type CostSnapshot = { unitCosts: (number | null)[]; at: string };
 
 /** Journey steps counted once per browsing session (sessions themselves come from the visit counter). */
 export const FUNNEL_STEPS = ["view", "add", "checkout", "order"] as const;
@@ -48,6 +52,8 @@ export type AnalyticsOrder = {
   statusAt: string | null;
   /** Actual amount collected when it differs from the submitted total. */
   confirmedValue: number | null;
+  /** Unit factory costs at confirmation time (Financial Management); absent before that. */
+  costSnapshot?: CostSnapshot;
 };
 
 /** Fields of one day's visit hash: all, s:<source>, t:<type>, c:<campaign>, a:<ad content>. */
@@ -237,6 +243,7 @@ export function buildReport(input: {
       ...withRates(totals),
       uniqueVisitors,
       cancelled: orders.filter((order) => order.status === "cancelled").length,
+      returned: orders.filter((order) => order.status === "returned").length,
       pending: orders.filter((order) => order.status === "submitted").length,
     },
     bySource: [...bySource].map(([source, metric]) => ({ source, type: sourceTypeOf(source), ...rated(metric) })),
@@ -272,7 +279,7 @@ export type RatedMetric = Metric & { submittedConversion: number | null; confirm
 
 export type AnalyticsReport = {
   range: { from: string; to: string; days: number };
-  totals: Metric & { submittedConversion: number | null; confirmedConversion: number | null; uniqueVisitors: number; cancelled: number; pending: number };
+  totals: Metric & { submittedConversion: number | null; confirmedConversion: number | null; uniqueVisitors: number; cancelled: number; returned: number; pending: number };
   bySource: (RatedMetric & { source: TrafficSource; type: SourceType })[];
   byType: (RatedMetric & { type: SourceType })[];
   campaigns: (RatedMetric & { campaign: string })[];

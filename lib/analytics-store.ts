@@ -35,6 +35,8 @@ import {
 } from "./analytics-report.ts";
 import { parseJourney, type ClientJourneyEvent, type JourneyEntry } from "./journey.ts";
 import type { OrderRecord } from "./order-record.ts";
+import { snapshotCosts } from "./finance.ts";
+import { productCostsFor } from "./finance-store.ts";
 import { openOrderDetails, type OrderDetails } from "./order-vault.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import { sourceTypeOf, trafficSourceOf, type TrafficSource } from "./traffic-source.ts";
@@ -369,11 +371,17 @@ export async function setOrderStatus(orderId: string, status: OrderStatus, confi
   const [raw] = await redisPipeline([["GET", key(`order:${orderId}`)]], "write");
   if (typeof raw !== "string") return null;
   const order = JSON.parse(raw) as AnalyticsOrder;
+  // The factory cost of each piece is kept from the first confirmation on, so later price changes
+  // never change the profit of an order that was already confirmed.
+  const costSnapshot = order.costSnapshot ?? (status === "confirmed"
+    ? snapshotCosts(order.products.map((product) => product.modelId), await productCostsFor(order.products.map((product) => product.modelId)))
+    : undefined);
   const updated: AnalyticsOrder = {
     ...order,
     status,
     statusAt: new Date().toISOString(),
     confirmedValue: status === "confirmed" ? confirmedValue : null,
+    ...(costSnapshot ? { costSnapshot } : {}),
   };
   const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
   return result === "OK" ? updated : null;

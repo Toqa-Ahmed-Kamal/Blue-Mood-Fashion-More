@@ -1477,3 +1477,22 @@ h1, h2, h3 { font-family: var(--font-display); }
 .admin-qty-sources-box .mono { font-family: ui-monospace, Consolas, monospace; font-size: .74rem; margin: 6px 0 0; overflow-wrap: anywhere; }
 .admin-unsaved { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; background: #fff3dc; color: #8a5a10; border: 1px solid #f0d9a8; border-radius: var(--radius); padding: 10px 14px; margin: 12px 0; font-size: .9rem; }
 .shipping-unserved { display: block; margin-top: 6px; font-size: .82rem; line-height: 1.6; color: #8a5a10; background: #fff3dc; border-radius: 8px; padding: 6px 10px; }
+.admin-table .status.returned, .admin-dialog .status.returned, .admin-order .status.returned { background: #ece6f6; color: #5b3d99; }
+.admin-order.status-returned { border-inline-start-color: #8a6ccf; opacity: .85; }
+
+/* ── Admin: Financial Management ── */
+.admin-card.bad strong { color: var(--danger); }
+.admin-negative { color: var(--danger); font-weight: 700; }
+.admin-fin-categories { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .84rem; color: var(--muted); }
+.admin-fin-categories strong { color: var(--navy); }
+.admin-inline-input { font: inherit; font-size: .85rem; color: var(--navy); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; min-height: 34px; width: 150px; }
+.admin-inline-input.narrow { width: 100px; }
+.admin-fin-products td { vertical-align: middle; }
+.admin-fin-products .admin-flag, .admin-table td .admin-flag { margin-inline-start: 6px; }
+.admin-fin-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; margin-bottom: 12px; align-items: end; }
+.admin-fin-form .wide { grid-column: span 3; }
+.admin-fin-form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .admin-fin-form { grid-template-columns: minmax(0, 1fr); }
+  .admin-fin-form .wide { grid-column: auto; }
+}

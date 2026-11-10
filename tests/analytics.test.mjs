@@ -48,6 +48,7 @@ function fakeRedis(command) {
     case "HSET": { const hash = get(args[0]) ?? {}; const added = args[1] in hash ? 0 : 1; hash[args[1]] = args[2]; store.set(args[0], hash); return added; }
     case "HSETNX": { const hash = get(args[0]) ?? {}; if (args[1] in hash) return 0; if (dropWrites) return 1; hash[args[1]] = args[2]; store.set(args[0], hash); return 1; }
     case "HLEN": return Object.keys(get(args[0]) ?? {}).length;
+    case "HMGET": { const hash = get(args[0]) ?? {}; return args.slice(1).map((field) => hash[field] ?? null); }
     case "HDEL": { const hash = get(args[0]) ?? {}; const had = args[1] in hash; delete hash[args[1]]; return had ? 1 : 0; }
     case "EXISTS": return store.has(args[0]) ? 1 : 0;
     case "PFADD": { const set = get(args[0]) ?? new Set(); const before = set.size; args.slice(1).forEach((v) => set.add(v)); store.set(args[0], set); return set.size > before ? 1 : 0; }
@@ -76,7 +77,7 @@ globalThis.fetch = async (url, options) => {
   const commands = JSON.parse(options.body);
   calls.push({ token, commands });
   // Like real Redis ACLs, PFCOUNT counts as a write command, so the read-only token is refused.
-  const isWrite = commands.some(([name]) => !["GET", "HGET", "HGETALL", "ZRANGE", "MGET", "LRANGE", "EXISTS"].includes(name.toUpperCase()));
+  const isWrite = commands.some(([name]) => !["GET", "HGET", "HMGET", "HGETALL", "ZRANGE", "MGET", "LRANGE", "EXISTS"].includes(name.toUpperCase()));
   if (token === READ_TOKEN && isWrite) return new Response(JSON.stringify({ error: "NOPERM" }), { status: 403 });
   return new Response(JSON.stringify(commands.map((command) => {
     const result = fakeRedis(command);
@@ -715,4 +716,45 @@ test("old orders import: success only after every order is read back; a write th
     dropWrites = false;
     delete process.env.ORDER_DATA_KEY;
   }
+});
+
+test("finance: confirming an order saves today's factory costs; later price changes and re-confirming keep them", async () => {
+  store.clear();
+  const finance = await import("../lib/finance-store.ts");
+  const { sanitizeProductCost } = await import("../lib/finance.ts");
+  const record = { ...orderRecord, orderId: "BM-55555555555555555555" };
+  await analytics.saveOrder(analytics.toAnalyticsOrder(record, null));
+  await finance.saveProductCost(sanitizeProductCost("bm-abaya-001", { factory: "مصنع أ", cost: 180 }));
+  let order = await analytics.setOrderStatus(record.orderId, "confirmed", null);
+  assert.deepEqual(order.costSnapshot.unitCosts, [180]);
+  await finance.saveProductCost(sanitizeProductCost("bm-abaya-001", { factory: "مصنع أ", cost: 260 }));
+  await analytics.setOrderStatus(record.orderId, "submitted", null);
+  order = await analytics.setOrderStatus(record.orderId, "confirmed", null);
+  assert.deepEqual(order.costSnapshot.unitCosts, [180], "the first confirmation's cost stays");
+  order = await analytics.setOrderStatus(record.orderId, "returned", null);
+  assert.equal(order.status, "returned");
+  assert.equal(order.confirmedValue, null);
+  // A pending order never gets a snapshot.
+  const other = { ...orderRecord, orderId: "BM-66666666666666666666" };
+  await analytics.saveOrder(analytics.toAnalyticsOrder(other, null));
+  assert.equal((await analytics.setOrderStatus(other.orderId, "cancelled", null)).costSnapshot, undefined);
+});
+
+test("finance store: costs and expenses are saved, read back, edited and deleted; nothing personal", async () => {
+  store.clear();
+  const finance = await import("../lib/finance-store.ts");
+  const { sanitizeExpense, sanitizeProductCost } = await import("../lib/finance.ts");
+  const saved = await finance.saveProductCost(sanitizeProductCost("bm-robe-003", { factory: "مصنع ب", cost: 110 }));
+  assert.equal(saved.cost, 110);
+  assert.equal((await finance.loadProductCosts())["bm-robe-003"].factory, "مصنع ب");
+  const expense = sanitizeExpense({ name: "إعلانات", category: "ads", amount: 500, date: "2026-11-10", notes: "حملة" }, "11111111-1111-1111-1111-111111111111");
+  assert.equal((await finance.saveExpense(expense)).amount, 500);
+  await finance.saveExpense({ ...expense, amount: 650 });
+  calls.length = 0;
+  const all = await finance.loadExpenses();
+  assert.ok(calls.every((call) => call.token === READ_TOKEN));
+  assert.deepEqual([all.length, all[0].amount], [1, 650]);
+  assert.equal(await finance.deleteExpense(expense.id), true);
+  assert.equal(await finance.deleteExpense(expense.id), false);
+  assert.deepEqual(await finance.loadExpenses(), []);
 });

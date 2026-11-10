@@ -2,6 +2,8 @@ import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
 import { isOrderStatus } from "@/lib/analytics-store";
 import { OLD_ORDER_ID_PATTERN, sanitizeOldOrder } from "@/lib/old-orders";
 import { VaultNotConfiguredError, deleteOldOrder, loadOldOrder, updateOldOrder } from "@/lib/old-orders-store";
+import { snapshotCosts } from "@/lib/finance";
+import { productCostsFor } from "@/lib/finance-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
 
@@ -62,7 +64,17 @@ export async function PATCH(request: Request, context: Context) {
       if (typeof body.archived !== "boolean") return json(400, { success: false, error: { code: "INVALID_ARCHIVED" } });
       next = { ...next, archived: body.archived };
     }
-    const saved = await updateOldOrder({ ...next, updatedAt: now.toISOString() });
+    // Cost snapshot: never sent by the browser. Kept from the first confirmation; taken again only when
+    // the pieces themselves were edited (the old snapshot would no longer match the lines).
+    const sameLines = JSON.stringify(next.products.map((product) => [product.modelId, product.quantity])) === JSON.stringify(current.products.map((product) => [product.modelId, product.quantity]));
+    let costSnapshot = sameLines ? current.costSnapshot : undefined;
+    if (!costSnapshot && next.status === "confirmed") {
+      const ids = next.products.map((product) => product.modelId);
+      costSnapshot = snapshotCosts(ids, await productCostsFor(ids), now);
+    }
+    const { costSnapshot: _ignored, ...withoutSnapshot } = next;
+    void _ignored;
+    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), updatedAt: now.toISOString() });
     return saved ? json(200, { success: true, order: saved }) : json(404, NOT_FOUND);
   } catch (error) {
     return storageError(error, "update");

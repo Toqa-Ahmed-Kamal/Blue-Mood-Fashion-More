@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CheckCircle2, Download, FileUp, Pencil, Plus, RotateCcw, Trash2, X, XCircle } from "lucide-react";
+import { Archive, ArchiveRestore, CheckCircle2, Download, FileUp, Pencil, Plus, RotateCcw, Trash2, Undo2, X, XCircle } from "lucide-react";
 
 import type { OrderStatus } from "@/lib/analytics-report";
 import { formatEGP } from "@/lib/format";
@@ -22,7 +22,7 @@ import { productImage } from "@/lib/quantity-summary";
 import { categoryInfo, findProduct } from "@/lib/site-data";
 import { buildXlsx, type XlsxCell } from "@/lib/xlsx";
 
-const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", cancelled: "اتلغى" };
+const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", cancelled: "اتلغى", returned: "مرتجع" };
 const IMPORT_BATCH = 50;
 const CHECK_BATCH = 500;
 const PAGE_SIZE = 50;
@@ -441,7 +441,8 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
                         <td className="actions wrap-actions">
                           <button type="button" disabled={busy} onClick={() => setEditing(order.orderId)}><Pencil size={14} /> تعديل</button>
                           {order.status !== "confirmed" && <button type="button" disabled={busy} onClick={() => void patch(order, { status: "confirmed" })}><CheckCircle2 size={14} /> تأكيد</button>}
-                          {order.status !== "cancelled" && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "cancelled" })}><XCircle size={14} /> إلغاء</button>}
+                          {order.status !== "cancelled" && order.status !== "returned" && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "cancelled" })}><XCircle size={14} /> إلغاء</button>}
+                          {order.status === "confirmed" && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "returned" })}><Undo2 size={14} /> مرتجع</button>}
                           {order.status !== "submitted" && <button type="button" disabled={busy} onClick={() => void patch(order, { status: "submitted" })} aria-label="رجوع لمستني تأكيد" title="رجوع لمستني تأكيد"><RotateCcw size={14} /></button>}
                           <button type="button" disabled={busy} onClick={() => void patch(order, { archived: !order.archived })}>
                             {order.archived ? <><ArchiveRestore size={14} /> استرجاع</> : <><Archive size={14} /> أرشفة</>}
@@ -495,7 +496,8 @@ function ProductThumb({ modelId, image, name }: { modelId: string; image?: strin
 
 function QuantitiesPanel({ orders }: { orders: OldOrder[] }) {
   const [includeCancelled, setIncludeCancelled] = useState(false);
-  const counted = orders.filter((order) => includeCancelled || order.status !== "cancelled");
+  // Returned pieces came back, like cancelled ones they are not pieces to make.
+  const counted = orders.filter((order) => includeCancelled || (order.status !== "cancelled" && order.status !== "returned"));
   const rows = aggregateQuantities(counted);
   const pieces = rows.reduce((sum, row) => sum + row.quantity, 0);
 
@@ -555,7 +557,7 @@ function QuantitiesPanel({ orders }: { orders: OldOrder[] }) {
         </div>
       </div>
       <label className="admin-check">
-        <input type="checkbox" checked={includeCancelled} onChange={(event) => setIncludeCancelled(event.target.checked)} /> احسبي الأوردرات الملغية كمان
+        <input type="checkbox" checked={includeCancelled} onChange={(event) => setIncludeCancelled(event.target.checked)} /> احسبي الأوردرات الملغية والمرتجعة كمان
       </label>
       {rows.length === 0 ? <p className="admin-muted empty">مفيش قطع في الأوردرات اللي ظاهرة.</p> : (
         <div className="admin-table-wrap">
