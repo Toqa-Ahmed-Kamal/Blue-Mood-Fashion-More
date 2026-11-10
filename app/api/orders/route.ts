@@ -194,7 +194,9 @@ export async function POST(request: Request) {
       link: productLink(origin, line.product.image),
     })),
   ];
-  const shippingNote = shippingCost === null
+  const shippingNote = rate.unserved
+    ? `منطقة غير مخدومة بالشحن العادي (${rate.unserved}): سعر الشحن غير محدد، يتأكد من خدمة العملاء قبل التنفيذ.`
+    : shippingCost === null
     ? "تكلفة الشحن غير مؤكدة؛ يجب تأكيدها قبل التنفيذ."
     : "سعر الشحن مبدئي وقابل للتعديل. الإجمالي تقديري.";
   const notes = [customer.notes, shippingNote].filter(Boolean).join("\n");

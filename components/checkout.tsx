@@ -18,7 +18,7 @@ import {
   normalizePhoneDigits,
   productLink,
 } from "@/lib/order-flow";
-import { findShippingRate, governorateShippingFee, isValidShippingArea, shippingAreasFor, shippingGovernorates } from "@/lib/shipping-rates";
+import { UNSERVED_AREA_NOTE, findShippingRate, governorateShippingFee, isValidShippingArea, shippingAreasFor, shippingGovernorates, unservedAreasIn } from "@/lib/shipping-rates";
 import { landingPromotion, priceOf, visibleCatalog } from "@/lib/site-data";
 import { SiteHeader } from "@/components/store-chrome";
 
@@ -96,7 +96,9 @@ export function Checkout() {
   const resolved = resolveCart(cart);
   const errors = validate(customer);
   // The fee is known as soon as the governorate is picked (one price per governorate).
-  const shippingFee = findShippingRate(customer.governorate, customer.area || "*")?.fee ?? null;
+  const shippingRate = findShippingRate(customer.governorate, customer.area || "*");
+  const shippingFee = shippingRate?.fee ?? null;
+  const unservedArea = shippingRate?.unserved ?? null;
 
   function update(field: keyof CustomerDetails, value: string) {
     setCustomer((current) => ({ ...current, [field]: value, ...(field === "governorate" ? { area: "" } : {}) }));
@@ -256,7 +258,7 @@ export function Checkout() {
                     <option value="">اختاري المحافظة</option>
                     {shippingGovernorates.map((governorate) => {
                       const fee = governorateShippingFee(governorate);
-                      return <option key={governorate} value={governorate}>{governorate}{fee !== null ? ` — شحن ${fee} ج.م` : ""}</option>;
+                      return <option key={governorate} value={governorate}>{governorate}{fee !== null ? ` — شحن ${fee} ج.م` : " — الشحن بيتأكد من خدمة العملاء"}</option>;
                     })}
                   </select>
                 </Field>
@@ -274,6 +276,11 @@ export function Checkout() {
                   ) : (
                     <input autoComplete="address-level2" maxLength={120} placeholder="مثلاً: المنصورة، طنطا، سموحة" value={customer.area} onChange={(e) => update("area", e.target.value)} aria-invalid={!!fieldError("area")} />
                   )}
+                  {unservedArea ? (
+                    <span className="shipping-unserved" role="status">{unservedArea}: {UNSERVED_AREA_NOTE}</span>
+                  ) : customer.governorate && unservedAreasIn(customer.governorate).length > 0 && shippingFee !== null ? (
+                    <span className="field-hint">مناطق غير مخدومة بالشحن العادي في المحافظة دي ({unservedAreasIn(customer.governorate).join("، ")}): سعر شحنها بيتأكد من خدمة العملاء.</span>
+                  ) : null}
                 </Field>
                 <Field label="العنوان بالتفصيل" error={fieldError("address")} wide>
                   <textarea rows={3} maxLength={500} autoComplete="street-address" placeholder="الشارع، رقم العمارة، الدور، علامة مميزة" value={customer.address} onChange={(e) => update("address", e.target.value)} aria-invalid={!!fieldError("address")} />
@@ -293,14 +300,14 @@ export function Checkout() {
                 {resolved.cart.items.length > 0 && <div><dt>القطع المنفردة</dt><dd>{formatEGP(resolved.cart.itemsTotal)}</dd></div>}
                 <div>
                   <dt>الشحن</dt>
-                  <dd>{!customer.governorate ? "اختاري المحافظة" : shippingFee === null ? "هيتأكد معاكي" : formatEGP(shippingFee)}</dd>
+                  <dd>{!customer.governorate ? "اختاري المحافظة" : shippingFee === null ? (unservedArea ? "غير محدد · هيتأكد من خدمة العملاء" : "هيتأكد من خدمة العملاء") : formatEGP(shippingFee)}</dd>
                 </div>
                 <div className="grand-total">
                   <dt>الإجمالي</dt>
                   <dd>{formatEGP(totals.total ?? totals.subtotal)}{totals.total === null && <small> + الشحن</small>}</dd>
                 </div>
               </dl>
-              <p className="fine-print">سعر الشحن حسب المحافظة وبيظهر جنب اسمها. الدفع عند الاستلام.</p>
+              <p className="fine-print">سعر الشحن حسب المحافظة وبيظهر جنب اسمها. المناطق غير المخدومة بالشحن العادي (سيناء، الوادي الجديد، العين السخنة، المتايف العالي، حلايب وشلاتين، السلوم، صحراء القاهرة، هليوبوليس الجديدة، مرسى علم، العاصمة الإدارية، الواحات) سعر شحنها غير محدد وبيتأكد من خدمة العملاء. الدفع عند الاستلام.</p>
               {submitError && <p className="form-error" role="alert">{submitError}</p>}
               {fallbackUrl && (
                 <a href={fallbackUrl} target="_blank" rel="noreferrer" className="btn btn-whatsapp btn-lg btn-block fallback-whatsapp">
