@@ -82,6 +82,8 @@ export function AnalyticsDashboard() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<TabId>("traffic");
+  // Old Orders stays mounted once opened, so an import preview is not lost when switching tabs.
+  const [oldOpened, setOldOpened] = useState(false);
 
   const load = useCallback(async (from: string, to: string) => {
     setLoading(true);
@@ -170,7 +172,7 @@ export function AnalyticsDashboard() {
                 aria-selected={tab === item.id}
                 aria-controls={`panel-${item.id}`}
                 className={tab === item.id ? "active" : ""}
-                onClick={() => setTab(item.id)}
+                onClick={() => { setTab(item.id); if (item.id === "old") setOldOpened(true); }}
               >
                 {item.label}
                 {item.id === "orders" && report.totals.pending > 0 && <span className="admin-badge">{report.totals.pending}</span>}
@@ -181,7 +183,7 @@ export function AnalyticsDashboard() {
             {tab === "traffic" && <TrafficTab report={report} />}
             {tab === "journey" && <JourneyTab report={report} />}
             {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} />}
-            {tab === "old" && <OldOrdersTab />}
+            {oldOpened && <div hidden={tab !== "old"}><OldOrdersTab /></div>}
             {tab === "quantities" && <QuantitySummaryTab />}
           </div>
         </>

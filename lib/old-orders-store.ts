@@ -12,6 +12,16 @@ import { keyPrefix, redisPipeline } from "./redis.ts";
 const HASH = () => `${keyPrefix()}oldorders`;
 const aad = (orderId: string) => `old:${orderId}`;
 
+/** Redis accepted the write but the orders are not there when read back. */
+export class OldOrdersNotPersistedError extends Error {
+  readonly missing: string[];
+  constructor(missing: string[]) {
+    super("NOT_PERSISTED");
+    this.name = "OldOrdersNotPersistedError";
+    this.missing = missing;
+  }
+}
+
 export class VaultNotConfiguredError extends Error {
   constructor() {
     super("ORDER_DATA_KEY_MISSING");
@@ -56,11 +66,16 @@ export async function loadOldOrder(orderId: string) {
  * customer details get them filled in from the message.
  */
 export async function importOldOrders(orders: OldOrder[]) {
-  if (orders.length === 0) return { imported: [] as string[], duplicates: [] as string[], backfilled: [] as string[] };
+  if (orders.length === 0) return { imported: [] as string[], duplicates: [] as string[], backfilled: [] as string[], stored: 0, totalSaved: 0 };
   const sealed = orders.map(seal);
   const results = await redisPipeline(orders.map((order, index) => ["HSETNX", HASH(), order.orderId, sealed[index]]), "write", 8000);
   const imported = orders.filter((_, index) => Number(results[index]) === 1).map((order) => order.orderId);
   const duplicates = orders.filter((_, index) => Number(results[index]) !== 1).map((order) => order.orderId);
+
+  // Read back: success is reported only when every order of the batch is really in storage.
+  const present = await redisPipeline(orders.map((order) => ["HEXISTS", HASH(), order.orderId]), "write", 8000);
+  const missing = orders.filter((_, index) => Number(present[index]) !== 1).map((order) => order.orderId);
+  if (missing.length > 0) throw new OldOrdersNotPersistedError(missing);
 
   const details = orders.flatMap((order) => {
     const view = oldOrderToDetails(order);
@@ -68,7 +83,8 @@ export async function importOldOrders(orders: OldOrder[]) {
     return sealedDetails ? [{ orderId: order.orderId, sealed: sealedDetails }] : [];
   });
   const backfilled = await backfillOrderDetails(details);
-  return { imported, duplicates, backfilled };
+  const [total] = await redisPipeline([["HLEN", HASH()]], "write");
+  return { imported, duplicates, backfilled, stored: orders.length, totalSaved: Number(total) || 0 };
 }
 
 /** Replaces a saved order (edit, status, archive). null when it does not exist. */

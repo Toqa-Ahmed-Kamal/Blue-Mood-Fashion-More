@@ -1,6 +1,6 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
 import { MAX_OLD_ORDERS_PER_REQUEST, sanitizeOldOrder } from "@/lib/old-orders";
-import { VaultNotConfiguredError, importOldOrders, loadOldOrders } from "@/lib/old-orders-store";
+import { OldOrdersNotPersistedError, VaultNotConfiguredError, importOldOrders, loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
 
@@ -49,9 +49,15 @@ export async function POST(request: Request) {
 
   try {
     const result = await importOldOrders(orders.filter((order) => order !== null));
+    // Visible in the Vercel logs: proof that an import reached storage (IDs only, no customer data).
+    console.info("[admin] old orders imported", { imported: result.imported.length, duplicates: result.duplicates.length, backfilled: result.backfilled.length, totalSaved: result.totalSaved });
     return json(200, { success: true, ...result });
   } catch (error) {
     if (error instanceof VaultNotConfiguredError) return json(503, NO_KEY);
+    if (error instanceof OldOrdersNotPersistedError) {
+      console.error("[admin] old orders not persisted after write", { missing: error.missing.length });
+      return json(502, { success: false, error: { code: "NOT_PERSISTED", message: `الحفظ ما اتأكدش: ${error.missing.length} أوردر مش موجودين في قاعدة البيانات بعد الحفظ. ما تقفليش الصفحة وجربي تاني.` } });
+    }
     console.error("[admin] old orders import failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
     return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مقدرناش نحفظ دلوقتي. جربي تاني." } });
   }

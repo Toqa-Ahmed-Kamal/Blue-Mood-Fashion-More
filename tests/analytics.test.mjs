@@ -16,6 +16,8 @@ import {
 const store = new Map();
 const calls = [];
 let redisDown = false;
+/** Simulates storage that acknowledges a write without keeping it. */
+let dropWrites = false;
 const WRITE_TOKEN = "write-token-test";
 const READ_TOKEN = "read-token-test";
 
@@ -44,7 +46,8 @@ function fakeRedis(command) {
     case "HGET": return (get(args[0]) ?? {})[args[1]] ?? null;
     case "HEXISTS": return args[1] in (get(args[0]) ?? {}) ? 1 : 0;
     case "HSET": { const hash = get(args[0]) ?? {}; const added = args[1] in hash ? 0 : 1; hash[args[1]] = args[2]; store.set(args[0], hash); return added; }
-    case "HSETNX": { const hash = get(args[0]) ?? {}; if (args[1] in hash) return 0; hash[args[1]] = args[2]; store.set(args[0], hash); return 1; }
+    case "HSETNX": { const hash = get(args[0]) ?? {}; if (args[1] in hash) return 0; if (dropWrites) return 1; hash[args[1]] = args[2]; store.set(args[0], hash); return 1; }
+    case "HLEN": return Object.keys(get(args[0]) ?? {}).length;
     case "HDEL": { const hash = get(args[0]) ?? {}; const had = args[1] in hash; delete hash[args[1]]; return had ? 1 : 0; }
     case "EXISTS": return store.has(args[0]) ? 1 : 0;
     case "PFADD": { const set = get(args[0]) ?? new Set(); const before = set.size; args.slice(1).forEach((v) => set.add(v)); store.set(args[0], set); return set.size > before ? 1 : 0; }
@@ -694,4 +697,22 @@ test("journey is shown in the order the steps happened, even when requests arriv
     { e: "order", at: "2026-11-10T15:01:00.000Z", o: "BM-AAAAAAAAAAAAAAAAAAAA", v: 350 },
   ].map((entry) => JSON.stringify(entry));
   assert.deepEqual(parseJourney(stored).map((entry) => entry.e), ["visit", "page", "view", "add", "page", "checkout", "order"]);
+});
+
+test("old orders import: success only after every order is read back; a write that did not stick is an error", async () => {
+  store.clear();
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  try {
+    const a = oldOrder("BM-0E0E0E0E0E0E0E0E0E0E");
+    const ok = await oldOrdersStore.importOldOrders([a]);
+    assert.deepEqual([ok.imported, ok.stored, ok.totalSaved], [[a.orderId], 1, 1]);
+    dropWrites = true;
+    const b = oldOrder("BM-0F0F0F0F0F0F0F0F0F0F");
+    await assert.rejects(oldOrdersStore.importOldOrders([b]), (error) => error instanceof oldOrdersStore.OldOrdersNotPersistedError && error.missing[0] === b.orderId);
+    dropWrites = false;
+    assert.equal((await oldOrdersStore.loadOldOrders()).orders.length, 1, "nothing half-saved");
+  } finally {
+    dropWrites = false;
+    delete process.env.ORDER_DATA_KEY;
+  }
 });

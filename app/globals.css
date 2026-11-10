@@ -1475,3 +1475,4 @@ h1, h2, h3 { font-family: var(--font-display); }
 .admin-qty-sources-box { display: grid; gap: 6px; background: var(--brand-soft); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 12px; font-size: .86rem; }
 .admin-qty-sources-box details summary { cursor: pointer; color: var(--brand-dark); }
 .admin-qty-sources-box .mono { font-family: ui-monospace, Consolas, monospace; font-size: .74rem; margin: 6px 0 0; overflow-wrap: anywhere; }
+.admin-unsaved { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; background: #fff3dc; color: #8a5a10; border: 1px solid #f0d9a8; border-radius: var(--radius); padding: 10px 14px; margin: 12px 0; font-size: .9rem; }

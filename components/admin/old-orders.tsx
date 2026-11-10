@@ -55,14 +55,17 @@ export function OldOrdersTab() {
   const [unreadable, setUnreadable] = useState(0);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
+  /** Reloads the saved orders from the server; returns them (null on failure). */
+  const load = useCallback(async (): Promise<OldOrder[] | null> => {
     try {
       const result = await api("/api/admin/old-orders");
       setOrders(result.orders);
       setUnreadable(result.unreadable);
       setError("");
+      return result.orders as OldOrder[];
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "مقدرناش نحمل الأوردرات القديمة.");
+      return null;
     }
   }, [api]);
 
@@ -90,7 +93,7 @@ export function OldOrdersTab() {
 
 // ── Import ────────────────────────────────────────────────────────────────
 
-function ImportPanel({ saved, ready, onImported }: { saved: OldOrder[]; ready: boolean; onImported: () => Promise<void> }) {
+function ImportPanel({ saved, ready, onImported }: { saved: OldOrder[]; ready: boolean; onImported: () => Promise<OldOrder[] | null> }) {
   const api = useAdminApi();
   const inputRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<PreviewRow[]>([]);
@@ -103,6 +106,15 @@ function ImportPanel({ saved, ready, onImported }: { saved: OldOrder[]; ready: b
 
   const duplicates = useMemo(() => findDuplicates(rows.map((row) => row.order), saved), [rows, saved]);
   const selected = rows.filter((row) => row.selected && !duplicates[row.order.orderId]?.alreadySaved);
+  const unsaved = rows.filter((row) => !duplicates[row.order.orderId]?.alreadySaved).length;
+
+  // A preview lives only in this page: warn before it is closed or reloaded with orders not saved yet.
+  useEffect(() => {
+    if (unsaved === 0) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
 
   async function readFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
@@ -144,6 +156,7 @@ function ImportPanel({ saved, ready, onImported }: { saved: OldOrder[]; ready: b
     setError("");
     setMessage("");
     const totals = { imported: 0, duplicates: 0, backfilled: 0 };
+    const ids = selected.map((row) => row.order.orderId);
     try {
       for (let start = 0; start < selected.length; start += IMPORT_BATCH) {
         const batch = selected.slice(start, start + IMPORT_BATCH).map((row) => row.order);
@@ -152,14 +165,22 @@ function ImportPanel({ saved, ready, onImported }: { saved: OldOrder[]; ready: b
         totals.duplicates += result.duplicates.length;
         totals.backfilled += result.backfilled.length;
       }
+      // Confirm from the database itself (a fresh read), not only from the save response.
+      const reloaded = await onImported();
+      const savedNow = new Set((reloaded ?? []).map((order) => order.orderId));
+      const missing = ids.filter((id) => !savedNow.has(id));
+      if (!reloaded || missing.length > 0) {
+        setError(`الحفظ ما اتأكدش: ${reloaded ? missing.length : ids.length} أوردر مش ظاهرين في قاعدة البيانات بعد الحفظ. المعاينة لسه موجودة، جربي تاني.`);
+        return;
+      }
       setRows([]);
       setFiles([]);
       setMessage(
-        `اتحفظ ${totals.imported} أوردر.`
+        `✓ اتحفظ واتأكد من قاعدة البيانات: ${totals.imported} أوردر جديد.`
         + (totals.duplicates ? ` ${totals.duplicates} كانوا متسجلين قبل كده ومتكرروش.` : "")
-        + (totals.backfilled ? ` واتكملت بيانات العميلة لـ ${totals.backfilled} أوردر في تبويب الأوردرات.` : ""),
+        + (totals.backfilled ? ` واتكملت بيانات العميلة لـ ${totals.backfilled} أوردر في تبويب الأوردرات.` : "")
+        + ` إجمالي الأوردرات القديمة المحفوظة دلوقتي: ${savedNow.size}، وبقوا محسوبين في حصر كميات المصنع.`,
       );
-      await onImported();
     } catch (caught) {
       setError(`${caught instanceof Error ? caught.message : "مقدرناش نحفظ."} (اللي اتحفظ قبل المشكلة مش هيتكرر لو جربتي تاني.)`);
     } finally {
@@ -191,6 +212,14 @@ function ImportPanel({ saved, ready, onImported }: { saved: OldOrder[]; ready: b
 
       {rows.length > 0 && (
         <>
+          {unsaved > 0 && (
+            <div className="admin-unsaved" role="status">
+              <span>⚠️ دي <strong>معاينة بس</strong>: الـ {unsaved} أوردر الجداد <strong>لسه ما اتحفظوش</strong> ومش داخلين في حصر الكميات. دوسي الزرار علشان يتحفظوا.</span>
+              <button type="button" className="admin-primary" disabled={busy || selected.length === 0} onClick={() => void importSelected()}>
+                {busy ? "جاري الحفظ…" : `احفظي ${selected.length} أوردر في قاعدة البيانات`}
+              </button>
+            </div>
+          )}
           <div className="admin-import-summary">
             <span>{files.join("، ")}: <strong>{rows.length}</strong> أوردر</span>
             <span>جديد: <strong>{rows.filter((row) => !duplicates[row.order.orderId]?.alreadySaved).length}</strong></span>
@@ -239,7 +268,7 @@ function ImportPanel({ saved, ready, onImported }: { saved: OldOrder[]; ready: b
           </div>
           <div className="admin-import-actions">
             <button type="button" className="admin-primary" disabled={busy || selected.length === 0} onClick={() => void importSelected()}>
-              {busy ? "جاري الحفظ…" : `استيراد المحدد (${selected.length})`}
+              {busy ? "جاري الحفظ…" : `احفظي ${selected.length} أوردر في قاعدة البيانات`}
             </button>
             <button type="button" className="admin-chip" disabled={busy} onClick={() => { setRows([]); setFiles([]); }}>إلغاء</button>
           </div>
@@ -349,7 +378,7 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
     <>
       <section className="admin-panel">
         <div className="admin-panel-head">
-          <h2>الأوردرات القديمة ({rows.length}{rows.length !== orders.length ? ` من ${orders.length}` : ""})</h2>
+          <h2>الأوردرات القديمة المحفوظة ({rows.length}{rows.length !== orders.length ? ` من ${orders.length}` : ""})</h2>
         </div>
         <div className="admin-filters">
           <input type="search" className="admin-search" placeholder="بحث: رقم الطلب، الاسم، الموبايل، العنوان، المنتج" value={query} onChange={(event) => { setQuery(event.target.value); setLimit(PAGE_SIZE); }} aria-label="بحث" />
