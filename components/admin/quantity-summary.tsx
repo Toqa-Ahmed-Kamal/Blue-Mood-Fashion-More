@@ -152,6 +152,8 @@ export function QuantitySummaryTab() {
             <div className="admin-card"><span>الملغي (مش محسوب)</span><strong>{integer.format(totals.pieces.cancelled)}</strong><small>قطعة في {integer.format(totals.orders.cancelled)} أوردر</small></div>
           </section>
 
+          <SourcesBox summary={data.summary} statuses={statuses} includeArchived={includeArchived} />
+
           {products.length === 0 ? <p className="admin-muted empty">مفيش قطع مطلوبة بالاختيار ده.</p> : (
             <div className="admin-qty-grid">
               {products.map((product) => <ProductCard key={product.productId || product.name} product={product} statuses={statuses} />)}
@@ -159,14 +161,39 @@ export function QuantitySummaryTab() {
           )}
 
           <p className="admin-muted small">
-            محسوب من {integer.format(data.summary.sources.siteOrders)} أوردر من الموقع و{integer.format(data.summary.sources.oldOrders)} أوردر قديم من تيليجرام.
-            {data.summary.sources.inBoth > 0 && ` ${integer.format(data.summary.sources.inBoth)} أوردر موجود في الاتنين واتحسب مرة واحدة بحالته في تبويب الأوردرات.`}
-            {data.summary.sources.archivedSkipped > 0 && ` ${integer.format(data.summary.sources.archivedSkipped)} أوردر قديم مؤرشف مش محسوب.`}
-            {" "}الملغي مش بيدخل في الإجمالي. البيجامات One Size، والمقاس اللي ظاهر هو حد الوزن اللي اتكتب في الأوردر وقتها؛ العبايات والأرواب والبلانكيت مالهاش مقاسات. آخر تحديث {cairoTime(data.generatedAt)}، وبيتحدث لوحده كل دقيقة.
+            المنتجات بتتربط بكود المنتج (مش بالاسم)، فمفيش منتجين مختلفين بيتجمعوا مع بعض. الملغي مش بيدخل في الإجمالي. البيجامات One Size بحد الوزن اللي في بيانات المنتج؛ العبايات والأرواب والبلانكيت مالهاش مقاسات. آخر تحديث {cairoTime(data.generatedAt)}، وبيتحدث لوحده كل دقيقة.
           </p>
         </>
       )}
     </section>
+  );
+}
+
+/** Where the numbers come from, and which imported orders are not added (and why). */
+function SourcesBox({ summary, statuses, includeArchived }: { summary: QuantitySummary; statuses: readonly OrderStatus[]; includeArchived: boolean }) {
+  const { sources, totals } = summary;
+  return (
+    <div className="admin-qty-sources-box">
+      <div>
+        <strong>{integer.format(sources.siteOrders)}</strong> أوردر من الموقع · <strong>{integer.format(sum(totals.bySource.site, statuses))}</strong> قطعة
+      </div>
+      <div>
+        <strong>{integer.format(sources.oldCounted)}</strong> من {integer.format(sources.oldOrders)} أوردر قديم (تيليجرام) محسوبين · <strong>{integer.format(sum(totals.bySource.telegram, statuses))}</strong> قطعة
+      </div>
+      {sources.inBoth > 0 && (
+        <details>
+          <summary>{integer.format(sources.inBoth)} أوردر قديم هو نفسه أوردر من الموقع، فاتحسب مرة واحدة من الموقع بحالته في تبويب الأوردرات</summary>
+          <p dir="ltr" className="mono">{sources.inBothIds.join(" · ")}</p>
+        </details>
+      )}
+      {sources.archivedSkipped > 0 && !includeArchived && (
+        <details>
+          <summary>{integer.format(sources.archivedSkipped)} أوردر قديم مؤرشف مش محسوب (علّمي &quot;احسبي الأوردرات القديمة المؤرشفة&quot; علشان يدخلوا)</summary>
+          <p dir="ltr" className="mono">{sources.archivedIds.join(" · ")}</p>
+        </details>
+      )}
+      {sources.oldOrders === 0 && <div className="admin-muted">مفيش أوردرات قديمة متحفظة. استوردي ملف تيليجرام من تبويب &quot;الأوردرات القديمة&quot;.</div>}
+    </div>
   );
 }
 
@@ -195,6 +222,7 @@ function ProductCard({ product, statuses }: { product: ProductSummary; statuses:
           {statuses.length > 1 && ` · ${product.pieces.submitted} مستني · ${product.pieces.confirmed} مؤكد`}
           {product.pieces.cancelled > 0 && ` · ${product.pieces.cancelled} ملغي`}
         </small>
+        <small className="admin-qty-sources">من الموقع {integer.format(sum(product.bySource.site, statuses))} · من تيليجرام {integer.format(sum(product.bySource.telegram, statuses))}</small>
         <ul className="admin-qty-sizes" aria-label="حسب المقاس">
           {sizes.map((size) => <li key={size.size}><span>{size.size}</span><strong>{size.count}</strong></li>)}
         </ul>

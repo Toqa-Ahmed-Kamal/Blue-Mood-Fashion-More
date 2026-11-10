@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { aggregateQuantities, sanitizeOldOrder } from "../lib/old-orders.ts";
-import { NO_SIZE, SIZE_NOT_RECORDED, active, buildQuantitySummary, productImage, shortSize } from "../lib/quantity-summary.ts";
+import { NO_SIZE, SIZE_NOT_RECORDED, active, buildQuantitySummary, oldOrderLines, productImage, shortSize, siteOrderLines } from "../lib/quantity-summary.ts";
 import { findProduct } from "../lib/site-data.ts";
 import { buildXlsx } from "../lib/xlsx.ts";
 
@@ -45,7 +45,10 @@ const old = [
 
 test("site + old orders are merged; an order in both counts once (site status wins)", () => {
   const summary = buildQuantitySummary({ live, old });
-  assert.deepEqual(summary.sources, { siteOrders: 4, oldOrders: 6, inBoth: 1, archivedSkipped: 1 });
+  assert.deepEqual(summary.sources, {
+    siteOrders: 4, oldOrders: 6, oldCounted: 4, inBoth: 1, archivedSkipped: 1,
+    inBothIds: ["BM-AAAAAAAAAAAAAAAAAAA2"], archivedIds: ["BM-BBBBBBBBBBBBBBBBBBB3"],
+  });
   const pajama = summary.products.find((row) => row.productId === "bm-winter-pajama-008");
   // pending: 2 (A1) + 1 (A3) + 3 (B1) = 6; confirmed: 1 (A2, site copy) + 1 (B2) = 2; cancelled: 5 (A4) — the cancelled Telegram copy of A2 is ignored.
   assert.deepEqual(pajama.pieces, { submitted: 6, confirmed: 2, cancelled: 5 });
@@ -125,4 +128,40 @@ test("xlsx with pictures: drawing, relationships and media are packaged", () => 
   assert.ok(text.includes('ht="60" customHeight="1"'));
   assert.ok(text.includes('Extension="jpeg"'));
   assert.ok(text.includes(`cx="${72 * 9525}"`));
+});
+
+test("both sources become the same line format before counting; pieces are split by source", () => {
+  const [siteLine] = siteOrderLines(live[0]);
+  const [oldLine] = oldOrderLines(old[0]);
+  assert.deepEqual(Object.keys(siteLine).sort(), Object.keys(oldLine).sort());
+  assert.deepEqual(
+    { ...siteLine, orderId: "", status: "", source: "", quantity: 0 },
+    { ...oldLine, orderId: "", status: "", source: "", quantity: 0 },
+    "same product → identical id, name, category, size and photo from either source",
+  );
+  const pajama = buildQuantitySummary({ live, old }).products.find((row) => row.productId === "bm-winter-pajama-008");
+  assert.deepEqual(pajama.bySource.site, { submitted: 3, confirmed: 1, cancelled: 5 });
+  assert.deepEqual(pajama.bySource.telegram, { submitted: 3, confirmed: 1, cancelled: 0 });
+  const totals = buildQuantitySummary({ live, old }).totals;
+  assert.equal(active(totals.bySource.site) + active(totals.bySource.telegram), active(totals.pieces));
+});
+
+test("mapping by product ID: a Telegram name that differs from the catalog is the same product; different IDs never merge", () => {
+  const renamed = oldOrder("BM-DDDDDDDDDDDDDDDDDDD1", "submitted", [{ modelId: "bm-robe-003", name: "روب نمر (اسم قديم)", size: "", color: "", quantity: 2, unitPrice: 250 }]);
+  const siteRobe = { order: siteOrder("BM-DDDDDDDDDDDDDDDDDDD2", "submitted", [{ modelId: "bm-robe-003", category: "robes", quantity: 1, fit: "روب" }]), fits: ["روب"] };
+  const summary = buildQuantitySummary({ live: [siteRobe], old: [renamed] });
+  assert.equal(summary.products.length, 1);
+  assert.equal(summary.products[0].name, findProduct("bm-robe-003").name);
+  assert.equal(active(summary.products[0].pieces), 3);
+  const sameName = buildQuantitySummary({ live: [], old: [
+    oldOrder("BM-DDDDDDDDDDDDDDDDDDD3", "submitted", [{ modelId: "bm-gone-1", name: "قطعة", size: "", color: "", quantity: 1, unitPrice: null }]),
+    oldOrder("BM-DDDDDDDDDDDDDDDDDDD4", "submitted", [{ modelId: "bm-gone-2", name: "قطعة", size: "", color: "", quantity: 1, unitPrice: null }]),
+  ] });
+  assert.equal(sameName.products.length, 2, "two unknown products with the same name stay apart");
+});
+
+test("an imported order listed twice in storage still counts once", () => {
+  const summary = buildQuantitySummary({ live: [], old: [old[0], old[0]] });
+  assert.equal(summary.sources.oldOrders, 1);
+  assert.equal(active(summary.products.find((row) => row.productId === "bm-robe-003").pieces), 1);
 });
