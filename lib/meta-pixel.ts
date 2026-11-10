@@ -1,6 +1,7 @@
 // Browser-only helpers for Meta Pixel events; imported by client components.
 import { landingPromotion, priceOf, type CatalogProduct } from "@/lib/site-data";
 import type { ResolvedCart } from "@/lib/cart";
+import { trackCheckoutStep, trackProductAdd } from "@/lib/journey-tracker";
 
 type PixelWindow = Window & { fbq?: (...args: unknown[]) => void };
 
@@ -33,7 +34,10 @@ function once(key: string, send: () => void) {
   send();
 }
 
+// The store-event helpers below also feed the dashboard's customer journey (lib/journey-tracker).
+
 export function trackAddToCart(product: CatalogProduct) {
+  trackProductAdd(product.id);
   const price = priceOf(product);
   track("AddToCart", {
     content_ids: [product.id],
@@ -47,6 +51,7 @@ export function trackAddToCart(product: CatalogProduct) {
 }
 
 export function trackAddOfferToCart(offerId: string, productIds: string[]) {
+  productIds.forEach((id) => trackProductAdd(id));
   const offer = landingPromotion.options.find((option) => option.id === offerId);
   track("AddToCart", {
     content_ids: productIds,
@@ -71,6 +76,7 @@ function cartContents(cart: ResolvedCart) {
 
 /** Once per distinct cart per tab: opening checkout again with the same cart (or refreshing) is not re-counted. */
 export function trackInitiateCheckout(cart: ResolvedCart, cartKey: string) {
+  trackCheckoutStep();
   once(`checkout:${cartKey}`, () => {
     track("InitiateCheckout", { ...cartContents(cart), content_type: "product", value: cart.subtotal, currency: CURRENCY });
   });

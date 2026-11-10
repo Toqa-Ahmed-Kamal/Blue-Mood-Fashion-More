@@ -1,7 +1,8 @@
 import { after } from "next/server";
 
 import { sanitizeAttribution } from "@/lib/attribution";
-import { saveOrder, toAnalyticsOrder } from "@/lib/analytics-store";
+import { saveOrder, toAnalyticsOrder, type OrderVisitIds } from "@/lib/analytics-store";
+import { orderDetailsOf, sealOrderDetails } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
 import { resolveCart, type CartError } from "@/lib/cart";
 import {
@@ -27,6 +28,13 @@ export const runtime = "nodejs";
 
 const UUID_PATTERN = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const MAX_BODY_LENGTH = 20_000;
+
+/** Anonymous visit IDs from the browser (optional); anything malformed is ignored. */
+function readVisitIds(value: unknown): OrderVisitIds {
+  const ids = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  const uuid = (id: unknown) => (typeof id === "string" && UUID_PATTERN.test(id) ? id.toLowerCase() : null);
+  return { sessionId: uuid(ids.sessionId), visitorId: uuid(ids.visitorId) };
+}
 
 /** Shown to customers whenever the order could not be saved; the page then offers WhatsApp directly. */
 const ORDER_NOT_SAVED_MESSAGE = "معرفناش نسجل الطلب دلوقتي. ابعتيه لنا على واتساب مباشرة من الزرار اللي تحت، أو جربي تاني بعد شوية.";
@@ -224,9 +232,13 @@ export async function POST(request: Request) {
 
   // Dashboard copy, saved only after Telegram accepted the order and after the customer got her answer.
   // Best-effort: a Redis problem is logged and never affects the order.
+  // Customer details are stored only encrypted; without ORDER_DATA_KEY they are not stored at all.
+  const visit = readVisitIds(body.visit);
   after(async () => {
     try {
-      await saveOrder(toAnalyticsOrder(order, order.attribution ?? null));
+      const sealedDetails = sealOrderDetails(orderDetailsOf(order));
+      if (!sealedDetails) console.warn("[analytics] ORDER_DATA_KEY missing or invalid: customer details not stored for the dashboard", { orderId });
+      await saveOrder(toAnalyticsOrder(order, order.attribution ?? null), { sealedDetails, visit });
     } catch (error) {
       console.error("[analytics] order not saved to dashboard storage", {
         orderId,

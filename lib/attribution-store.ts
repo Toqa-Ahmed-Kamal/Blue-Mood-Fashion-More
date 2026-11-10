@@ -73,6 +73,17 @@ function storedId(storage: Storage, storageKey: string, rotate = false) {
   return id;
 }
 
+/** The anonymous IDs of the current visit, if one was started; never creates new ones. */
+export function currentVisitIds(): { sessionId: string; visitorId: string } | null {
+  try {
+    const sessionId = window.sessionStorage.getItem(VISIT_SESSION_KEY);
+    const visitorId = window.localStorage.getItem(VISITOR_KEY);
+    return sessionId && visitorId ? { sessionId, visitorId } : null;
+  } catch {
+    return null;
+  }
+}
+
 function reportVisit(touch: Touch, newSession: boolean) {
   try {
     const body = JSON.stringify({

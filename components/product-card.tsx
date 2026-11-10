@@ -9,6 +9,7 @@ import { SocialProof } from "@/components/promo";
 import { addCartItem, setCartItemQuantity, MAX_ITEM_QUANTITY } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
+import { trackProductView } from "@/lib/journey-tracker";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
 import { categoryInfo, landingPromotion, offerCategories, priceOf, type CatalogProduct } from "@/lib/site-data";
@@ -113,6 +114,7 @@ export function QuickView({ product, onClose, action }: {
     if (!dialog) return;
     if (product && !dialog.open) dialog.showModal();
     if (!product && dialog.open) dialog.close();
+    if (product) trackProductView(product.id);
   }, [product]);
 
   return (

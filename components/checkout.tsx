@@ -8,7 +8,7 @@ import { ArrowLeft, Check, ChevronRight, Copy, Minus, Pencil, Plus, ShieldCheck,
 import { addCartItem, emptyCart, MAX_ITEM_QUANTITY, resolveCart, setCartItemQuantity, setCartOffer, type ResolvedCart } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
-import { readAttribution } from "@/lib/attribution-store";
+import { currentVisitIds, readAttribution } from "@/lib/attribution-store";
 import { trackAddToCart, trackInitiateCheckout, trackLead } from "@/lib/meta-pixel";
 import {
   buildWhatsAppOrderText,
@@ -17,7 +17,7 @@ import {
   normalizePhoneDigits,
   productLink,
 } from "@/lib/order-flow";
-import { findShippingRate, isValidShippingArea, shippingAreasFor, shippingGovernorates } from "@/lib/shipping-rates";
+import { findShippingRate, governorateShippingFee, isValidShippingArea, shippingAreasFor, shippingGovernorates } from "@/lib/shipping-rates";
 import { landingPromotion, priceOf, visibleCatalog } from "@/lib/site-data";
 import { SiteHeader } from "@/components/store-chrome";
 
@@ -94,7 +94,8 @@ export function Checkout() {
 
   const resolved = resolveCart(cart);
   const errors = validate(customer);
-  const shippingFee = findShippingRate(customer.governorate, customer.area)?.fee ?? null;
+  // The fee is known as soon as the governorate is picked (one price per governorate).
+  const shippingFee = findShippingRate(customer.governorate, customer.area || "*")?.fee ?? null;
 
   function update(field: keyof CustomerDetails, value: string) {
     setCustomer((current) => ({ ...current, [field]: value, ...(field === "governorate" ? { area: "" } : {}) }));
@@ -155,7 +156,7 @@ export function Checkout() {
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...requestBody, submissionId: attemptRef.current.submissionId, attribution: readAttribution() }),
+        body: JSON.stringify({ ...requestBody, submissionId: attemptRef.current.submissionId, attribution: readAttribution(), visit: currentVisitIds() }),
       });
       const result = await response.json().catch(() => null) as OrderApiResponse | null;
       if (!response.ok || result?.success !== true || !result.order) {
@@ -251,7 +252,10 @@ export function Checkout() {
                 <Field label="المحافظة" error={fieldError("governorate")}>
                   <select value={customer.governorate} onChange={(e) => update("governorate", e.target.value)} aria-invalid={!!fieldError("governorate")}>
                     <option value="">اختاري المحافظة</option>
-                    {shippingGovernorates.map((governorate) => <option key={governorate} value={governorate}>{governorate}</option>)}
+                    {shippingGovernorates.map((governorate) => {
+                      const fee = governorateShippingFee(governorate);
+                      return <option key={governorate} value={governorate}>{governorate}{fee !== null ? ` — شحن ${fee} ج.م` : ""}</option>;
+                    })}
                   </select>
                 </Field>
                 <Field label={areaOptions.length > 0 ? "المنطقة" : "المدينة / المنطقة"} error={fieldError("area")} wide>
@@ -287,14 +291,14 @@ export function Checkout() {
                 {resolved.cart.items.length > 0 && <div><dt>القطع المنفردة</dt><dd>{formatEGP(resolved.cart.itemsTotal)}</dd></div>}
                 <div>
                   <dt>الشحن</dt>
-                  <dd>{!customer.area ? "اختاري المنطقة" : shippingFee === null ? "هيتأكد معاكي" : formatEGP(shippingFee)}</dd>
+                  <dd>{!customer.governorate ? "اختاري المحافظة" : shippingFee === null ? "هيتأكد معاكي" : formatEGP(shippingFee)}</dd>
                 </div>
                 <div className="grand-total">
                   <dt>الإجمالي</dt>
                   <dd>{formatEGP(totals.total ?? totals.subtotal)}{totals.total === null && <small> + الشحن</small>}</dd>
                 </div>
               </dl>
-              <p className="fine-print">أسعار الشحن مبدئية وممكن تتعدل. الدفع عند الاستلام.</p>
+              <p className="fine-print">سعر الشحن حسب المحافظة وبيظهر جنب اسمها. الدفع عند الاستلام.</p>
               {submitError && <p className="form-error" role="alert">{submitError}</p>}
               {fallbackUrl && (
                 <a href={fallbackUrl} target="_blank" rel="noreferrer" className="btn btn-whatsapp btn-lg btn-block fallback-whatsapp">

@@ -1,8 +1,26 @@
 // Turns stored daily visit counters and order records into the dashboard report. Pure (no I/O) and tested.
 import type { Touch } from "./attribution.ts";
-import { SOURCE_TYPES, TRAFFIC_SOURCES, sourceTypeOf, type SourceType, type TrafficSource } from "./traffic-source.ts";
+import { catalog, categoryInfo } from "./site-data.ts";
+import { SOURCE_TYPES, TRAFFIC_SOURCES, isTrafficSource, sourceTypeOf, type SourceType, type TrafficSource } from "./traffic-source.ts";
 
 export const ORDER_STATUSES = ["submitted", "confirmed", "cancelled"] as const;
+
+/** Journey steps counted once per browsing session (sessions themselves come from the visit counter). */
+export const FUNNEL_STEPS = ["view", "add", "checkout", "order"] as const;
+export type FunnelStep = (typeof FUNNEL_STEPS)[number];
+export type FunnelCounts = Record<FunnelStep, number>;
+
+export type ProductRow = {
+  productId: string;
+  name: string;
+  category: string;
+  image: string;
+  views: number;
+  /** Pieces added to the cart (an add of 2 counts 2). */
+  adds: number;
+  /** Different shoppers (browsers) who added it. */
+  uniqueAdders: number;
+};
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 /** What Redis keeps per order. Deliberately no name, phone, address, area or free-text notes. */
@@ -78,6 +96,11 @@ export type OrderRow = {
   governorate: string;
   offerName: string;
   pieces: number;
+  /** Product IDs and quantities (no prices or personal data; those are in the encrypted details). */
+  products: { modelId: string; quantity: number }[];
+  subtotal: number;
+  shippingCost: number | null;
+  total: number | null;
   source: TrafficSource;
   sourceType: SourceType;
   campaign: string;
@@ -88,7 +111,40 @@ export type OrderRow = {
   hasFbclid: boolean;
 };
 
-export function buildReport(input: { days: string[]; visits: DayVisits[]; uniqueVisitors: number; orders: AnalyticsOrder[] }): AnalyticsReport {
+/** Per-product views / adds from the daily `products:{day}` hashes, for every visible product plus any hidden one with data. */
+export function buildProductRows(productDays: DayVisits[], uniqueAdders: Record<string, number>): ProductRow[] {
+  const views = new Map<string, number>();
+  const adds = new Map<string, number>();
+  for (const fields of productDays) {
+    for (const [field, raw] of Object.entries(fields)) {
+      const count = Number(raw) || 0;
+      if (field.startsWith("v:")) views.set(field.slice(2), (views.get(field.slice(2)) ?? 0) + count);
+      else if (field.startsWith("a:")) adds.set(field.slice(2), (adds.get(field.slice(2)) ?? 0) + count);
+    }
+  }
+  return catalog
+    .filter((product) => !product.hidden || views.has(product.id) || adds.has(product.id))
+    .map((product) => ({
+      productId: product.id,
+      name: product.name,
+      category: categoryInfo[product.category].singular,
+      image: product.image,
+      views: views.get(product.id) ?? 0,
+      adds: adds.get(product.id) ?? 0,
+      uniqueAdders: uniqueAdders[product.id] ?? 0,
+    }))
+    .toSorted((a, b) => b.adds - a.adds || b.views - a.views);
+}
+
+export function buildReport(input: {
+  days: string[];
+  visits: DayVisits[];
+  uniqueVisitors: number;
+  orders: AnalyticsOrder[];
+  products?: DayVisits[];
+  funnel?: FunnelCounts;
+  uniqueAdders?: Record<string, number>;
+}): AnalyticsReport {
   const { days, visits, uniqueVisitors } = input;
   const daySet = new Set(days);
   const orders = input.orders.filter((order) => daySet.has(order.day));
@@ -98,6 +154,8 @@ export function buildReport(input: { days: string[]; visits: DayVisits[]; unique
   const byType = new Map<SourceType, Metric>(SOURCE_TYPES.map((type) => [type, emptyMetric()]));
   const campaigns = new Map<string, Metric>();
   const adContents = new Map<string, Metric>();
+  /** Key "<source>|<campaign>" (campaign may be empty). */
+  const sourceCampaigns = new Map<string, Metric>();
   const timeline = new Map(days.map((day) => [day, { date: day, sessions: 0, submitted: 0, confirmed: 0 }]));
   const metricFor = (map: Map<string, Metric>, key: string) => {
     let metric = map.get(key);
@@ -122,6 +180,8 @@ export function buildReport(input: { days: string[]; visits: DayVisits[]; unique
         metricFor(campaigns, field.slice(2)).sessions += count;
       } else if (field.startsWith("a:")) {
         metricFor(adContents, field.slice(2)).sessions += count;
+      } else if (field.startsWith("sc:")) {
+        metricFor(sourceCampaigns, field.slice(3)).sessions += count;
       }
     }
   });
@@ -132,6 +192,7 @@ export function buildReport(input: { days: string[]; visits: DayVisits[]; unique
     addOrder(byType.get(order.sourceType) ?? byType.get("Unknown")!, order);
     if (order.campaign) addOrder(metricFor(campaigns, order.campaign), order);
     if (order.adContent) addOrder(metricFor(adContents, order.adContent), order);
+    addOrder(metricFor(sourceCampaigns, `${order.source}|${order.campaign}`), order);
     const point = timeline.get(order.day);
     if (point) {
       point.submitted += 1;
@@ -155,6 +216,10 @@ export function buildReport(input: { days: string[]; visits: DayVisits[]; unique
       governorate: order.governorate,
       offerName: order.offerName,
       pieces: order.products.reduce((sum, product) => sum + product.quantity, 0),
+      products: order.products.map((product) => ({ modelId: product.modelId, quantity: product.quantity })),
+      subtotal: order.subtotal,
+      shippingCost: order.shippingCost,
+      total: order.total,
       source: order.source,
       sourceType: order.sourceType,
       campaign: order.campaign,
@@ -181,8 +246,24 @@ export function buildReport(input: { days: string[]; visits: DayVisits[]; unique
     adContents: [...adContents]
       .map(([adContent, metric]) => ({ adContent, ...rated(metric) }))
       .toSorted((a, b) => b.submitted - a.submitted || b.sessions - a.sessions),
+    sourceCampaigns: [...sourceCampaigns]
+      .map(([pair, metric]) => {
+        const split = pair.indexOf("|");
+        const source = split < 0 ? pair : pair.slice(0, split);
+        return {
+          source: isTrafficSource(source) ? source : "Unknown" as TrafficSource,
+          campaign: split < 0 ? "" : pair.slice(split + 1),
+          ...rated(metric),
+        };
+      })
+      .toSorted((a, b) => b.sessions - a.sessions || b.submitted - a.submitted),
     timeline: [...timeline.values()],
     orders: orderRows,
+    funnel: {
+      sessions: totals.sessions,
+      ...(input.funnel ?? { view: 0, add: 0, checkout: 0, order: 0 }),
+    },
+    products: buildProductRows(input.products ?? [], input.uniqueAdders ?? {}),
   };
 }
 
@@ -195,6 +276,11 @@ export type AnalyticsReport = {
   byType: (RatedMetric & { type: SourceType })[];
   campaigns: (RatedMetric & { campaign: string })[];
   adContents: (RatedMetric & { adContent: string })[];
+  /** Sessions by source and campaign together (campaign "" = no utm_campaign). */
+  sourceCampaigns: (RatedMetric & { source: TrafficSource; campaign: string })[];
   timeline: { date: string; sessions: number; submitted: number; confirmed: number }[];
   orders: OrderRow[];
+  /** Sessions, then sessions that viewed a product, added to cart, opened checkout and sent an order. */
+  funnel: { sessions: number } & FunnelCounts;
+  products: ProductRow[];
 };

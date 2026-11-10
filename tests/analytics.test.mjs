@@ -53,6 +53,9 @@ function fakeRedis(command) {
     case "ZRANGE": { const [key, min, max] = args; return [...(get(key) ?? new Map())].filter(([, s]) => s >= Number(min) && s <= Number(max)).sort((a, b) => a[1] - b[1]).map(([m]) => m); }
     case "ZREMRANGEBYSCORE": return 0;
     case "MGET": return args.map((key) => get(key) ?? null);
+    case "RPUSH": { const list = get(args[0]) ?? []; list.push(...args.slice(1)); store.set(args[0], list); return list.length; }
+    case "LTRIM": { const list = get(args[0]) ?? []; const start = Number(args[1]); store.set(args[0], list.slice(start < 0 ? Math.max(list.length + start, 0) : start)); return "OK"; }
+    case "LRANGE": { const list = get(args[0]) ?? []; const start = Number(args[1]); return list.slice(start < 0 ? Math.max(list.length + start, 0) : start); }
     default: return { error: `unsupported ${name}` };
   }
 }
@@ -64,7 +67,7 @@ globalThis.fetch = async (url, options) => {
   const commands = JSON.parse(options.body);
   calls.push({ token, commands });
   // Like real Redis ACLs, PFCOUNT counts as a write command, so the read-only token is refused.
-  const isWrite = commands.some(([name]) => !["GET", "HGETALL", "ZRANGE", "MGET"].includes(name.toUpperCase()));
+  const isWrite = commands.some(([name]) => !["GET", "HGETALL", "ZRANGE", "MGET", "LRANGE"].includes(name.toUpperCase()));
   if (token === READ_TOKEN && isWrite) return new Response(JSON.stringify({ error: "NOPERM" }), { status: 403 });
   return new Response(JSON.stringify(commands.map((command) => {
     const result = fakeRedis(command);
@@ -306,5 +309,151 @@ test("without ADMIN_SESSION_SECRET every session is rejected (fails closed)", ()
     assert.equal(isValidAdminSessionToken(token), false);
   } finally {
     process.env.ADMIN_SESSION_SECRET = saved;
+  }
+});
+
+// ── Encrypted order details, journey events and products ───────────────────
+const vault = await import("../lib/order-vault.ts");
+const { sanitizeJourneyEvents } = await import("../lib/journey.ts");
+const TEST_ORDER_KEY = randomBytes(32).toString("base64url");
+
+test("customer details are encrypted, bound to their order and unreadable without the key", () => {
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  const details = vault.orderDetailsOf({ ...orderRecord, attribution: { firstTouch: null, lastTouch: null } });
+  assert.equal("attribution" in details, false);
+  const sealed = vault.sealOrderDetails(details);
+  for (const secret of [orderRecord.customerName, orderRecord.phone, orderRecord.address]) assert.equal(sealed.includes(secret), false);
+  assert.deepEqual(vault.openOrderDetails(orderRecord.orderId, sealed), details);
+  assert.equal(vault.openOrderDetails("BM-00000000000000000000", sealed), null, "a blob cannot be moved to another order");
+  const [v, iv, tag, data] = sealed.split(".");
+  assert.equal(vault.openOrderDetails(orderRecord.orderId, [v, iv, tag, data.slice(0, -3) + "AAA"].join(".")), null, "tampering is detected");
+  process.env.ORDER_DATA_KEY = randomBytes(32).toString("base64url");
+  assert.equal(vault.openOrderDetails(orderRecord.orderId, sealed), null, "another key cannot read it");
+  delete process.env.ORDER_DATA_KEY;
+  assert.equal(vault.sealOrderDetails(details), null, "no key → nothing personal is stored");
+  process.env.ORDER_DATA_KEY = "too-short";
+  assert.equal(vault.isOrderVaultConfigured(), false);
+  delete process.env.ORDER_DATA_KEY;
+});
+
+test("journey events accept only real catalog products and known event types", () => {
+  const events = sanitizeJourneyEvents([
+    { type: "view", productId: "bm-abaya-001" },
+    { type: "add", productId: "bm-abaya-001", quantity: 99 },
+    { type: "add", productId: "not-a-product" },
+    { type: "checkout", productId: "ignored" },
+    { type: "purchase" },
+    "junk",
+  ]);
+  assert.deepEqual(events, [
+    { type: "view", productId: "bm-abaya-001" },
+    { type: "add", productId: "bm-abaya-001", quantity: 10 },
+    { type: "checkout" },
+  ]);
+  assert.deepEqual(sanitizeJourneyEvents("nope"), []);
+});
+
+test("journey: views, adds, unique customers, funnel and the order's own journey + encrypted details", async () => {
+  store.clear();
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  try {
+    const now = new Date("2026-11-09T12:00:00Z");
+    const day = "2026-11-09";
+    const shopperA = { sessionId: randomUUID(), visitorId: randomUUID() };
+    const shopperB = { sessionId: randomUUID(), visitorId: randomUUID() };
+    const adTouch = visit("?utm_source=facebook&utm_medium=paid_social&utm_campaign=winter_2026");
+
+    await analytics.recordVisit({ ...shopperA, touch: adTouch, ipHash: "a", now });
+    await analytics.recordVisit({ ...shopperB, touch: visit("?utm_source=whatsapp&utm_medium=messaging"), ipHash: "b", now });
+    await analytics.recordEvents({ ...shopperA, ipHash: "a", now, events: [
+      { type: "view", productId: "bm-abaya-001" },
+      { type: "add", productId: "bm-abaya-001", quantity: 2 },
+      { type: "view", productId: "bm-winter-pajama-001" },
+    ] });
+    await analytics.recordEvents({ ...shopperA, ipHash: "a", now, events: [{ type: "add", productId: "bm-abaya-001", quantity: 1 }, { type: "checkout" }] });
+    await analytics.recordEvents({ ...shopperB, ipHash: "b", now, events: [{ type: "view", productId: "bm-abaya-001" }, { type: "add", productId: "bm-abaya-001", quantity: 1 }] });
+
+    const record = { ...orderRecord, createdAt: "2026-11-09T12:05:00.000Z" };
+    const order = analytics.toAnalyticsOrder(record, { firstTouch: adTouch, lastTouch: adTouch });
+    const sealedDetails = vault.sealOrderDetails(vault.orderDetailsOf(record));
+    assert.equal(await analytics.saveOrder(order, { sealedDetails, visit: shopperA }), "saved");
+    assert.equal(await analytics.saveOrder(order, { sealedDetails, visit: shopperA }), "duplicate");
+
+    // Nothing personal is readable anywhere in Redis.
+    const everything = JSON.stringify([...store.entries()].map(([k, v]) => [k, v instanceof Set ? [...v] : v instanceof Map ? [...v] : v]));
+    for (const secret of [record.customerName, record.phone, record.alternatePhone, record.address, "01099998888"]) {
+      assert.equal(everything.includes(secret), false, `leaked ${secret}`);
+    }
+
+    const report = await analytics.loadReport([day]);
+    assert.deepEqual(report.funnel, { sessions: 2, view: 2, add: 2, checkout: 1, order: 1 });
+    const abaya = report.products.find((row) => row.productId === "bm-abaya-001");
+    assert.equal(abaya.views, 2);
+    assert.equal(abaya.adds, 4, "2 + 1 by A and 1 by B");
+    assert.equal(abaya.uniqueAdders, 2, "two different shoppers");
+    assert.equal(report.products[0].productId, "bm-abaya-001", "most added first");
+    assert.equal(report.products.find((row) => row.productId === "bm-winter-pajama-001").adds, 0);
+    const fbWinter = report.sourceCampaigns.find((row) => row.source === "Facebook Ads" && row.campaign === "winter_2026");
+    assert.equal(fbWinter.sessions, 1);
+    assert.equal(fbWinter.submitted, 1);
+    assert.equal(report.sourceCampaigns.find((row) => row.source === "WhatsApp" && row.campaign === "").sessions, 1);
+
+    calls.length = 0;
+    const view = await analytics.loadOrderDetails(order.orderId);
+    assert.ok(calls.every((call) => call.token === READ_TOKEN), "order details use the read-only token");
+    assert.equal(view.detailsState, "ok");
+    assert.equal(view.details.customerName, record.customerName);
+    assert.equal(view.details.phone, record.phone);
+    assert.equal(view.details.products[0].unitPrice, 350);
+    assert.deepEqual(view.journey.map((entry) => entry.e), ["visit", "view", "add", "view", "add", "checkout", "order"]);
+    assert.equal(view.journey[0].s, "Facebook Ads");
+    assert.equal(view.journey.at(-1).o, order.orderId);
+
+    process.env.ORDER_DATA_KEY = randomBytes(32).toString("base64url");
+    assert.equal((await analytics.loadOrderDetails(order.orderId)).detailsState, "unreadable");
+    assert.equal(await analytics.loadOrderDetails("BM-00000000000000000000"), null);
+  } finally {
+    delete process.env.ORDER_DATA_KEY;
+  }
+});
+
+test("an order saved without ORDER_DATA_KEY keeps working, just without customer details", async () => {
+  store.clear();
+  const order = analytics.toAnalyticsOrder(orderRecord, null);
+  assert.equal(await analytics.saveOrder(order, { sealedDetails: vault.sealOrderDetails(vault.orderDetailsOf(orderRecord)) }), "saved");
+  const view = await analytics.loadOrderDetails(order.orderId);
+  assert.equal(view.detailsState, "not_stored");
+  assert.equal(view.details, null);
+  assert.deepEqual(view.journey.map((entry) => entry.e), ["order"]);
+});
+
+test("journey-event flooding from one IP is capped", async () => {
+  store.clear();
+  const ids = { sessionId: randomUUID(), visitorId: randomUUID() };
+  const results = [];
+  for (let i = 0; i < 302; i++) results.push(await analytics.recordEvents({ ...ids, ipHash: "flood", events: [{ type: "checkout" }] }));
+  assert.equal(results.filter((r) => r === "recorded").length, 300);
+  assert.equal(results.at(-1), "rate_limited");
+  assert.equal(await analytics.recordEvents({ ...ids, ipHash: "x", events: [] }), "empty");
+});
+
+test("the orders list loads decrypted details for many orders at once (read-only token)", async () => {
+  store.clear();
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  try {
+    const second = { ...orderRecord, orderId: "BM-11111111111111111111", customerName: "منى التجربة" };
+    for (const record of [orderRecord, second]) {
+      await analytics.saveOrder(analytics.toAnalyticsOrder(record, null), { sealedDetails: vault.sealOrderDetails(vault.orderDetailsOf(record)) });
+    }
+    await analytics.saveOrder(analytics.toAnalyticsOrder({ ...orderRecord, orderId: "BM-22222222222222222222" }, null));
+    calls.length = 0;
+    const details = await analytics.loadOrdersDetails([orderRecord.orderId, second.orderId, "BM-22222222222222222222"]);
+    assert.ok(calls.every((call) => call.token === READ_TOKEN));
+    assert.equal(details[orderRecord.orderId].customerName, orderRecord.customerName);
+    assert.equal(details[second.orderId].customerName, "منى التجربة");
+    assert.equal(details["BM-22222222222222222222"], null, "no details stored → null, not an error");
+    assert.deepEqual(await analytics.loadOrdersDetails([]), {});
+  } finally {
+    delete process.env.ORDER_DATA_KEY;
   }
 });

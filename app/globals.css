@@ -1196,9 +1196,110 @@ h1, h2, h3 { font-family: var(--font-display); }
 .admin-login-card label { display: grid; gap: 6px; text-align: start; font-size: .88rem; }
 .admin-login-card input { font: inherit; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 44px; }
 .admin-login-icon { justify-self: center; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 999px; background: var(--brand-soft); color: var(--brand-dark); }
+.admin-tabs { display: flex; gap: 4px; overflow-x: auto; margin: 4px 0 16px; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.admin-tabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .92rem; font-weight: 700; color: var(--muted); background: transparent; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; cursor: pointer; }
+.admin-tabs button.active { color: var(--navy); border-bottom-color: var(--pink); }
+.admin-tabs button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: 6px; }
+.admin-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--pink); color: #fff; font-size: .72rem; }
+.admin-select { font: inherit; font-size: .82rem; color: var(--navy); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; min-height: 34px; }
+.admin-funnel { display: grid; gap: 14px; }
+.admin-funnel-step { display: grid; gap: 6px; }
+.admin-funnel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: .9rem; }
+.admin-funnel-head strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.admin-funnel-track { height: 12px; border-radius: 999px; background: var(--brand-soft); overflow: hidden; }
+.admin-funnel-track span { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: linear-gradient(90deg, var(--pink), #ee8fb6); }
+.admin-funnel-step small { color: var(--muted); font-size: .78rem; }
+.admin-sort { font: inherit; font-size: .78rem; font-weight: 600; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; }
+.admin-sort.active { color: var(--navy); }
+.admin-product { display: inline-flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+.admin-product img { width: 34px; height: 34px; object-fit: cover; border-radius: 8px; flex: none; background: var(--bg); }
+.admin-product:hover span { text-decoration: underline; }
+.admin-link { font: inherit; color: var(--brand-dark); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.admin-table td.wrap { white-space: normal; min-width: 160px; }
+.admin-dialog { width: min(860px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; border: 0; border-radius: var(--radius-lg); background: var(--paper); color: var(--navy); box-shadow: var(--shadow); font-family: var(--font-body); }
+.admin-dialog::backdrop { background: rgba(31, 53, 80, .45); }
+.admin-dialog-inner { display: grid; gap: 14px; padding: 18px; }
+.admin-dialog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.admin-dialog-head h2 { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: 1.05rem; text-align: start; }
+.admin-dialog-head p { margin: 4px 0 0; font-size: .85rem; }
+.admin-dialog .status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; }
+.admin-dialog .status.submitted { background: #fff3dc; color: #8a5a10; }
+.admin-dialog .status.confirmed { background: #e2f5ea; color: #157a3e; }
+.admin-dialog .status.cancelled { background: #f6e1e4; color: var(--danger); }
+.admin-dialog-body { display: grid; gap: 14px; }
+.admin-detail { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; min-width: 0; }
+.admin-detail h3 { margin: 0 0 10px; font-size: .95rem; }
+.admin-dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+.admin-dl div { min-width: 0; }
+.admin-dl .wide { grid-column: 1 / -1; }
+.admin-dl dt { color: var(--muted); font-size: .76rem; }
+.admin-dl dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.admin-dl dd.pre { white-space: pre-line; font-weight: 500; }
+.admin-dl a { color: var(--brand-dark); }
+.admin-dl .dot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; margin-inline-end: 6px; vertical-align: middle; }
+.admin-totals { display: grid; gap: 6px; margin: 12px 0 0; max-width: 360px; margin-inline-start: auto; }
+.admin-totals div { display: flex; justify-content: space-between; gap: 12px; font-size: .88rem; }
+.admin-totals dt { color: var(--muted); }
+.admin-totals dd { margin: 0; font-weight: 600; }
+.admin-totals .grand { border-top: 1px solid var(--line); padding-top: 6px; font-size: 1rem; }
+.admin-totals .grand dd { font-weight: 800; }
+.admin-journey { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.admin-journey li { position: relative; display: grid; grid-template-columns: 120px 1fr; gap: 10px; padding: 6px 18px 6px 0; font-size: .86rem; }
+.admin-journey li::before { content: ""; position: absolute; inset-inline-start: 4px; top: 12px; width: 8px; height: 8px; border-radius: 999px; background: var(--brand); }
+.admin-journey li::after { content: ""; position: absolute; inset-inline-start: 7px; top: 22px; bottom: -6px; width: 2px; background: var(--line); }
+.admin-journey li:last-child::after { display: none; }
+.admin-journey li.step-add::before { background: var(--pink); }
+.admin-journey li.step-order::before { background: var(--whatsapp); width: 10px; height: 10px; inset-inline-start: 3px; }
+.admin-journey time { color: var(--muted); font-size: .78rem; text-align: start; }
+.admin-dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 12px; }
+.admin-dialog-actions button { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .88rem; border: 1px solid var(--line); background: var(--paper); color: var(--navy); border-radius: 10px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+.admin-dialog-actions button.danger { color: var(--danger); }
+.admin-dialog-actions button:disabled { opacity: .5; cursor: default; }
 @media (max-width: 900px) {
   .admin-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-grid-2 { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+.admin-orders { display: grid; gap: 14px; }
+.admin-order { border: 1px solid var(--line); border-inline-start: 4px solid #e9b949; border-radius: var(--radius); background: var(--paper); padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.admin-order.status-confirmed { border-inline-start-color: var(--whatsapp); }
+.admin-order.status-cancelled { border-inline-start-color: var(--danger); opacity: .8; }
+.admin-order-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.admin-order-head > div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.admin-order-head .mono { font-family: ui-monospace, Consolas, monospace; font-size: .85rem; }
+.admin-order-head .admin-muted { font-size: .8rem; }
+.admin-order .status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; }
+.admin-order .status.submitted { background: #fff3dc; color: #8a5a10; }
+.admin-order .status.confirmed { background: #e2f5ea; color: #157a3e; }
+.admin-order .status.cancelled { background: #f6e1e4; color: var(--danger); }
+.admin-order-source { font-size: .82rem; color: var(--muted); }
+.admin-order-source .dot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; margin-inline-end: 6px; vertical-align: middle; }
+.admin-order-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; }
+.admin-order-customer, .admin-order-items { min-width: 0; }
+.admin-order-offer { margin: 0 0 8px; font-weight: 700; font-size: .88rem; color: var(--pink-dark); }
+.admin-order-items ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.admin-order-items li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; font-size: .86rem; }
+.admin-order-items li strong { display: block; font-weight: 600; line-height: 1.5; }
+.admin-order-items li small { display: block; color: var(--muted); font-size: .75rem; line-height: 1.5; }
+.admin-order-items .qty { font-weight: 700; white-space: nowrap; }
+.admin-order-items .price { font-weight: 600; white-space: nowrap; min-width: 60px; text-align: end; }
+.admin-order-thumb { display: block; width: 56px; height: 56px; border-radius: 10px; overflow: hidden; background: var(--bg); }
+.admin-order-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.admin-order .admin-totals { max-width: none; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.admin-order-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 10px; }
+.admin-order-actions button { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .84rem; border: 1px solid var(--line); background: var(--paper); color: var(--navy); border-radius: 10px; padding: 6px 12px; min-height: 38px; cursor: pointer; }
+.admin-order-actions button.danger { color: var(--danger); }
+.admin-order-actions button:disabled { opacity: .5; cursor: default; }
+.admin-more { display: block; margin: 14px auto 0; font: inherit; font-size: .88rem; font-weight: 700; color: var(--brand-dark); background: var(--brand-soft); border: 0; border-radius: 999px; padding: 10px 18px; cursor: pointer; }
+@media (max-width: 760px) {
+  .admin-order-body { grid-template-columns: minmax(0, 1fr); }
+  .admin-order-items li { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .admin-order-items .price { grid-column: 2 / -1; text-align: start; min-width: 0; }
+  .admin-order-thumb { width: 48px; height: 48px; }
+}
+@media (max-width: 600px) {
+  .admin-dl { grid-template-columns: minmax(0, 1fr); }
+  .admin-journey li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .admin-dialog-inner { padding: 14px; }
 }
 @media (max-width: 420px) {
   .admin-card strong { font-size: 1.3rem; }

@@ -1,10 +1,28 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
-import { isOrderStatus, setOrderStatus } from "@/lib/analytics-store";
+import { isOrderStatus, loadOrderDetails, setOrderStatus } from "@/lib/analytics-store";
+import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
 
 export const runtime = "nodejs";
 
 const json = (status: number, body: object) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+const ORDER_ID_PATTERN = /^BM-[A-F\d]{20}$/;
+
+/** Full order for review: customer details (decrypted on the server), items, totals, source and journey. Read-only token. */
+export async function GET(request: Request, context: { params: Promise<{ orderId: string }> }) {
+  if (!isAdminRequest(request)) return unauthorized();
+  const { orderId } = await context.params;
+  if (!ORDER_ID_PATTERN.test(orderId)) return json(400, { success: false, error: { code: "INVALID_ORDER_ID" } });
+
+  try {
+    const view = await loadOrderDetails(orderId);
+    if (!view) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
+    return json(200, { success: true, ...view, vaultConfigured: isOrderVaultConfigured() });
+  } catch (error) {
+    console.error("[admin] order details read failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+    return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نقرا الطلب دلوقتي. جربي تاني." } });
+  }
+}
 
 /** Marks an order as confirmed sale / cancelled / back to submitted. Uses the write token. */
 export async function PATCH(request: Request, context: { params: Promise<{ orderId: string }> }) {
@@ -12,7 +30,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
 
   const { orderId } = await context.params;
-  if (!/^BM-[A-F\d]{20}$/.test(orderId)) return json(400, { success: false, error: { code: "INVALID_ORDER_ID" } });
+  if (!ORDER_ID_PATTERN.test(orderId)) return json(400, { success: false, error: { code: "INVALID_ORDER_ID" } });
 
   let body: Record<string, unknown>;
   try {

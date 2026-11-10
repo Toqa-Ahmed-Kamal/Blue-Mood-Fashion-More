@@ -1,8 +1,8 @@
 /**
  * Editable preliminary delivery table. Fees are estimates and remain changeable.
  * Use null when the fee is not set yet — the customer is told it will be confirmed.
- * Cairo has per-area fees (ordered approximately from Matariya); every other
- * governorate has one row with area: "*" and the customer types her own city.
+ * One fee per governorate (area: "*"); the customer types her own city/area.
+ * A governorate can still get per-area rows (area: "<name>") that override "*".
  */
 export type ShippingRate = {
   governorate: string;
@@ -41,50 +41,45 @@ export const shippingGovernorates = [
 ] as const;
 
 export const shippingRates: ShippingRate[] = [
-  { governorate: "القاهرة", area: "المطرية", fee: 30 },
-  { governorate: "القاهرة", area: "عين شمس", fee: 35 },
-  { governorate: "القاهرة", area: "المرج", fee: 40 },
-  { governorate: "القاهرة", area: "الزيتون", fee: 40 },
-  { governorate: "القاهرة", area: "حدائق القبة", fee: 45 },
-  { governorate: "القاهرة", area: "الأميرية", fee: 45 },
-  { governorate: "القاهرة", area: "مصر الجديدة", fee: 50 },
-  { governorate: "القاهرة", area: "مدينة نصر", fee: 55 },
-  { governorate: "القاهرة", area: "العباسية", fee: 60 },
-  { governorate: "القاهرة", area: "شبرا", fee: 60 },
-  { governorate: "القاهرة", area: "وسط البلد", fee: 65 },
-  { governorate: "القاهرة", area: "المعادي", fee: 75 },
-  { governorate: "القاهرة", area: "القاهرة الجديدة والتجمع", fee: 80 },
-  { governorate: "القاهرة", area: "حلوان", fee: 85 },
-  { governorate: "القاهرة", area: "منطقة أخرى بالقاهرة (السعر غير محدد)", fee: null },
-
-  // One fee per governorate — replace null with the price when it is known.
-  { governorate: "الجيزة", area: "*", fee: null },
-  { governorate: "الإسكندرية", area: "*", fee: null },
-  { governorate: "القليوبية", area: "*", fee: null },
-  { governorate: "الشرقية", area: "*", fee: null },
-  { governorate: "الدقهلية", area: "*", fee: null },
-  { governorate: "الغربية", area: "*", fee: null },
-  { governorate: "المنوفية", area: "*", fee: null },
-  { governorate: "البحيرة", area: "*", fee: null },
-  { governorate: "كفر الشيخ", area: "*", fee: null },
-  { governorate: "دمياط", area: "*", fee: null },
-  { governorate: "بورسعيد", area: "*", fee: null },
-  { governorate: "الإسماعيلية", area: "*", fee: null },
-  { governorate: "السويس", area: "*", fee: null },
-  { governorate: "الفيوم", area: "*", fee: null },
+  // ── القاهرة والجيزة ──
+  { governorate: "القاهرة", area: "*", fee: 80 },
+  { governorate: "الجيزة", area: "*", fee: 80 },
+  // ── الإسكندرية ──
+  { governorate: "الإسكندرية", area: "*", fee: 90 },
+  // ── وجه بحري والدلتا والقناة ──
+  { governorate: "القليوبية", area: "*", fee: 100 },
+  { governorate: "الشرقية", area: "*", fee: 100 },
+  { governorate: "الدقهلية", area: "*", fee: 100 },
+  { governorate: "الغربية", area: "*", fee: 100 },
+  { governorate: "المنوفية", area: "*", fee: 100 },
+  { governorate: "البحيرة", area: "*", fee: 100 },
+  { governorate: "كفر الشيخ", area: "*", fee: 100 },
+  { governorate: "دمياط", area: "*", fee: 100 },
+  { governorate: "بورسعيد", area: "*", fee: 100 },
+  { governorate: "الإسماعيلية", area: "*", fee: 100 },
+  { governorate: "السويس", area: "*", fee: 100 },
+  // ── شمال الصعيد ──
+  { governorate: "الفيوم", area: "*", fee: 110 },
+  { governorate: "المنيا", area: "*", fee: 110 },
+  { governorate: "أسيوط", area: "*", fee: 110 },
+  // ── جنوب الصعيد ──
+  { governorate: "سوهاج", area: "*", fee: 120 },
+  { governorate: "قنا", area: "*", fee: 120 },
+  { governorate: "الأقصر", area: "*", fee: 120 },
+  { governorate: "أسوان", area: "*", fee: 120 },
+  // ── لسه مفيش سعر — الشحن بيتأكد مع العميلة ──
   { governorate: "بني سويف", area: "*", fee: null },
-  { governorate: "المنيا", area: "*", fee: null },
-  { governorate: "أسيوط", area: "*", fee: null },
-  { governorate: "سوهاج", area: "*", fee: null },
-  { governorate: "قنا", area: "*", fee: null },
-  { governorate: "الأقصر", area: "*", fee: null },
-  { governorate: "أسوان", area: "*", fee: null },
   { governorate: "البحر الأحمر", area: "*", fee: null },
   { governorate: "الوادي الجديد", area: "*", fee: null },
   { governorate: "مطروح", area: "*", fee: null },
   { governorate: "شمال سيناء", area: "*", fee: null },
   { governorate: "جنوب سيناء", area: "*", fee: null },
 ];
+
+/** The governorate-wide fee (its "*" row), or null when it still has to be confirmed. */
+export function governorateShippingFee(governorate: string) {
+  return findShippingRate(governorate, "*")?.fee ?? null;
+}
 
 export function isShippingGovernorate(value: string) {
   return (shippingGovernorates as readonly string[]).includes(value);

@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, LogOut, RefreshCw, RotateCcw, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, ExternalLink, Eye, LogOut, RefreshCw, RotateCcw, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -19,9 +19,12 @@ import {
   YAxis,
 } from "recharts";
 
-import type { AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
+import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
 import { formatEGP } from "@/lib/format";
-import { SOURCE_TYPES, TRAFFIC_SOURCES, type SourceType, type TrafficSource } from "@/lib/traffic-source";
+import type { JourneyEntry } from "@/lib/journey";
+import type { OrderDetails } from "@/lib/order-vault";
+import { findProduct } from "@/lib/site-data";
+import { SOURCE_TYPES, TRAFFIC_SOURCES, sourceTypeOf, type SourceType, type TrafficSource } from "@/lib/traffic-source";
 
 const SOURCE_COLORS: Record<TrafficSource, string> = {
   "Facebook Ads": "#2f5fb3",
@@ -45,14 +48,26 @@ const PRESETS = [
   { id: "7", label: "٧ أيام", days: 7 },
   { id: "30", label: "٣٠ يوم", days: 30 },
   { id: "90", label: "٩٠ يوم", days: 90 },
+  { id: "all", label: "الكل", days: 400 },
 ] as const;
+
+const TABS = [
+  { id: "traffic", label: "الزيارات" },
+  { id: "journey", label: "رحلة العميلة والمنتجات" },
+  { id: "orders", label: "الأوردرات" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
 
 const integer = new Intl.NumberFormat("en-US");
 const percent = (value: number | null) => (value === null ? "—" : `${(value * 100).toFixed(value < 0.1 ? 2 : 1)}%`);
+const ratio = (part: number, whole: number) => (whole > 0 ? part / whole : null);
 const cairoDay = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(date);
 const daysAgo = (days: number) => cairoDay(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+const cairoTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" });
+const productName = (id: string) => findProduct(id)?.name ?? id;
 
 type Report = AnalyticsReport;
+type OrderUpdate = (id: string, status: OrderStatus, value: number | null, at: string | null) => void;
 
 export function AnalyticsDashboard() {
   const router = useRouter();
@@ -61,6 +76,7 @@ export function AnalyticsDashboard() {
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabId>("traffic");
 
   const load = useCallback(async (from: string, to: string) => {
     setLoading(true);
@@ -136,20 +152,42 @@ export function AnalyticsDashboard() {
 
       {error && <p className="admin-error" role="alert">{error}</p>}
       {!report && loading && <p className="admin-muted">جاري التحميل…</p>}
-      {report && <ReportView report={report} onOrderUpdated={applyOrderUpdate} />}
+      {report && (
+        <>
+          <OverviewCards report={report} />
+          <nav className="admin-tabs" role="tablist" aria-label="أقسام الداشبورد">
+            {TABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`tab-${item.id}`}
+                aria-selected={tab === item.id}
+                aria-controls={`panel-${item.id}`}
+                className={tab === item.id ? "active" : ""}
+                onClick={() => setTab(item.id)}
+              >
+                {item.label}
+                {item.id === "orders" && report.totals.pending > 0 && <span className="admin-badge">{report.totals.pending}</span>}
+              </button>
+            ))}
+          </nav>
+          <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+            {tab === "traffic" && <TrafficTab report={report} />}
+            {tab === "journey" && <JourneyTab report={report} />}
+            {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} />}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function ReportView({ report, onOrderUpdated }: { report: Report; onOrderUpdated: (id: string, status: OrderStatus, value: number | null, at: string | null) => void }) {
+function OverviewCards({ report }: { report: Report }) {
   const { totals } = report;
   const type = (name: SourceType) => report.byType.find((row) => row.type === name);
   const paid = type("Paid");
   const organic = type("Organic");
-  const sourcesWithSessions = report.bySource.filter((row) => row.sessions > 0);
-  const activeSources = report.bySource.filter((row) => row.sessions > 0 || row.submitted > 0);
-  const metaAds = report.bySource.filter((row) => row.source === "Facebook Ads" || row.source === "Instagram Ads");
-
   return (
     <>
       <section className="admin-cards">
@@ -162,8 +200,20 @@ function ReportView({ report, onOrderUpdated }: { report: Report; onOrderUpdated
         <StatCard label="طلبات Paid Ads" value={integer.format(paid?.submitted ?? 0)} hint={`${paid?.confirmed ?? 0} مؤكد`} />
         <StatCard label="طلبات Organic" value={integer.format(organic?.submitted ?? 0)} hint={`${organic?.confirmed ?? 0} مؤكد · Direct لوحده`} />
       </section>
-      {totals.pending > 0 && <p className="admin-note">فيه {totals.pending} طلب لسه مستني تأكيد. علّميهم من جدول الطلبات تحت علشان أرقام المبيعات المؤكدة تبقى صح.</p>}
+      {totals.pending > 0 && <p className="admin-note">فيه {totals.pending} طلب لسه مستني تأكيد. راجعيهم من تبويب الأوردرات علشان أرقام المبيعات المؤكدة تبقى صح.</p>}
+    </>
+  );
+}
 
+// ── 1. Traffic ─────────────────────────────────────────────────────────────
+
+function TrafficTab({ report }: { report: Report }) {
+  const sourcesWithSessions = report.bySource.filter((row) => row.sessions > 0);
+  const activeSources = report.bySource.filter((row) => row.sessions > 0 || row.submitted > 0);
+  const metaAds = report.bySource.filter((row) => row.source === "Facebook Ads" || row.source === "Instagram Ads");
+
+  return (
+    <>
       <Panel title="الزيارات والطلبات يوم بيوم">
         <ChartBox height={290}>
           <LineChart data={report.timeline} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
@@ -238,6 +288,8 @@ function ReportView({ report, onOrderUpdated }: { report: Report; onOrderUpdated
         <p className="admin-muted small">الطلب بيتحسب لآخر مصدر غير مباشر (Last Non-Direct Touch). يعني لو عميلة جت من إعلان ورجعت بعدين مباشرة، الطلب بيتحسب للإعلان، فنسبة التحويل للمصادر المدفوعة ممكن تطلع أعلى شوية من نسبة الجلسات بتاعتها.</p>
       </Panel>
 
+      <SourceCampaignPanel report={report} />
+
       <div className="admin-grid-2">
         <Panel title="قيمة الطلبات حسب المصدر">
           {activeSources.length === 0 ? <Empty /> : (
@@ -289,11 +341,53 @@ function ReportView({ report, onOrderUpdated }: { report: Report; onOrderUpdated
         </Panel>
         <CampaignPanel report={report} />
       </div>
-
-      <OrdersPanel report={report} onOrderUpdated={onOrderUpdated} />
     </>
   );
 }
+
+function SourceCampaignPanel({ report }: { report: Report }) {
+  const [source, setSource] = useState("");
+  const rows = report.sourceCampaigns.filter((row) => (row.sessions > 0 || row.submitted > 0) && (!source || row.source === source));
+  const sources = [...new Set(report.sourceCampaigns.map((row) => row.source))];
+  return (
+    <Panel
+      title="الزيارات حسب المصدر والحملة"
+      action={(
+        <select className="admin-select" value={source} onChange={(e) => setSource(e.target.value)} aria-label="المصدر">
+          <option value="">كل المصادر</option>
+          {sources.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      )}
+    >
+      {rows.length === 0 ? <Empty /> : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr><th>المصدر</th><th>النوع</th><th>الحملة</th><th>Sessions</th><th>النسبة</th><th>Submitted</th><th>Confirmed</th><th>قيمة المؤكد</th><th>Conv. طلبات</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.source}|${row.campaign}`}>
+                  <td><span className="dot" style={{ background: SOURCE_COLORS[row.source] }} />{row.source}</td>
+                  <td>{TYPE_LABELS[sourceTypeOf(row.source)]}</td>
+                  <td>{row.campaign || <span className="admin-muted">بدون حملة</span>}</td>
+                  <td>{integer.format(row.sessions)}</td>
+                  <td>{percent(row.sessionShare)}</td>
+                  <td>{row.submitted}</td>
+                  <td>{row.confirmed}</td>
+                  <td>{formatEGP(row.confirmedValue)}</td>
+                  <td>{percent(row.submittedConversion)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="admin-muted small">تفصيل المصدر مع الحملة بيتسجل من أول التحديث ده. الزيارات الأقدم موجودة في جداول المصادر والحملات فوق، والطلبات الأقدم ظاهرة هنا عادي.</p>
+    </Panel>
+  );
+}
+
 
 function CampaignPanel({ report }: { report: Report }) {
   const [metric, setMetric] = useState<"sessions" | "submitted">("sessions");
@@ -329,16 +423,198 @@ function CampaignPanel({ report }: { report: Report }) {
   );
 }
 
-function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdated: (id: string, status: OrderStatus, value: number | null, at: string | null) => void }) {
+// ── 2. Customer journey & products ─────────────────────────────────────────
+
+function JourneyTab({ report }: { report: Report }) {
+  const { funnel } = report;
+  const steps = [
+    { label: "دخلت الموقع", count: funnel.sessions },
+    { label: "فتحت منتج", count: funnel.view },
+    { label: "أضافت للسلة", count: funnel.add },
+    { label: "فتحت صفحة الطلب", count: funnel.checkout },
+    { label: "بعتت الطلب", count: funnel.order },
+  ];
+  const [metric, setMetric] = useState<"views" | "adds">("adds");
+  const top = report.products
+    .filter((row) => row[metric] > 0)
+    .toSorted((a, b) => b[metric] - a[metric])
+    .slice(0, 8)
+    .map((row) => ({ ...row, label: row.name.length > 26 ? `${row.name.slice(0, 25)}…` : row.name }));
+
+  return (
+    <>
+      <Panel title="رحلة العميلة: من الدخول لحد إرسال الطلب">
+        <div className="admin-funnel">
+          {steps.map((step, index) => {
+            const share = ratio(step.count, funnel.sessions);
+            const fromPrevious = index === 0 ? null : ratio(step.count, steps[index - 1].count);
+            return (
+              <div className="admin-funnel-step" key={step.label}>
+                <div className="admin-funnel-head">
+                  <span>{index + 1}. {step.label}</span>
+                  <strong>{integer.format(step.count)}</strong>
+                </div>
+                <div className="admin-funnel-track"><span style={{ width: `${Math.min(100, (share ?? 0) * 100)}%` }} /></div>
+                <small>
+                  {index === 0 ? "كل الجلسات" : `${percent(share)} من الجلسات · ${percent(fromPrevious)} من الخطوة اللي قبلها`}
+                </small>
+              </div>
+            );
+          })}
+        </div>
+        <p className="admin-muted small">كل خطوة بتتحسب مرة واحدة لكل جلسة. &quot;فتحت منتج&quot; يعني فتحت صورة المنتج بالكامل. الرحلة بتتسجل من أول التحديث ده، فالأرقام الأقدم ممكن تبان أقل. رحلة كل عميلة بالتفصيل موجودة جوه تفاصيل الأوردر.</p>
+      </Panel>
+
+      <Panel
+        title="المنتجات الأكثر مشاهدة وإضافة للسلة"
+        action={(
+          <div className="admin-presets small" role="group">
+            <button type="button" className={metric === "adds" ? "active" : ""} onClick={() => setMetric("adds")}>إضافة للسلة</button>
+            <button type="button" className={metric === "views" ? "active" : ""} onClick={() => setMetric("views")}>مشاهدة</button>
+          </div>
+        )}
+      >
+        {top.length === 0 ? <Empty /> : (
+          <ChartBox height={Math.max(220, top.length * 36)}>
+            <BarChart data={top} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ecdfd6" />
+              <XAxis type="number" allowDecimals={false} fontSize={11} />
+              <YAxis type="category" dataKey="label" width={170} fontSize={11} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="views" name="مشاهدات" fill="#7a96be" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="adds" name="إضافات للسلة" fill="#d6246e" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="uniqueAdders" name="عميلات مختلفات" fill="#1c9d50" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ChartBox>
+        )}
+      </Panel>
+
+      <ProductsTable report={report} />
+    </>
+  );
+}
+
+function ProductsTable({ report }: { report: Report }) {
+  const [sort, setSort] = useState<"adds" | "views" | "uniqueAdders">("adds");
+  const rows = report.products.toSorted((a, b) => b[sort] - a[sort] || b.adds - a.adds || b.views - a.views);
+  const header = (key: typeof sort, label: string) => (
+    <th aria-sort={sort === key ? "descending" : "none"}>
+      <button type="button" className={`admin-sort${sort === key ? " active" : ""}`} onClick={() => setSort(key)}>{label}{sort === key ? " ↓" : ""}</button>
+    </th>
+  );
+  return (
+    <Panel title={`كل المنتجات (${rows.length})`}>
+      <div className="admin-table-wrap">
+        <table className="admin-table products">
+          <thead>
+            <tr>
+              <th>المنتج</th><th>القسم</th>
+              {header("views", "مشاهدات")}
+              {header("adds", "مرات الإضافة للسلة")}
+              {header("uniqueAdders", "عميلات مختلفات أضافوه")}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.productId} className={row.views === 0 && row.adds === 0 ? "dim" : ""}>
+                <td>
+                  <a className="admin-product" href={row.image} target="_blank" rel="noreferrer">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- tiny admin thumbnail, no optimisation needed */}
+                    <img src={row.image} alt="" width={34} height={34} loading="lazy" />
+                    <span>{row.name}</span>
+                  </a>
+                </td>
+                <td>{row.category}</td>
+                <td>{integer.format(row.views)}</td>
+                <td>{integer.format(row.adds)}</td>
+                <td>{integer.format(row.uniqueAdders)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="admin-muted small">مرات الإضافة = عدد القطع اللي اتضافت للسلة (اختيار قطعة جوه العرض بيتحسب إضافة). عميلات مختلفات = عدد المتصفحات المختلفة اللي أضافت المنتج.</p>
+    </Panel>
+  );
+}
+
+// ── 3. Orders ──────────────────────────────────────────────────────────────
+
+/** Confirm / cancel / reset an order (shared by the table and the details window). */
+function useOrderStatus(onOrderUpdated: OrderUpdate) {
+  const router = useRouter();
+  const [busyId, setBusyId] = useState("");
+  const [error, setError] = useState("");
+
+  async function update(orderId: string, value: number, next: OrderStatus) {
+    let confirmedValue: number | null = null;
+    if (next === "confirmed") {
+      const answer = window.prompt(`القيمة اللي اتحصلت فعلاً للطلب ${orderId} (سيبيها زي ما هي لو مفيش تغيير):`, String(value));
+      if (answer === null) return false;
+      // Empty answer = keep the order total (null), never 0.
+      const digits = answer.replace(/[^\d.]/g, "");
+      confirmedValue = digits ? Number(digits) : null;
+      if (confirmedValue !== null && (!Number.isFinite(confirmedValue) || confirmedValue <= 0)) {
+        setError("اكتبي قيمة صحيحة أكبر من صفر، أو سيبي الخانة فاضية علشان نستخدم قيمة الطلب.");
+        return false;
+      }
+    }
+    setBusyId(orderId);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next, confirmedValue }),
+      });
+      if (response.status === 401) {
+        router.replace("/admin/login");
+        return false;
+      }
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        setError(result?.error?.message ?? "مقدرناش نحفظ التغيير.");
+        return false;
+      }
+      onOrderUpdated(orderId, result.order.status, result.order.confirmedValue, result.order.statusAt);
+      return true;
+    } catch {
+      setError("مفيش اتصال. جربي تاني.");
+      return false;
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  return { update, busyId, error };
+}
+
+function StatusActions({ orderId, value, status, busy, onChange }: { orderId: string; value: number; status: OrderStatus; busy: boolean; onChange: (id: string, value: number, next: OrderStatus) => void }) {
+  return (
+    <>
+      {status !== "confirmed" && (
+        <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "confirmed")} title="بيع مؤكد"><CheckCircle2 size={16} /> تأكيد</button>
+      )}
+      {status !== "cancelled" && (
+        <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "cancelled")} title="إلغاء" className="danger"><XCircle size={16} /> إلغاء</button>
+      )}
+      {status !== "submitted" && (
+        <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "submitted")} title="رجوع لمستني تأكيد" aria-label="رجوع لمستني تأكيد"><RotateCcw size={15} /></button>
+      )}
+    </>
+  );
+}
+
+function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdated: OrderUpdate }) {
   const [source, setSource] = useState("");
   const [type, setType] = useState("");
   const [campaign, setCampaign] = useState("");
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const router = useRouter();
-  const [busyId, setBusyId] = useState("");
-  const [rowError, setRowError] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const { update, busyId, error } = useOrderStatus(onOrderUpdated);
 
   const campaigns = useMemo(() => [...new Set(report.orders.map((row) => row.campaign).filter(Boolean))].sort(), [report.orders]);
   const rows = report.orders.filter((row) =>
@@ -348,48 +624,27 @@ function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdate
     && (!status || row.status === status)
     && (!from || row.day >= from)
     && (!to || row.day <= to));
-
-  async function update(row: OrderRow, next: OrderStatus) {
-    let confirmedValue: number | null = null;
-    if (next === "confirmed") {
-      const answer = window.prompt(`القيمة اللي اتحصلت فعلاً للطلب ${row.orderId} (سيبيها زي ما هي لو مفيش تغيير):`, String(row.value));
-      if (answer === null) return;
-      // Empty answer = keep the order total (null), never 0.
-      const digits = answer.replace(/[^\d.]/g, "");
-      confirmedValue = digits ? Number(digits) : null;
-      if (confirmedValue !== null && (!Number.isFinite(confirmedValue) || confirmedValue <= 0)) {
-        setRowError("اكتبي قيمة صحيحة أكبر من صفر، أو سيبي الخانة فاضية علشان نستخدم قيمة الطلب.");
-        return;
-      }
-    }
-    setBusyId(row.orderId);
-    setRowError("");
-    try {
-      const response = await fetch(`/api/admin/orders/${row.orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: next, confirmedValue }),
-      });
-      if (response.status === 401) {
-        router.replace("/admin/login");
-        return;
-      }
-      const result = await response.json().catch(() => null);
-      if (!response.ok || !result?.success) {
-        setRowError(result?.error?.message ?? "مقدرناش نحفظ التغيير.");
-        return;
-      }
-      onOrderUpdated(row.orderId, result.order.status, result.order.confirmedValue, result.order.statusAt);
-    } catch {
-      setRowError("مفيش اتصال. جربي تاني.");
-    } finally {
-      setBusyId("");
-    }
-  }
+  const openRow = openId ? report.orders.find((row) => row.orderId === openId) ?? null : null;
+  const [view, setView] = useState<"cards" | "table">("cards");
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const shown = rows.slice(0, limit);
+  const details = useOrdersDetails(view === "cards" ? shown.map((row) => row.orderId) : []);
 
   return (
-    <Panel title={`الطلبات ومصادرها (${rows.length})`}>
+    <Panel
+      title={`الأوردرات (${rows.length})`}
+      action={(
+        <div className="admin-presets small" role="group" aria-label="طريقة العرض">
+          <button type="button" className={view === "cards" ? "active" : ""} onClick={() => setView("cards")}>تفاصيل كاملة</button>
+          <button type="button" className={view === "table" ? "active" : ""} onClick={() => setView("table")}>جدول المصادر</button>
+        </div>
+      )}
+    >
       <div className="admin-filters">
+        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="الحالة">
+          <option value="">كل الحالات</option>
+          {(Object.keys(STATUS_LABELS) as OrderStatus[]).map((item) => <option key={item} value={item}>{STATUS_LABELS[item]}</option>)}
+        </select>
         <select value={source} onChange={(e) => setSource(e.target.value)} aria-label="المصدر">
           <option value="">كل المصادر</option>
           {TRAFFIC_SOURCES.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -403,29 +658,48 @@ function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdate
           <option value="-">بدون حملة</option>
           {campaigns.map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="الحالة">
-          <option value="">كل الحالات</option>
-          {(Object.keys(STATUS_LABELS) as OrderStatus[]).map((item) => <option key={item} value={item}>{STATUS_LABELS[item]}</option>)}
-        </select>
         <label>من <input type="date" value={from} min={report.range.from} max={report.range.to} onChange={(e) => setFrom(e.target.value)} /></label>
         <label>لحد <input type="date" value={to} min={report.range.from} max={report.range.to} onChange={(e) => setTo(e.target.value)} /></label>
       </div>
-      {rowError && <p className="admin-error" role="alert">{rowError}</p>}
-      {rows.length === 0 ? <Empty text="مفيش طلبات بالفلاتر دي." /> : (
+      {error && <p className="admin-error" role="alert">{error}</p>}
+      {details.error && <p className="admin-error" role="alert">{details.error}</p>}
+      {rows.length === 0 ? <Empty text="مفيش طلبات بالفلاتر دي." /> : view === "cards" ? (
+        <>
+          <div className="admin-orders">
+            {shown.map((row) => (
+              <OrderCard
+                key={row.orderId}
+                row={row}
+                details={details.byId[row.orderId]}
+                vaultConfigured={details.vaultConfigured}
+                busy={busyId === row.orderId}
+                onChange={(id, value, next) => void update(id, value, next)}
+                onJourney={() => setOpenId(row.orderId)}
+              />
+            ))}
+          </div>
+          {rows.length > shown.length && (
+            <button type="button" className="admin-more" onClick={() => setLimit((current) => current + PAGE_SIZE)}>
+              اعرضي {Math.min(PAGE_SIZE, rows.length - shown.length)} أوردر كمان ({rows.length - shown.length} باقيين)
+            </button>
+          )}
+        </>
+      ) : (
         <div className="admin-table-wrap">
           <table className="admin-table orders">
             <thead>
               <tr>
-                <th>رقم الطلب</th><th>التاريخ</th><th>القيمة</th><th>الحالة</th><th>Source</th><th>النوع</th><th>Campaign</th><th>Ad Content</th>
+                <th>رقم الطلب</th><th>التاريخ</th><th>القيمة</th><th>القطع</th><th>الحالة</th><th>Source</th><th>النوع</th><th>Campaign</th><th>Ad Content</th>
                 <th>First Touch</th><th>Last Touch</th><th>Landing Page</th><th>المحافظة</th><th>إجراء</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.orderId}>
-                  <td dir="ltr" className="mono">{row.orderId}</td>
-                  <td dir="ltr">{new Date(row.createdAt).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" })}</td>
+                  <td dir="ltr" className="mono"><button type="button" className="admin-link" onClick={() => setOpenId(row.orderId)}>{row.orderId}</button></td>
+                  <td dir="ltr">{cairoTime(row.createdAt)}</td>
                   <td>{formatEGP(row.value)}{row.confirmedValue !== null && row.confirmedValue !== row.value && <small> (اتحصل {formatEGP(row.confirmedValue)})</small>}</td>
+                  <td>{row.pieces}</td>
                   <td><span className={`status ${row.status}`}>{STATUS_LABELS[row.status]}</span></td>
                   <td><span className="dot" style={{ background: SOURCE_COLORS[row.source] }} />{row.source}{row.hasFbclid && <small> · fbclid</small>}</td>
                   <td>{row.sourceType}</td>
@@ -436,15 +710,8 @@ function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdate
                   <td dir="ltr">{row.landingPage || "—"}</td>
                   <td>{row.governorate}</td>
                   <td className="actions">
-                    {row.status !== "confirmed" && (
-                      <button type="button" disabled={busyId === row.orderId} onClick={() => void update(row, "confirmed")} title="بيع مؤكد"><CheckCircle2 size={16} /> تأكيد</button>
-                    )}
-                    {row.status !== "cancelled" && (
-                      <button type="button" disabled={busyId === row.orderId} onClick={() => void update(row, "cancelled")} title="إلغاء" className="danger"><XCircle size={16} /> إلغاء</button>
-                    )}
-                    {row.status !== "submitted" && (
-                      <button type="button" disabled={busyId === row.orderId} onClick={() => void update(row, "submitted")} title="رجوع لمستني تأكيد"><RotateCcw size={15} /></button>
-                    )}
+                    <button type="button" onClick={() => setOpenId(row.orderId)} title="تفاصيل الأوردر"><Eye size={15} /> تفاصيل</button>
+                    <StatusActions orderId={row.orderId} value={row.value} status={row.status} busy={busyId === row.orderId} onChange={(id, value, next) => void update(id, value, next)} />
                   </td>
                 </tr>
               ))}
@@ -452,10 +719,342 @@ function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdate
           </table>
         </div>
       )}
-      <p className="admin-muted small">الاسم والتليفون والعنوان مش متخزنين هنا. تلاقيهم في رسالة الطلب على تيليجرام برقم الطلب.</p>
+      <p className="admin-muted small">بيانات العميلة متخزنة متشفرة وبتتفك على السيرفر بس لما تفتحي الداشبورد. &quot;رحلة العميلة&quot; بيوريكي خطواتها من أول ما دخلت لحد ما طلبت.</p>
+      {openId && (
+        <OrderDialog
+          orderId={openId}
+          row={openRow}
+          busy={busyId === openId}
+          error={error}
+          onChange={(id, value, next) => void update(id, value, next)}
+          onClose={() => setOpenId(null)}
+        />
+      )}
     </Panel>
   );
 }
+
+const PAGE_SIZE = 30;
+
+/** Loads (and caches) the decrypted details of the orders currently shown. */
+function useOrdersDetails(orderIds: string[]) {
+  const router = useRouter();
+  const [byId, setById] = useState<Record<string, OrderDetails | null | undefined>>({});
+  const [vaultConfigured, setVaultConfigured] = useState(true);
+  const [error, setError] = useState("");
+  const requested = useRef(new Set<string>());
+  const idsKey = orderIds.join(",");
+
+  useEffect(() => {
+    // Only ask for orders not fetched yet (the list grows with "show more").
+    const ids = idsKey.split(",").filter((id) => id && !requested.current.has(id));
+    if (ids.length === 0) return;
+    ids.forEach((id) => requested.current.add(id));
+    (async () => {
+      try {
+        const response = await fetch(`/api/admin/orders?ids=${encodeURIComponent(ids.join(","))}`, { cache: "no-store" });
+        if (response.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.success) {
+          ids.forEach((id) => requested.current.delete(id));
+          setError(result?.error?.message ?? "مقدرناش نجيب تفاصيل الأوردرات.");
+          return;
+        }
+        setError("");
+        setVaultConfigured(result.vaultConfigured);
+        setById((current) => ({ ...current, ...result.details }));
+      } catch {
+        ids.forEach((id) => requested.current.delete(id));
+        setError("مفيش اتصال. جربي تاني.");
+      }
+    })();
+  }, [idsKey, router]);
+
+  return { byId, vaultConfigured, error };
+}
+
+function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }: {
+  row: OrderRow;
+  /** undefined = still loading, null = not stored / unreadable. */
+  details: OrderDetails | null | undefined;
+  vaultConfigured: boolean;
+  busy: boolean;
+  onChange: (id: string, value: number, next: OrderStatus) => void;
+  onJourney: () => void;
+}) {
+  const products = details?.products ?? row.products.map((product) => ({ ...product, name: productName(product.modelId), fit: "", unitPrice: null as number | null, link: null as string | null }));
+  return (
+    <article className={`admin-order status-${row.status}`}>
+      <header className="admin-order-head">
+        <div>
+          <strong dir="ltr" className="mono">{row.orderId}</strong>
+          <span className="admin-muted" dir="ltr">{cairoTime(row.createdAt)}</span>
+          <span className={`status ${row.status}`}>{STATUS_LABELS[row.status]}</span>
+        </div>
+        <div className="admin-order-source">
+          <span className="dot" style={{ background: SOURCE_COLORS[row.source] }} />{row.source}
+          {row.campaign && <small> · {row.campaign}</small>}
+        </div>
+      </header>
+
+      <div className="admin-order-body">
+        <section className="admin-order-customer" aria-label="بيانات العميلة">
+          {details ? (
+            <dl className="admin-dl">
+              <div><dt>الاسم</dt><dd>{details.customerName}</dd></div>
+              <div><dt>الموبايل</dt><dd dir="ltr"><a href={`tel:${details.phone}`}>{details.phone}</a>{details.alternatePhone && <> · <a href={`tel:${details.alternatePhone}`}>{details.alternatePhone}</a></>}</dd></div>
+              <div><dt>المحافظة / المنطقة</dt><dd>{details.governorate} — {details.area}</dd></div>
+              <div className="wide"><dt>العنوان</dt><dd>{details.address}</dd></div>
+              {details.notes && <div className="wide"><dt>ملاحظات</dt><dd className="pre">{details.notes}</dd></div>}
+            </dl>
+          ) : details === undefined ? (
+            <p className="admin-muted">جاري تحميل بيانات العميلة…</p>
+          ) : (
+            <p className="admin-muted small">
+              {vaultConfigured
+                ? "بيانات العميلة مش متخزنة للأوردر ده (اتسجل قبل تفعيل الحفظ). تلاقيها في تيليجرام برقم الطلب."
+                : "بيانات العميلة مش بتتخزن لسه لأن ORDER_DATA_KEY مش متضاف على Vercel. تلاقيها في تيليجرام برقم الطلب."}
+              {" "}المحافظة: {row.governorate}
+            </p>
+          )}
+        </section>
+
+        <section className="admin-order-items" aria-label="المنتجات">
+          <p className="admin-order-offer">{row.offerName}</p>
+          <ul>
+            {products.map((product, index) => {
+              const image = findProduct(product.modelId)?.image;
+              return (
+                <li key={`${product.modelId}-${index}`}>
+                  {image ? (
+                    <a href={product.link ?? image} target="_blank" rel="noreferrer" className="admin-order-thumb" aria-label={`صورة ${product.name}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- small admin thumbnail */}
+                      <img src={image} alt="" width={56} height={56} loading="lazy" />
+                    </a>
+                  ) : <span className="admin-order-thumb" />}
+                  <div>
+                    <strong>{product.name}</strong>
+                    {product.fit && <small>{product.fit}</small>}
+                  </div>
+                  <span className="qty">× {product.quantity}</span>
+                  <span className="price">{product.unitPrice === null ? (details ? "ضمن العرض" : "") : formatEGP(product.unitPrice * product.quantity)}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <dl className="admin-totals">
+            {details && details.offerPrice > 0 && <div><dt>سعر العرض</dt><dd>{formatEGP(details.offerPrice)}</dd></div>}
+            {details && details.itemsTotal > 0 && <div><dt>القطع المنفردة</dt><dd>{formatEGP(details.itemsTotal)}</dd></div>}
+            <div><dt>الشحن</dt><dd>{row.shippingCost === null ? "لسه هيتأكد" : formatEGP(row.shippingCost)}</dd></div>
+            <div className="grand"><dt>الإجمالي</dt><dd>{row.total === null ? `${formatEGP(row.subtotal)} + الشحن` : formatEGP(row.total)}</dd></div>
+            {row.confirmedValue !== null && row.confirmedValue !== row.value && <div><dt>اتحصل فعلاً</dt><dd>{formatEGP(row.confirmedValue)}</dd></div>}
+          </dl>
+        </section>
+      </div>
+
+      <footer className="admin-order-actions actions">
+        <button type="button" onClick={onJourney}><Eye size={15} /> رحلة العميلة</button>
+        <StatusActions orderId={row.orderId} value={row.value} status={row.status} busy={busy} onChange={onChange} />
+      </footer>
+    </article>
+  );
+}
+
+type OrderDetailsResponse = {
+  order: AnalyticsOrder;
+  details: OrderDetails | null;
+  detailsState: "ok" | "not_stored" | "unreadable";
+  journey: JourneyEntry[];
+  vaultConfigured: boolean;
+};
+
+function OrderDialog({ orderId, row, busy, error, onChange, onClose }: {
+  orderId: string;
+  row: OrderRow | null;
+  busy: boolean;
+  error: string;
+  onChange: (id: string, value: number, next: OrderStatus) => void;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [data, setData] = useState<OrderDetailsResponse | null>(null);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(`/api/admin/orders/${orderId}`, { cache: "no-store" });
+        if (response.status === 401) {
+          router.replace("/admin/login");
+          return;
+        }
+        const result = await response.json().catch(() => null);
+        if (cancelled) return;
+        if (!response.ok || !result?.success) setLoadError(result?.error?.message ?? "مقدرناش نجيب تفاصيل الأوردر.");
+        else setData(result);
+      } catch {
+        if (!cancelled) setLoadError("مفيش اتصال. جربي تاني.");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [orderId, router]);
+
+  // The table row is updated right away after a status change; the fetched copy may be older.
+  const status = row?.status ?? data?.order.status ?? "submitted";
+  const value = row?.value ?? (data ? data.order.total ?? data.order.subtotal : 0);
+  const details = data?.details ?? null;
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="admin-dialog"
+      dir="rtl"
+      aria-labelledby="order-dialog-title"
+      onClose={onClose}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <div className="admin-dialog-inner">
+        <header className="admin-dialog-head">
+          <div>
+            <h2 id="order-dialog-title" dir="ltr">{orderId}</h2>
+            <p className="admin-muted">
+              {data && cairoTime(data.order.createdAt)} · <span className={`status ${status}`}>{STATUS_LABELS[status]}</span>
+              {row?.confirmedValue != null && <> · اتحصل {formatEGP(row.confirmedValue)}</>}
+            </p>
+          </div>
+          <button type="button" className="admin-icon-btn" onClick={onClose} aria-label="إغلاق"><X size={18} /></button>
+        </header>
+
+        {loadError && <p className="admin-error" role="alert">{loadError}</p>}
+        {!data && !loadError && <p className="admin-muted">جاري التحميل…</p>}
+
+        {data && (
+          <div className="admin-dialog-body">
+            <section className="admin-detail">
+              <h3>بيانات العميلة</h3>
+              {details ? (
+                <dl className="admin-dl">
+                  <div><dt>الاسم</dt><dd>{details.customerName}</dd></div>
+                  <div><dt>الموبايل</dt><dd dir="ltr"><a href={`tel:${details.phone}`}>{details.phone}</a></dd></div>
+                  {details.alternatePhone && <div><dt>رقم تاني</dt><dd dir="ltr"><a href={`tel:${details.alternatePhone}`}>{details.alternatePhone}</a></dd></div>}
+                  <div><dt>المحافظة</dt><dd>{details.governorate}</dd></div>
+                  <div><dt>المنطقة</dt><dd>{details.area}</dd></div>
+                  <div className="wide"><dt>العنوان</dt><dd>{details.address}</dd></div>
+                  {details.notes && <div className="wide"><dt>ملاحظات</dt><dd className="pre">{details.notes}</dd></div>}
+                </dl>
+              ) : (
+                <p className="admin-note">
+                  {data.detailsState === "unreadable"
+                    ? "بيانات العميلة متخزنة بس مش قادرين نفكها بالمفتاح الحالي (ORDER_DATA_KEY اتغير). تلاقيها في رسالة تيليجرام برقم الطلب."
+                    : !data.vaultConfigured
+                      ? "بيانات العميلة مش بتتخزن لسه لأن ORDER_DATA_KEY مش متضاف على Vercel. تلاقيها في رسالة تيليجرام برقم الطلب."
+                      : "الأوردر ده اتسجل قبل تفعيل حفظ بيانات العميلة. تلاقيها في رسالة تيليجرام برقم الطلب."}
+                </p>
+              )}
+            </section>
+
+            <section className="admin-detail">
+              <h3>المنتجات · {data.order.offerName}</h3>
+              <div className="admin-table-wrap">
+                <table className="admin-table compact">
+                  <thead><tr><th>المنتج</th><th>المقاس</th><th>الكمية</th><th>سعر القطعة</th><th>الإجمالي</th></tr></thead>
+                  <tbody>
+                    {(details?.products ?? data.order.products.map((product) => ({ ...product, name: productName(product.modelId), fit: "", unitPrice: null, link: null }))).map((product, index) => {
+                      const image = findProduct(product.modelId)?.image;
+                      return (
+                        <tr key={`${product.modelId}-${index}`}>
+                          <td>
+                            {image ? (
+                              <a className="admin-product" href={product.link ?? image} target="_blank" rel="noreferrer">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- tiny admin thumbnail */}
+                                <img src={image} alt="" width={34} height={34} loading="lazy" />
+                                <span>{product.name}</span>
+                                <ExternalLink size={12} aria-hidden="true" />
+                              </a>
+                            ) : product.name}
+                          </td>
+                          <td className="wrap">{product.fit || "—"}</td>
+                          <td>{product.quantity}</td>
+                          <td>{product.unitPrice === null ? "ضمن العرض" : formatEGP(product.unitPrice)}</td>
+                          <td>{product.unitPrice === null ? "—" : formatEGP(product.unitPrice * product.quantity)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <dl className="admin-totals">
+                {details && details.offerPrice > 0 && <div><dt>سعر العرض</dt><dd>{formatEGP(details.offerPrice)}</dd></div>}
+                {details && details.itemsTotal > 0 && <div><dt>القطع المنفردة</dt><dd>{formatEGP(details.itemsTotal)}</dd></div>}
+                <div><dt>المجموع</dt><dd>{formatEGP(data.order.subtotal)}</dd></div>
+                <div><dt>الشحن</dt><dd>{data.order.shippingCost === null ? "لسه هيتأكد" : formatEGP(data.order.shippingCost)}</dd></div>
+                <div className="grand"><dt>الإجمالي</dt><dd>{data.order.total === null ? `${formatEGP(data.order.subtotal)} + الشحن` : formatEGP(data.order.total)}</dd></div>
+              </dl>
+            </section>
+
+            <section className="admin-detail">
+              <h3>المصدر</h3>
+              <dl className="admin-dl">
+                <div><dt>المصدر</dt><dd><span className="dot" style={{ background: SOURCE_COLORS[data.order.source] }} />{data.order.source} · {data.order.sourceType}</dd></div>
+                <div><dt>الحملة</dt><dd>{data.order.campaign || "—"}</dd></div>
+                <div><dt>Ad Content</dt><dd>{data.order.adContent || "—"}</dd></div>
+                <div><dt>Landing Page</dt><dd dir="ltr">{data.order.landingPage || "—"}</dd></div>
+              </dl>
+            </section>
+
+            <section className="admin-detail">
+              <h3>رحلة العميلة</h3>
+              <JourneyTimeline entries={data.journey} />
+            </section>
+          </div>
+        )}
+
+        {error && <p className="admin-error" role="alert">{error}</p>}
+        <footer className="admin-dialog-actions actions">
+          <StatusActions orderId={orderId} value={value} status={status} busy={busy || !data} onChange={onChange} />
+        </footer>
+      </div>
+    </dialog>
+  );
+}
+
+function journeyText(entry: JourneyEntry) {
+  switch (entry.e) {
+    case "visit": return `دخلت الموقع من ${entry.s}${entry.c ? ` · حملة ${entry.c}` : ""}${entry.l ? ` · ${entry.l}` : ""}`;
+    case "view": return `فتحت ${productName(entry.p)}`;
+    case "add": return `أضافت ${productName(entry.p)} للسلة${entry.q > 1 ? ` × ${entry.q}` : ""}`;
+    case "checkout": return "فتحت صفحة الطلب";
+    case "order": return `بعتت الطلب ${entry.o} · ${formatEGP(entry.v)}`;
+  }
+}
+
+function JourneyTimeline({ entries }: { entries: JourneyEntry[] }) {
+  if (entries.length <= 1) {
+    return <p className="admin-muted small">مفيش خطوات متسجلة قبل الطلب (أوردر قديم، أو المتصفح مانع التتبع).</p>;
+  }
+  return (
+    <ol className="admin-journey">
+      {entries.map((entry, index) => (
+        <li key={`${entry.at}-${index}`} className={`step-${entry.e}`}>
+          <time dir="ltr">{cairoTime(entry.at)}</time>
+          <span>{journeyText(entry)}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// ── Shared bits ────────────────────────────────────────────────────────────
 
 function TypeTable({ rows }: { rows: Report["byType"] }) {
   return (

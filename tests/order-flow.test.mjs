@@ -86,26 +86,29 @@ test("catalog products keep unique internal ids and names", () => {
   assert.equal(catalog.every((product) => product.image.startsWith("/images/")), true);
 });
 
-test("Cairo shipping quote updates from the configured draft area fee", () => {
-  const nearest = findShippingRate("القاهرة", "المطرية");
-  const farthest = findShippingRate("القاهرة", "حلوان");
-
-  assert.equal(nearest.fee, 30);
-  assert.deepEqual(calculateOrderTotals(1100, nearest.fee), { subtotal: 1100, shipping: 30, total: 1130 });
-  assert.equal(farthest.fee, 85);
-  assert.deepEqual(calculateOrderTotals(1100, farthest.fee), { subtotal: 1100, shipping: 85, total: 1185 });
-  const noRate = findShippingRate("القاهرة", "منطقة أخرى بالقاهرة (السعر غير محدد)");
-  assert.equal(noRate.fee, null);
-  assert.equal(findShippingRate("القاهرة", "منطقة غير مدرجة"), undefined);
-  assert.equal(shippingRates.every((rate) => rate.fee === null || (rate.fee >= 30 && rate.fee <= 85)), true);
-
-  const originalFee = nearest.fee;
-  nearest.fee = 37;
-  assert.equal(findShippingRate("القاهرة", "المطرية").fee, 37);
-  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("القاهرة", "المطرية").fee), { subtotal: 1100, shipping: 37, total: 1137 });
-  nearest.fee = originalFee;
-  assert.deepEqual(calculateOrderTotals(1100, noRate.fee), { subtotal: 1100, shipping: null, total: null });
-
+test("shipping fee comes from the governorate price table", async () => {
+  const { governorateShippingFee } = await import("../lib/shipping-rates.ts");
+  const expected = {
+    "القاهرة": 80, "الجيزة": 80,
+    "الإسكندرية": 90,
+    "القليوبية": 100, "الشرقية": 100, "الدقهلية": 100, "الغربية": 100, "المنوفية": 100, "البحيرة": 100, "كفر الشيخ": 100, "دمياط": 100,
+    "بورسعيد": 100, "الإسماعيلية": 100, "السويس": 100,
+    "الفيوم": 110, "المنيا": 110, "أسيوط": 110,
+    "سوهاج": 120, "قنا": 120, "الأقصر": 120, "أسوان": 120,
+  };
+  for (const [governorate, fee] of Object.entries(expected)) {
+    assert.equal(findShippingRate(governorate, "أي مدينة").fee, fee, governorate);
+    assert.equal(governorateShippingFee(governorate), fee, governorate);
+  }
+  // Not priced yet: the order still goes through and shipping is confirmed later.
+  for (const governorate of ["بني سويف", "البحر الأحمر", "الوادي الجديد", "مطروح", "شمال سيناء", "جنوب سيناء"]) {
+    assert.equal(governorateShippingFee(governorate), null, governorate);
+  }
+  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("القاهرة", "المطرية").fee), { subtotal: 1100, shipping: 80, total: 1180 });
+  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("أسوان", "إدفو").fee), { subtotal: 1100, shipping: 120, total: 1220 });
+  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("مطروح", "مرسى مطروح").fee), { subtotal: 1100, shipping: null, total: null });
+  assert.equal(findShippingRate("محافظة وهمية", "x"), undefined);
+  assert.equal(shippingRates.every((rate) => rate.fee === null || [80, 90, 100, 110, 120].includes(rate.fee)), true);
 });
 
 test("WhatsApp text names pajama styles without technical ids or false size selections", () => {
@@ -195,22 +198,20 @@ test("WhatsApp text lists single pieces with quantity and line totals next to th
   assert.match(message, /730 جنيه/);
 });
 
-test("shipping covers every governorate: Cairo by area, the rest by free-text city", async () => {
-  const { isShippingGovernorate, isValidShippingArea, shippingAreasFor, shippingGovernorates } = await import("../lib/shipping-rates.ts");
+test("shipping covers every governorate with a free-text city", async () => {
+  const { isShippingGovernorate, isValidShippingArea, shippingGovernorates } = await import("../lib/shipping-rates.ts");
 
   assert.equal(shippingGovernorates.length, 27);
   assert.equal(new Set(shippingGovernorates).size, 27);
   for (const governorate of shippingGovernorates) {
-    assert.ok(findShippingRate(governorate, "أي مدينة") || shippingAreasFor(governorate).length > 0, governorate);
+    assert.ok(findShippingRate(governorate, "أي مدينة"), governorate);
   }
 
   assert.equal(isShippingGovernorate("الإسكندرية"), true);
   assert.equal(isShippingGovernorate("محافظة وهمية"), false);
   assert.equal(isValidShippingArea("القاهرة", "المطرية"), true);
-  assert.equal(isValidShippingArea("القاهرة", "منطقة مكتوبة يدويًا"), false);
   assert.equal(isValidShippingArea("الدقهلية", "المنصورة"), true);
   assert.equal(isValidShippingArea("الدقهلية", " "), false);
-  assert.equal(findShippingRate("الدقهلية", "المنصورة").fee, null);
 });
 
 test("pajamas with their own weight limit show it; others keep the default note", async () => {
