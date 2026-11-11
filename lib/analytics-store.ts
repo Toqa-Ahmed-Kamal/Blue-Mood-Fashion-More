@@ -27,6 +27,7 @@ import {
   FUNNEL_STEPS,
   ORDER_STATUSES,
   buildReport,
+  isSaleStatus,
   orderValue,
   type AnalyticsOrder,
   type DayVisits,
@@ -373,14 +374,15 @@ export async function setOrderStatus(orderId: string, status: OrderStatus, confi
   const order = JSON.parse(raw) as AnalyticsOrder;
   // The factory cost of each piece is kept from the first confirmation on, so later price changes
   // never change the profit of an order that was already confirmed.
-  const costSnapshot = order.costSnapshot ?? (status === "confirmed"
+  const costSnapshot = order.costSnapshot ?? (isSaleStatus(status)
     ? snapshotCosts(order.products.map((product) => product.modelId), await productCostsFor(order.products.map((product) => product.modelId)))
     : undefined);
   const updated: AnalyticsOrder = {
     ...order,
     status,
     statusAt: new Date().toISOString(),
-    confirmedValue: status === "confirmed" ? confirmedValue : null,
+    // Delivered keeps the amount entered at confirmation (unless a new one is given).
+    confirmedValue: status === "confirmed" ? confirmedValue : status === "delivered" ? confirmedValue ?? order.confirmedValue : null,
     ...(costSnapshot ? { costSnapshot } : {}),
   };
   const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");

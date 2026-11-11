@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parseDepositAmount } from "../lib/analytics-report.ts";
 import { resolveCart, addCartItem, emptyCart } from "../lib/cart.ts";
-import { categoryUrl, orderMessage, unavailableMessage, whatsappChatUrl, whatsappNumber } from "../lib/customer-whatsapp.ts";
+import { categoryUrl, orderMessage, retargetWhatsApp, unavailableMessage, whatsappChatUrl, whatsappNumber } from "../lib/customer-whatsapp.ts";
 import { OFFER_PIECE_PRICE, pricingRows } from "../lib/finance.ts";
 import { classifyChannel, touchFromVisit } from "../lib/attribution.ts";
 import { trafficSourceOf } from "../lib/traffic-source.ts";
@@ -18,7 +18,14 @@ test("WhatsApp numbers: Egyptian mobiles in any common form; anything else refus
   assert.equal(whatsappNumber("0225551234"), null, "landline");
   assert.equal(whatsappNumber("123"), null);
   assert.equal(whatsappChatUrl("123", "x"), null);
-  assert.match(whatsappChatUrl("01112345678", "أهلاً"), /^https:\/\/wa\.me\/201112345678\?text=%D8%A3/);
+  // No wa.me: its extra redirect page can hang. Direct chat links instead.
+  assert.match(whatsappChatUrl("01112345678", "أهلاً"), /^https:\/\/api\.whatsapp\.com\/send\?phone=201112345678&text=%D8%A3/);
+  assert.match(whatsappChatUrl("01112345678", "أهلاً", "web"), /^https:\/\/web\.whatsapp\.com\/send\?phone=201112345678&text=/);
+  assert.match(whatsappChatUrl("01112345678", "أهلاً", "app"), /^whatsapp:\/\/send\?phone=201112345678&text=/);
+  const universal = whatsappChatUrl("01112345678", "سطر\nتاني & رابط https://x.test/?a=1#b");
+  assert.equal(retargetWhatsApp(universal, "web"), universal.replace("https://api.whatsapp.com/send?", "https://web.whatsapp.com/send?"), "same phone and message, other target");
+  assert.equal(decodeURIComponent(retargetWhatsApp(universal, "app").split("text=")[1]), "سطر\nتاني & رابط https://x.test/?a=1#b", "message kept intact");
+  assert.equal(retargetWhatsApp("https://example.com/x", "web"), "https://example.com/x", "only WhatsApp chat links are changed");
 });
 
 test("'not available' message links to the same category with its own UTM (not the ads one)", () => {
@@ -76,4 +83,24 @@ test("pricing calculator: expense share per piece, full cost, current profit and
   assert.equal(rows[1].inOfferOnly, true);
   assert.equal(rows[1].suggestedPrice, 260, "(150 + 50) × 1.3 = 260");
   assert.equal(pricingRows(products, { expenses: 1000, pieces: 0, profitPercent: 30 })[0].expenseShare, 0, "no pieces → no share (no division by zero)");
+});
+
+test("order confirmation message: delivery fee, two days, InstaPay transfer to confirm, refund if cancelled", async () => {
+  const { confirmationMessage, weightMessage, INSTAPAY_NUMBER } = await import("../lib/customer-whatsapp.ts");
+  const text = confirmationMessage({ name: "منى أحمد", orderId: "BM-AAAA", shippingCost: 80 });
+  assert.equal(text, [
+    "أهلاً بيكي منى 🌸",
+    "طلبتي أوردر من Blue Mood (رقم BM-AAAA)",
+    "وبنوضحلك سعر التوصيل 80 ج",
+    "أوردرك هيوصل خلال يومين",
+    "لتأكيد طلبك هستأذنك تحويل تمن التوصيل على رقم 01223155437 إنستا باي لتأكيد جدية الحجز، وابعتيلنا سكرين بالتحويل",
+    "وفي حالة إلغاء الطلب بنرجّع لحضرتك تمن التوصيل 🤍",
+  ].join("\n"));
+  assert.equal(INSTAPAY_NUMBER, "01223155437");
+  assert.ok(confirmationMessage({ name: "", orderId: "BM-B", shippingCost: null }).includes("سعر التوصيل هنأكده معاكي حسب منطقتك"), "no invented fee");
+
+  const weight = weightMessage({ name: "منى", orderId: "BM-AAAA", productName: "بيجاما بطبعة دب", productId: "bm-winter-pajama-001" });
+  assert.ok(weight.includes("بيجاما بطبعة دب هتبقى مظبوطة عليكي (One Size · لحد 70 كيلو)"));
+  assert.ok(weight.endsWith("ممكن تقوليلنا وزنك كام؟ 🤍"));
+  assert.ok(weightMessage({ name: "منى", orderId: "BM-AAAA" }).includes("حابين نتأكد من المقاس"));
 });

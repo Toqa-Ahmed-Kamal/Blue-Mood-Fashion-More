@@ -811,3 +811,16 @@ test("deposit and sold-out flags are stored and read back without touching anyth
     setSoldOut([]);
   }
 });
+
+test("delivered: confirming saves the cost; delivering keeps the collected amount and the cost", async () => {
+  store.clear();
+  await analytics.saveOrder(analytics.toAnalyticsOrder(orderRecord, null));
+  await analytics.setOrderStatus(orderRecord.orderId, "confirmed", 650);
+  const delivered = await analytics.setOrderStatus(orderRecord.orderId, "delivered", null);
+  assert.equal(delivered.status, "delivered");
+  assert.equal(delivered.confirmedValue, 650, "collected amount kept");
+  assert.ok(delivered.costSnapshot, "cost kept");
+  const report = await analytics.loadReport([analytics.cairoDay(new Date(orderRecord.createdAt))]);
+  assert.equal(report.totals.confirmed, 1, "a delivered order counts as a confirmed sale");
+  assert.equal(report.totals.confirmedValue, 650);
+});

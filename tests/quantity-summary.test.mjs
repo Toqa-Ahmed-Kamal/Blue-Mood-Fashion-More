@@ -51,8 +51,8 @@ test("site + old orders are merged; an order in both counts once (site status wi
   });
   const pajama = summary.products.find((row) => row.productId === "bm-winter-pajama-008");
   // pending: 2 (A1) + 1 (A3) + 3 (B1) = 6; confirmed: 1 (A2, site copy) + 1 (B2) = 2; cancelled: 5 (A4) — the cancelled Telegram copy of A2 is ignored.
-  assert.deepEqual(pajama.pieces, { submitted: 6, confirmed: 2, cancelled: 5, returned: 0 });
-  assert.deepEqual(pajama.orders, { submitted: 3, confirmed: 2, cancelled: 1, returned: 0 });
+  assert.deepEqual(pajama.pieces, { submitted: 6, confirmed: 2, delivered: 0, cancelled: 5, returned: 0 });
+  assert.deepEqual(pajama.orders, { submitted: 3, confirmed: 2, delivered: 0, cancelled: 1, returned: 0 });
   assert.equal(active(pajama.pieces), 8, "cancelled never counts as pieces to make");
   assert.equal(pajama.image, findProduct("bm-winter-pajama-008").image);
   assert.equal(pajama.name, findProduct("bm-winter-pajama-008").name);
@@ -63,11 +63,11 @@ test("sizes: a catalog pajama is One Size with its product weight limit (one lin
   const sizes = Object.fromEntries(pajama.sizes.map((size) => [size.size, size.pieces]));
   // Orders recorded "85–90" (old weight note) or no note at all: all counted under the product's corrected 70 kg.
   assert.deepEqual(sizes, {
-    "One Size · لحد 70 كيلو": { submitted: 6, confirmed: 1, cancelled: 5, returned: 0 },
-    "One Size · لحد 70 كيلو · وردي": { submitted: 0, confirmed: 1, cancelled: 0, returned: 0 },
+    "One Size · لحد 70 كيلو": { submitted: 6, confirmed: 1, delivered: 0, cancelled: 5, returned: 0 },
+    "One Size · لحد 70 كيلو · وردي": { submitted: 0, confirmed: 1, delivered: 0, cancelled: 0, returned: 0 },
   });
   const abaya = buildQuantitySummary({ live, old }).products.find((row) => row.productId === "bm-abaya-001");
-  assert.deepEqual(abaya.sizes, [{ size: NO_SIZE, pieces: { submitted: 2, confirmed: 0, cancelled: 0, returned: 0 } }]);
+  assert.deepEqual(abaya.sizes, [{ size: NO_SIZE, pieces: { submitted: 2, confirmed: 0, delivered: 0, cancelled: 0, returned: 0 } }]);
   const gone = buildQuantitySummary({ live: [{ order: siteOrder("BM-AAAAAAAAAAAAAAAAAAA9", "submitted", [{ modelId: "bm-retired-pajama", category: "winter-pajamas", quantity: 1 }]), fits: [null] }], old: [] });
   assert.equal(gone.products[0].sizes[0].size, SIZE_NOT_RECORDED, "no size invented for a pajama outside the catalog");
   assert.equal(shortSize(PAJAMA_90), "One Size · لحد 85–90 كيلو");
@@ -81,7 +81,7 @@ test("pajama 008: 10 pieces recorded with 85–90 and 70 notes count as 10 · On
   ];
   const row = buildQuantitySummary({ live: [], old: orders }).products[0];
   assert.equal(active(row.pieces), 10);
-  assert.deepEqual(row.sizes, [{ size: "One Size · لحد 70 كيلو", pieces: { submitted: 9, confirmed: 1, cancelled: 0, returned: 0 } }]);
+  assert.deepEqual(row.sizes, [{ size: "One Size · لحد 70 كيلو", pieces: { submitted: 9, confirmed: 1, delivered: 0, cancelled: 0, returned: 0 } }]);
   assert.equal(findProduct("bm-winter-pajama-008").maxWeightKg, 70, "product data says 70 kg");
   const [factoryRow] = aggregateQuantities(orders);
   assert.deepEqual([factoryRow.size, factoryRow.quantity], ["One Size · لحد 70 كيلو", 10], "Old Orders factory table agrees");
@@ -106,14 +106,14 @@ test("archived old orders are left out unless asked; a status change moves the p
 
   const cancelledNow = live.map((item) => (item.order.orderId === "BM-AAAAAAAAAAAAAAAAAAA1" ? { ...item, order: { ...item.order, status: "cancelled" } } : item));
   const pajama = buildQuantitySummary({ live: cancelledNow, old }).products.find((row) => row.productId === "bm-winter-pajama-008");
-  assert.deepEqual(pajama.pieces, { submitted: 4, confirmed: 2, cancelled: 7, returned: 0 });
+  assert.deepEqual(pajama.pieces, { submitted: 4, confirmed: 2, delivered: 0, cancelled: 7, returned: 0 });
 });
 
 test("totals add up and products are sorted by pieces to make", () => {
   const summary = buildQuantitySummary({ live, old });
   const sumOf = (status) => summary.products.reduce((total, row) => total + row.pieces[status], 0);
-  assert.deepEqual(summary.totals.pieces, { submitted: sumOf("submitted"), confirmed: sumOf("confirmed"), cancelled: sumOf("cancelled"), returned: sumOf("returned") });
-  assert.deepEqual(summary.totals.orders, { submitted: 5, confirmed: 2, cancelled: 1, returned: 0 });
+  assert.deepEqual(summary.totals.pieces, { submitted: sumOf("submitted"), confirmed: sumOf("confirmed"), delivered: sumOf("delivered"), cancelled: sumOf("cancelled"), returned: sumOf("returned") });
+  assert.deepEqual(summary.totals.orders, { submitted: 5, confirmed: 2, delivered: 0, cancelled: 1, returned: 0 });
   const actives = summary.products.map((row) => active(row.pieces));
   assert.deepEqual(actives, actives.toSorted((a, b) => b - a));
   assert.deepEqual(buildQuantitySummary({ live: [], old: [] }).products, []);
@@ -140,8 +140,8 @@ test("both sources become the same line format before counting; pieces are split
     "same product → identical id, name, category, size and photo from either source",
   );
   const pajama = buildQuantitySummary({ live, old }).products.find((row) => row.productId === "bm-winter-pajama-008");
-  assert.deepEqual(pajama.bySource.site, { submitted: 3, confirmed: 1, cancelled: 5, returned: 0 });
-  assert.deepEqual(pajama.bySource.telegram, { submitted: 3, confirmed: 1, cancelled: 0, returned: 0 });
+  assert.deepEqual(pajama.bySource.site, { submitted: 3, confirmed: 1, delivered: 0, cancelled: 5, returned: 0 });
+  assert.deepEqual(pajama.bySource.telegram, { submitted: 3, confirmed: 1, delivered: 0, cancelled: 0, returned: 0 });
   const totals = buildQuantitySummary({ live, old }).totals;
   assert.equal(active(totals.bySource.site) + active(totals.bySource.telegram), active(totals.pieces));
 });

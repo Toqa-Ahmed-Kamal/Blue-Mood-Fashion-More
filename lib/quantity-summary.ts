@@ -26,8 +26,8 @@ export const SIZE_NOT_RECORDED = "المقاس مش متسجل";
 export type LiveOrderForSummary = { order: AnalyticsOrder; fits: (string | null)[] };
 
 type Counts = Record<OrderStatus, number>;
-const zero = (): Counts => ({ submitted: 0, confirmed: 0, cancelled: 0, returned: 0 });
-const STATUSES: OrderStatus[] = ["submitted", "confirmed", "cancelled", "returned"];
+const zero = (): Counts => ({ submitted: 0, confirmed: 0, delivered: 0, cancelled: 0, returned: 0 });
+const STATUSES: OrderStatus[] = ["submitted", "confirmed", "delivered", "cancelled", "returned"];
 
 export type OrderSource = "site" | "telegram";
 
@@ -145,7 +145,7 @@ export function buildQuantitySummary(input: { live: LiveOrderForSummary[]; old: 
 
   type Row = ProductSummary & { orderIds: Record<OrderStatus, Set<string>>; sizeMap: Map<string, Counts> };
   const products = new Map<string, Row>();
-  const orderIds: Record<OrderStatus, Set<string>> = { submitted: new Set(), confirmed: new Set(), cancelled: new Set(), returned: new Set() };
+  const orderIds: Record<OrderStatus, Set<string>> = { submitted: new Set(), confirmed: new Set(), delivered: new Set(), cancelled: new Set(), returned: new Set() };
   const pieces = zero();
   const bySource: Record<OrderSource, Counts> = { site: zero(), telegram: zero() };
   for (const item of lines) {
@@ -162,7 +162,7 @@ export function buildQuantitySummary(input: { live: LiveOrderForSummary[]; old: 
         bySource: { site: zero(), telegram: zero() },
         orders: zero(),
         sizes: [],
-        orderIds: { submitted: new Set(), confirmed: new Set(), cancelled: new Set(), returned: new Set() },
+        orderIds: { submitted: new Set(), confirmed: new Set(), delivered: new Set(), cancelled: new Set(), returned: new Set() },
         sizeMap: new Map(),
       };
       products.set(key, row);
@@ -200,7 +200,7 @@ export function buildQuantitySummary(input: { live: LiveOrderForSummary[]; old: 
   };
 }
 
-/** Pieces to make: pending + confirmed (cancelled and returned never count). */
+/** Pieces ordered: pending + confirmed + delivered (cancelled and returned never count). */
 export function active(counts: Counts) {
-  return counts.submitted + counts.confirmed;
+  return counts.submitted + counts.confirmed + counts.delivered;
 }

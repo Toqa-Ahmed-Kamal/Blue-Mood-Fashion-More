@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, ChartColumn, CheckCircle2, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, ChartColumn, ClipboardList, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -19,13 +19,14 @@ import {
   YAxis,
 } from "recharts";
 
+import { AllOrdersTab } from "@/components/admin/all-orders";
 import { OldOrdersTab } from "@/components/admin/old-orders";
-import { WhatsAppLink } from "@/components/admin/whatsapp-link";
+import { WhatsAppLink, WhatsAppMenu, WhatsAppTargetPicker } from "@/components/admin/whatsapp-link";
 import { FinanceTab } from "@/components/admin/finance";
 import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
-import { orderMessage, unavailableMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
+import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import type { JourneyEntry } from "@/lib/journey";
 import type { OrderDetails } from "@/lib/order-vault";
@@ -48,7 +49,7 @@ const SOURCE_COLORS: Record<TrafficSource, string> = {
 
 const TYPE_COLORS: Record<SourceType, string> = { Paid: "#d6246e", Organic: "#1c9d50", Direct: "#1f3550", Unknown: "#b9b3ba" };
 const TYPE_LABELS: Record<SourceType, string> = { Paid: "Paid (إعلانات)", Organic: "Organic (مجاني)", Direct: "Direct (مباشر)", Unknown: "Unknown" };
-const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", cancelled: "اتلغى", returned: "مرتجع" };
+const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", delivered: "تم الاستلام", cancelled: "اتلغى", returned: "مرتجع" };
 
 const PRESETS = [
   { id: "7", label: "٧ أيام", days: 7 },
@@ -58,6 +59,7 @@ const PRESETS = [
 ] as const;
 
 const TABS = [
+  { id: "all", label: "كل الأوردرات", icon: ClipboardList },
   { id: "traffic", label: "الزيارات", icon: ChartColumn },
   { id: "journey", label: "رحلة العميلة والمنتجات", icon: Route },
   { id: "orders", label: "الأوردرات", icon: ShoppingBag },
@@ -88,7 +90,8 @@ export function AnalyticsDashboard() {
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<TabId>("traffic");
+  // Opens on "كل الأوردرات": the section used every day.
+  const [tab, setTab] = useState<TabId>("all");
   // Old Orders stays mounted once opened, so an import preview is not lost when switching tabs.
   const [oldOpened, setOldOpened] = useState(false);
   // Sections sidebar: open by default on wide screens, closed on phones; the choice is remembered.
@@ -226,6 +229,7 @@ export function AnalyticsDashboard() {
           </div>
         </div>
         <div className="admin-header-actions">
+          <WhatsAppTargetPicker />
           <button type="button" className="admin-icon-btn" onClick={() => void load(range.from, range.to)} disabled={loading} aria-label="تحديث">
             <RefreshCw size={17} className={loading ? "spin" : undefined} />
           </button>
@@ -249,6 +253,7 @@ export function AnalyticsDashboard() {
         <>
           <OverviewCards report={report} />
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+            {tab === "all" && <AllOrdersTab />}
             {tab === "traffic" && <TrafficTab report={report} />}
             {tab === "journey" && <JourneyTab report={report} />}
             {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} />}
@@ -706,13 +711,16 @@ function useOrderStatus(onOrderUpdated: OrderUpdate, onDepositUpdated?: DepositU
 function StatusActions({ orderId, value, status, busy, onChange }: { orderId: string; value: number; status: OrderStatus; busy: boolean; onChange: (id: string, value: number, next: OrderStatus) => void }) {
   return (
     <>
-      {status !== "confirmed" && (
+      {status !== "confirmed" && status !== "delivered" && (
         <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "confirmed")} title="بيع مؤكد"><CheckCircle2 size={16} /> تأكيد</button>
       )}
-      {status !== "cancelled" && status !== "returned" && (
+      {status === "confirmed" && (
+        <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "delivered")} title="العميلة استلمت" className="good"><PackageCheck size={16} /> تم الاستلام</button>
+      )}
+      {status !== "cancelled" && status !== "returned" && status !== "delivered" && (
         <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "cancelled")} title="إلغاء" className="danger"><XCircle size={16} /> إلغاء</button>
       )}
-      {status === "confirmed" && (
+      {(status === "confirmed" || status === "delivered") && (
         <button type="button" disabled={busy} onClick={() => onChange(orderId, value, "returned")} title="الأوردر رجع" className="danger"><Undo2 size={16} /> مرتجع</button>
       )}
       {status !== "submitted" && (
@@ -928,7 +936,11 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney, o
               <div><dt>الاسم</dt><dd>{details.customerName}</dd></div>
               <div><dt>الموبايل</dt><dd dir="ltr"><a href={`tel:${details.phone}`}>{details.phone}</a>{details.alternatePhone && <> · <a href={`tel:${details.alternatePhone}`}>{details.alternatePhone}</a></>}</dd></div>
               <div className="wide">
-                <WhatsAppLink href={chat(orderMessage({ name: details.customerName, orderId: row.orderId }))} label="كلّمي العميلة على واتساب" />
+                <WhatsAppMenu options={[
+                  { label: "✅ تأكيد الطلب والتوصيل (إنستا باي)", href: chat(confirmationMessage({ name: details.customerName, orderId: row.orderId, shippingCost: row.shippingCost })) },
+                  { label: "⚖️ سؤال عن الوزن", href: chat(weightMessage({ name: details.customerName, orderId: row.orderId })) },
+                  { label: "💬 رسالة عادية", href: chat(orderMessage({ name: details.customerName, orderId: row.orderId })) },
+                ]} />
               </div>
               <div><dt>المحافظة / المنطقة</dt><dd>{details.governorate} — {details.area}</dd></div>
               <div className="wide"><dt>العنوان</dt><dd>{details.address}</dd></div>
@@ -971,6 +983,14 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney, o
                       compact
                       href={chat(unavailableMessage({ name: details.customerName, orderId: row.orderId, productName: product.name, productId: product.modelId, origin, category: findProduct(product.modelId)?.category }))}
                       label={`${product.name} مش متوفر — ابعتي بدائل`}
+                    />
+                  )}
+                  {details && findProduct(product.modelId)?.category === "winter-pajamas" && (
+                    <WhatsAppLink
+                      compact
+                      text="وزنها؟"
+                      href={chat(weightMessage({ name: details.customerName, orderId: row.orderId, productName: product.name, productId: product.modelId }))}
+                      label={`اسألي عن وزنها علشان ${product.name}`}
                     />
                   )}
                 </li>

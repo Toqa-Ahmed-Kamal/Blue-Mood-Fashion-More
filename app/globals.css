@@ -1592,3 +1592,38 @@ select.admin-inline-input { width: 160px; }
 .admin-primary:not(:disabled):hover { transform: translateY(-1px); }
 .admin-sidebar { background: linear-gradient(180deg, #ffffff 0%, #fdf8f4 100%); }
 .admin-order { box-shadow: 0 8px 22px -20px rgba(31, 53, 80, .5); }
+
+/* ── Admin: WhatsApp message menu ── */
+.admin-wa-menu { position: relative; display: inline-block; }
+.admin-wa-menu > summary { list-style: none; cursor: pointer; }
+.admin-wa-menu > summary::-webkit-details-marker { display: none; }
+.admin-wa-options { position: absolute; z-index: 20; inset-inline-start: 0; top: calc(100% + 6px); display: grid; min-width: 250px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; }
+.admin-wa-options a { display: block; padding: 9px 12px; border-radius: 8px; color: var(--navy); text-decoration: none; font-size: .86rem; font-weight: 600; white-space: nowrap; }
+.admin-wa-options a:hover, .admin-wa-options a:focus-visible { background: #e2f5ea; color: #157a3e; }
+.admin-order-items li { grid-template-columns: 56px minmax(0, 1fr) auto auto auto auto; }
+@media (max-width: 760px) {
+  .admin-order-items li { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .admin-order-items li .admin-wa.compact { grid-column: auto; }
+  .admin-wa-options { inset-inline-start: auto; inset-inline-end: 0; min-width: 220px; }
+}
+
+/* ── Admin: delivered status + WhatsApp target ── */
+.admin-table .status.delivered, .admin-dialog .status.delivered, .admin-order .status.delivered { background: #d9f2e3; color: #0f6b35; }
+.admin-order.status-delivered { border-inline-start-color: #0f6b35; }
+.admin-order-actions button.good, .admin-table .actions button.good { color: #0f6b35; border-color: #b8e3c8; background: #ecf8f0; }
+.admin-wa-target { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--muted); }
+.admin-wa-target select { font: inherit; font-size: .78rem; color: var(--navy); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; min-height: 32px; }
+@media (max-width: 760px) { .admin-wa-target { display: none; } }
+
+/* ── Admin: all orders ── */
+.admin-order-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.admin-filter-chip { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: .86rem; font-weight: 700; color: var(--navy); background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+.admin-filter-chip span { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--bg); font-size: .76rem; }
+.admin-filter-chip.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.admin-filter-chip.active span { background: rgba(255, 255, 255, .2); color: #fff; }
+.admin-filter-chip.filter-deposit.active { background: #155e75; border-color: #155e75; }
+.admin-filter-chip.filter-delivered.active { background: #0f6b35; border-color: #0f6b35; }
+.admin-filter-chip.filter-cancelled.active, .admin-filter-chip.filter-returned.active { background: var(--danger); border-color: var(--danger); }
+.admin-source-badge { display: inline-block; font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 2px 9px; }
+.admin-source-badge.site { background: var(--brand-soft); color: var(--brand-dark); }
+.admin-source-badge.telegram { background: #e7f0fb; color: #1d5fa8; }

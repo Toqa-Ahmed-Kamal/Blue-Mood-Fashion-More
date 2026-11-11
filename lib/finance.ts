@@ -10,7 +10,7 @@
 //   its own expense, so nothing is deducted twice.
 // - Each order counts once: an imported Telegram order that is also a site order is the site order.
 // - Net profit = sales − products cost − expenses, all in EGP, for the chosen dates.
-import { confirmedValueOf, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
+import { confirmedValueOf, isSaleStatus, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
 import { oldOrderValue, type OldOrder } from "./old-orders.ts";
 import { catalog, landingPromotion } from "./site-data.ts";
 
@@ -186,7 +186,7 @@ export function buildFinanceReport(input: {
   let productsCost = 0;
   let returnedValue = 0;
   for (const order of orders) {
-    if (!inRange(order.day) || (order.status !== "confirmed" && order.status !== "returned")) continue;
+    if (!inRange(order.day) || (!isSaleStatus(order.status) && order.status !== "returned")) continue;
     const pieces = order.lines.reduce((sum, line) => sum + line.quantity, 0);
     if (order.status === "returned") {
       returnedValue += order.value;
@@ -231,7 +231,7 @@ export function buildFinanceReport(input: {
   const deducted = expenses.filter((expense) => !NOT_DEDUCTED_CATEGORIES.includes(expense.category));
   const expensesTotal = round(deducted.reduce((sum, expense) => sum + expense.amount, 0));
   const stockPurchases = round(expenses.filter((expense) => NOT_DEDUCTED_CATEGORIES.includes(expense.category)).reduce((sum, expense) => sum + expense.amount, 0));
-  const confirmed = rows.filter((row) => row.status === "confirmed");
+  const confirmed = rows.filter((row) => isSaleStatus(row.status));
   return {
     range: { from, to },
     totals: { sales: round(sales), productsCost: round(productsCost), expenses: expensesTotal, stockPurchases, netProfit: round(sales - productsCost - expensesTotal) },

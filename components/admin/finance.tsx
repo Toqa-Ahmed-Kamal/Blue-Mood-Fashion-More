@@ -436,7 +436,7 @@ function OrdersProfit({ report }: { report: FinanceReport }) {
                   <td dir="ltr" className="mono">{row.orderId}</td>
                   <td dir="ltr">{row.day}</td>
                   <td>{row.source === "site" ? "الموقع" : "تيليجرام"}</td>
-                  <td><span className={`status ${row.status}`}>{row.status === "returned" ? "مرتجع · مش محسوب" : "بيع مؤكد"}</span></td>
+                  <td><span className={`status ${row.status}`}>{row.status === "returned" ? "مرتجع · مش محسوب" : row.status === "delivered" ? "تم الاستلام" : "بيع مؤكد"}</span></td>
                   <td>{row.pieces}</td>
                   <td>{row.status === "returned" ? "—" : money(row.sales)}</td>
                   <td>
@@ -626,7 +626,7 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
 // ── Pricing calculator ────────────────────────────────────────────────────
 
 function PricingCalculator({ products, report }: { products: ProductRow[]; report: FinanceReport }) {
-  const soldPieces = report.orders.filter((row) => row.status === "confirmed").reduce((sum, row) => sum + row.pieces, 0);
+  const soldPieces = report.orders.filter((row) => row.status === "confirmed" || row.status === "delivered").reduce((sum, row) => sum + row.pieces, 0);
   const [expenses, setExpenses] = useState(String(report.totals.expenses || ""));
   const [pieces, setPieces] = useState(String(soldPieces || ""));
   const [percent, setPercent] = useState("30");

@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, BadgeCheck, CheckCircle2, Download, FileUp, Pencil, Plus, RotateCcw, Trash2, Undo2, X, XCircle } from "lucide-react";
+import { Archive, ArchiveRestore, BadgeCheck, CheckCircle2, PackageCheck, Download, FileUp, Pencil, Plus, RotateCcw, Trash2, Undo2, X, XCircle } from "lucide-react";
 
-import { WhatsAppLink } from "@/components/admin/whatsapp-link";
+import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
 import type { OrderStatus } from "@/lib/analytics-report";
-import { orderMessage, unavailableMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
+import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import {
   aggregateQuantities,
@@ -24,7 +24,7 @@ import { productImage } from "@/lib/quantity-summary";
 import { categoryInfo, findProduct } from "@/lib/site-data";
 import { buildXlsx, type XlsxCell } from "@/lib/xlsx";
 
-const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", cancelled: "اتلغى", returned: "مرتجع" };
+const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", delivered: "تم الاستلام", cancelled: "اتلغى", returned: "مرتجع" };
 const IMPORT_BATCH = 50;
 const CHECK_BATCH = 500;
 const PAGE_SIZE = 50;
@@ -436,6 +436,14 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
                                   href={whatsappChatUrl(order.phone, unavailableMessage({ name: order.customerName, orderId: order.orderId, productName: product.name, productId: product.modelId, origin: window.location.origin }))}
                                   label={`${product.name} مش متوفر — ابعتي بدائل`}
                                 />
+                                {findProduct(product.modelId)?.category === "winter-pajamas" && (
+                                  <WhatsAppLink
+                                    compact
+                                    text="وزنها؟"
+                                    href={whatsappChatUrl(order.phone, weightMessage({ name: order.customerName, orderId: order.orderId, productName: product.name, productId: product.modelId }))}
+                                    label={`اسألي عن وزنها علشان ${product.name}`}
+                                  />
+                                )}
                               </li>
                             ))}
                           </ul>
@@ -448,16 +456,21 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
                         </td>
                         <td className="actions wrap-actions">
                           <button type="button" disabled={busy} onClick={() => setEditing(order.orderId)}><Pencil size={14} /> تعديل</button>
-                          <WhatsAppLink href={whatsappChatUrl(order.phone, orderMessage({ name: order.customerName, orderId: order.orderId }))} label="واتساب" />
+                          <WhatsAppMenu options={[
+                            { label: "✅ تأكيد الطلب والتوصيل (إنستا باي)", href: whatsappChatUrl(order.phone, confirmationMessage({ name: order.customerName, orderId: order.orderId, shippingCost: order.shippingCost })) },
+                            { label: "⚖️ سؤال عن الوزن", href: whatsappChatUrl(order.phone, weightMessage({ name: order.customerName, orderId: order.orderId })) },
+                            { label: "💬 رسالة عادية", href: whatsappChatUrl(order.phone, orderMessage({ name: order.customerName, orderId: order.orderId })) },
+                          ]} />
                           <button type="button" disabled={busy} className={order.deposit ? "deposit-on" : undefined} onClick={() => {
                             const answer = window.prompt(`مبلغ الديبوزيت لتأكيد حجز ${order.orderId} (ج.م) — سيبيها فاضية لإلغاء الديبوزيت:`, order.deposit ? String(order.deposit.amount) : "");
                             if (answer === null) return;
                             const digits = answer.replace(/[^\d.]/g, "");
                             void patch(order, { deposit: digits ? Number(digits) : null });
                           }}><BadgeCheck size={14} /> {order.deposit ? "الديبوزيت" : "ديبوزيت"}</button>
-                          {order.status !== "confirmed" && <button type="button" disabled={busy} onClick={() => void patch(order, { status: "confirmed" })}><CheckCircle2 size={14} /> تأكيد</button>}
-                          {order.status !== "cancelled" && order.status !== "returned" && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "cancelled" })}><XCircle size={14} /> إلغاء</button>}
-                          {order.status === "confirmed" && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "returned" })}><Undo2 size={14} /> مرتجع</button>}
+                          {order.status === "confirmed" && <button type="button" disabled={busy} className="good" onClick={() => void patch(order, { status: "delivered" })}><PackageCheck size={14} /> تم الاستلام</button>}
+                          {order.status !== "confirmed" && order.status !== "delivered" && <button type="button" disabled={busy} onClick={() => void patch(order, { status: "confirmed" })}><CheckCircle2 size={14} /> تأكيد</button>}
+                          {order.status !== "cancelled" && order.status !== "returned" && order.status !== "delivered" && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "cancelled" })}><XCircle size={14} /> إلغاء</button>}
+                          {(order.status === "confirmed" || order.status === "delivered") && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "returned" })}><Undo2 size={14} /> مرتجع</button>}
                           {order.status !== "submitted" && <button type="button" disabled={busy} onClick={() => void patch(order, { status: "submitted" })} aria-label="رجوع لمستني تأكيد" title="رجوع لمستني تأكيد"><RotateCcw size={14} /></button>}
                           <button type="button" disabled={busy} onClick={() => void patch(order, { archived: !order.archived })}>
                             {order.archived ? <><ArchiveRestore size={14} /> استرجاع</> : <><Archive size={14} /> أرشفة</>}

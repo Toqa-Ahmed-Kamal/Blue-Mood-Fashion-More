@@ -3,8 +3,16 @@ import type { Touch } from "./attribution.ts";
 import { catalog, categoryInfo } from "./site-data.ts";
 import { SOURCE_TYPES, TRAFFIC_SOURCES, isTrafficSource, sourceTypeOf, type SourceType, type TrafficSource } from "./traffic-source.ts";
 
-/** "returned": a confirmed order that came back — not a sale, its pieces cost nothing to the store. */
-export const ORDER_STATUSES = ["submitted", "confirmed", "cancelled", "returned"] as const;
+/**
+ * "delivered": the customer received it (a sale, like "confirmed").
+ * "returned": a confirmed order that came back — not a sale, its pieces cost nothing to the store.
+ */
+export const ORDER_STATUSES = ["submitted", "confirmed", "delivered", "cancelled", "returned"] as const;
+
+/** Confirmed and delivered orders are sales. */
+export function isSaleStatus(status: string) {
+  return status === "confirmed" || status === "delivered";
+}
 
 /** Booking confirmed by a deposit the customer paid in advance (part of the order total, not extra). */
 export type Deposit = { amount: number; at: string };
@@ -92,7 +100,7 @@ function addOrder(metric: Metric, order: AnalyticsOrder) {
   // Every order that reached Telegram counts as submitted (including ones later cancelled).
   metric.submitted += 1;
   metric.submittedValue += orderValue(order);
-  if (order.status === "confirmed") {
+  if (isSaleStatus(order.status)) {
     metric.confirmed += 1;
     metric.confirmedValue += confirmedValueOf(order);
   }
@@ -215,7 +223,7 @@ export function buildReport(input: {
     const point = timeline.get(order.day);
     if (point) {
       point.submitted += 1;
-      if (order.status === "confirmed") point.confirmed += 1;
+      if (isSaleStatus(order.status)) point.confirmed += 1;
     }
   }
 
@@ -229,7 +237,7 @@ export function buildReport(input: {
       createdAt: order.createdAt,
       day: order.day,
       value: orderValue(order),
-      confirmedValue: order.status === "confirmed" ? confirmedValueOf(order) : null,
+      confirmedValue: isSaleStatus(order.status) ? confirmedValueOf(order) : null,
       status: order.status,
       statusAt: order.statusAt,
       governorate: order.governorate,

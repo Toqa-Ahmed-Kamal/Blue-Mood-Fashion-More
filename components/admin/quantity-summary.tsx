@@ -11,8 +11,8 @@ import { buildXlsx, type XlsxCell, type XlsxImage } from "@/lib/xlsx";
 
 const REFRESH_MS = 60_000;
 const VIEWS = [
-  { id: "active", label: "مستني تأكيد + مؤكد", statuses: ["submitted", "confirmed"] },
-  { id: "confirmed", label: "المؤكد بس", statuses: ["confirmed"] },
+  { id: "active", label: "مستني تأكيد + مؤكد", statuses: ["submitted", "confirmed", "delivered"] },
+  { id: "confirmed", label: "المؤكد بس", statuses: ["confirmed", "delivered"] },
   { id: "submitted", label: "المستني تأكيد بس", statuses: ["submitted"] },
 ] as const satisfies readonly { id: string; label: string; statuses: OrderStatus[] }[];
 type ViewId = (typeof VIEWS)[number]["id"];
@@ -89,7 +89,7 @@ export function QuantitySummaryTab() {
           product.category ? categoryInfo[product.category].singular : "",
           sum(product.pieces, statuses),
           statuses.includes("submitted") ? product.pieces.submitted : null,
-          statuses.includes("confirmed") ? product.pieces.confirmed : null,
+          statuses.includes("confirmed") ? product.pieces.confirmed + product.pieces.delivered : null,
           sum(product.orders, statuses),
           sizesOf(product, statuses).map((size) => `${size.size}: ${size.count}`).join("\n"),
         ]);
@@ -100,7 +100,7 @@ export function QuantitySummaryTab() {
       for (const product of products) {
         for (const size of product.sizes) {
           const count = sum(size.pieces, statuses);
-          if (count > 0) bySize.push([product.productId, product.name, size.size, count, statuses.includes("submitted") ? size.pieces.submitted : null, statuses.includes("confirmed") ? size.pieces.confirmed : null]);
+          if (count > 0) bySize.push([product.productId, product.name, size.size, count, statuses.includes("submitted") ? size.pieces.submitted : null, statuses.includes("confirmed") ? size.pieces.confirmed + size.pieces.delivered : null]);
         }
       }
       const file = buildXlsx([

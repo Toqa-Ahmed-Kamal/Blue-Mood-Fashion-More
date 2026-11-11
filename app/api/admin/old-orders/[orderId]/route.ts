@@ -1,5 +1,5 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
-import { parseDepositAmount } from "@/lib/analytics-report";
+import { isSaleStatus, parseDepositAmount } from "@/lib/analytics-report";
 import { isOrderStatus } from "@/lib/analytics-store";
 import { OLD_ORDER_ID_PATTERN, sanitizeOldOrder } from "@/lib/old-orders";
 import { VaultNotConfiguredError, deleteOldOrder, loadOldOrder, updateOldOrder } from "@/lib/old-orders-store";
@@ -76,7 +76,7 @@ export async function PATCH(request: Request, context: Context) {
     // the pieces themselves were edited (the old snapshot would no longer match the lines).
     const sameLines = JSON.stringify(next.products.map((product) => [product.modelId, product.quantity])) === JSON.stringify(current.products.map((product) => [product.modelId, product.quantity]));
     let costSnapshot = sameLines ? current.costSnapshot : undefined;
-    if (!costSnapshot && next.status === "confirmed") {
+    if (!costSnapshot && isSaleStatus(next.status)) {
       const ids = next.products.map((product) => product.modelId);
       costSnapshot = snapshotCosts(ids, await productCostsFor(ids), now);
     }
