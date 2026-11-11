@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ChartColumn, CheckCircle2, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, ChartColumn, CheckCircle2, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -20,10 +20,12 @@ import {
 } from "recharts";
 
 import { OldOrdersTab } from "@/components/admin/old-orders";
+import { WhatsAppLink } from "@/components/admin/whatsapp-link";
 import { FinanceTab } from "@/components/admin/finance";
 import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
+import { orderMessage, unavailableMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import type { JourneyEntry } from "@/lib/journey";
 import type { OrderDetails } from "@/lib/order-vault";
@@ -77,6 +79,7 @@ const productName = (id: string) => findProduct(id)?.name ?? id;
 
 type Report = AnalyticsReport;
 type OrderUpdate = (id: string, status: OrderStatus, value: number | null, at: string | null) => void;
+type DepositUpdate = (id: string, deposit: OrderRow["deposit"]) => void;
 
 export function AnalyticsDashboard() {
   const router = useRouter();
@@ -158,6 +161,10 @@ export function AnalyticsDashboard() {
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" }).catch(() => {});
     router.replace("/admin/login");
+  }
+
+  function applyDeposit(orderId: string, deposit: OrderRow["deposit"]) {
+    setReport((current) => current && { ...current, orders: current.orders.map((row) => (row.orderId === orderId ? { ...row, deposit } : row)) });
   }
 
   function applyOrderUpdate(orderId: string, status: OrderStatus, confirmedValue: number | null, statusAt: string | null) {
@@ -244,7 +251,7 @@ export function AnalyticsDashboard() {
           <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
             {tab === "traffic" && <TrafficTab report={report} />}
             {tab === "journey" && <JourneyTab report={report} />}
-            {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} />}
+            {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} />}
             {oldOpened && <div hidden={tab !== "old"}><OldOrdersTab /></div>}
             {tab === "quantities" && <QuantitySummaryTab />}
             {tab === "finance" && <FinanceTab />}
@@ -615,7 +622,7 @@ function ProductsTable({ report }: { report: Report }) {
 // ── 3. Orders ──────────────────────────────────────────────────────────────
 
 /** Confirm / cancel / reset an order (shared by the table and the details window). */
-function useOrderStatus(onOrderUpdated: OrderUpdate) {
+function useOrderStatus(onOrderUpdated: OrderUpdate, onDepositUpdated?: DepositUpdate) {
   const router = useRouter();
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
@@ -660,7 +667,40 @@ function useOrderStatus(onOrderUpdated: OrderUpdate) {
     }
   }
 
-  return { update, busyId, error };
+  /** Records the deposit that confirmed the booking (empty answer removes it). */
+  async function setDeposit(orderId: string, current: number | null) {
+    const answer = window.prompt(`مبلغ الديبوزيت اللي العميلة دفعته لتأكيد الحجز ${orderId} (ج.م) — سيبيها فاضية لإلغاء الديبوزيت:`, current === null ? "" : String(current));
+    if (answer === null) return false;
+    const digits = answer.replace(/[^\d.]/g, "");
+    const amount = digits ? Number(digits) : null;
+    if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
+      setError("اكتبي مبلغ صحيح أكبر من صفر، أو سيبيها فاضية.");
+      return false;
+    }
+    setBusyId(orderId);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/orders/${orderId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deposit: amount }) });
+      if (response.status === 401) {
+        router.replace("/admin/login");
+        return false;
+      }
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        setError(result?.error?.message ?? "مقدرناش نحفظ الديبوزيت.");
+        return false;
+      }
+      onDepositUpdated?.(orderId, result.order.deposit);
+      return true;
+    } catch {
+      setError("مفيش اتصال. جربي تاني.");
+      return false;
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  return { update, setDeposit, busyId, error };
 }
 
 function StatusActions({ orderId, value, status, busy, onChange }: { orderId: string; value: number; status: OrderStatus; busy: boolean; onChange: (id: string, value: number, next: OrderStatus) => void }) {
@@ -682,7 +722,7 @@ function StatusActions({ orderId, value, status, busy, onChange }: { orderId: st
   );
 }
 
-function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdated: OrderUpdate }) {
+function OrdersPanel({ report, onOrderUpdated, onDepositUpdated }: { report: Report; onOrderUpdated: OrderUpdate; onDepositUpdated: DepositUpdate }) {
   const [source, setSource] = useState("");
   const [type, setType] = useState("");
   const [campaign, setCampaign] = useState("");
@@ -690,7 +730,7 @@ function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdate
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
-  const { update, busyId, error } = useOrderStatus(onOrderUpdated);
+  const { update, setDeposit, busyId, error } = useOrderStatus(onOrderUpdated, onDepositUpdated);
 
   const campaigns = useMemo(() => [...new Set(report.orders.map((row) => row.campaign).filter(Boolean))].sort(), [report.orders]);
   const rows = report.orders.filter((row) =>
@@ -751,6 +791,7 @@ function OrdersPanel({ report, onOrderUpdated }: { report: Report; onOrderUpdate
                 busy={busyId === row.orderId}
                 onChange={(id, value, next) => void update(id, value, next)}
                 onJourney={() => setOpenId(row.orderId)}
+                onDeposit={() => void setDeposit(row.orderId, row.deposit?.amount ?? null)}
               />
             ))}
           </div>
@@ -852,7 +893,7 @@ function useOrdersDetails(orderIds: string[]) {
   return { byId, vaultConfigured, error };
 }
 
-function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }: {
+function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney, onDeposit }: {
   row: OrderRow;
   /** undefined = still loading, null = not stored / unreadable. */
   details: OrderDetails | null | undefined;
@@ -860,7 +901,10 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }:
   busy: boolean;
   onChange: (id: string, value: number, next: OrderStatus) => void;
   onJourney: () => void;
+  onDeposit: () => void;
 }) {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const chat = (text: string) => (details ? whatsappChatUrl(details.phone, text) : null);
   const products = details?.products ?? row.products.map((product) => ({ ...product, name: productName(product.modelId), fit: "", unitPrice: null as number | null, link: null as string | null }));
   return (
     <article className={`admin-order status-${row.status}`}>
@@ -869,6 +913,7 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }:
           <strong dir="ltr" className="mono">{row.orderId}</strong>
           <span className="admin-muted" dir="ltr">{cairoTime(row.createdAt)}</span>
           <span className={`status ${row.status}`}>{STATUS_LABELS[row.status]}</span>
+          {row.deposit && <span className="admin-deposit"><BadgeCheck size={14} aria-hidden="true" /> حجز مؤكد بديبوزيت {formatEGP(row.deposit.amount)}</span>}
         </div>
         <div className="admin-order-source">
           <span className="dot" style={{ background: SOURCE_COLORS[row.source] }} />{row.source}
@@ -882,6 +927,9 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }:
             <dl className="admin-dl">
               <div><dt>الاسم</dt><dd>{details.customerName}</dd></div>
               <div><dt>الموبايل</dt><dd dir="ltr"><a href={`tel:${details.phone}`}>{details.phone}</a>{details.alternatePhone && <> · <a href={`tel:${details.alternatePhone}`}>{details.alternatePhone}</a></>}</dd></div>
+              <div className="wide">
+                <WhatsAppLink href={chat(orderMessage({ name: details.customerName, orderId: row.orderId }))} label="كلّمي العميلة على واتساب" />
+              </div>
               <div><dt>المحافظة / المنطقة</dt><dd>{details.governorate} — {details.area}</dd></div>
               <div className="wide"><dt>العنوان</dt><dd>{details.address}</dd></div>
               {details.notes && <div className="wide"><dt>ملاحظات</dt><dd className="pre">{details.notes}</dd></div>}
@@ -918,6 +966,13 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }:
                   </div>
                   <span className="qty">× {product.quantity}</span>
                   <span className="price">{!details ? "" : product.unitPrice === null ? "ضمن العرض" : formatEGP(product.unitPrice * product.quantity)}</span>
+                  {details && (
+                    <WhatsAppLink
+                      compact
+                      href={chat(unavailableMessage({ name: details.customerName, orderId: row.orderId, productName: product.name, productId: product.modelId, origin, category: findProduct(product.modelId)?.category }))}
+                      label={`${product.name} مش متوفر — ابعتي بدائل`}
+                    />
+                  )}
                 </li>
               );
             })}
@@ -928,12 +983,15 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney }:
             <div><dt>الشحن</dt><dd>{row.shippingCost === null ? "لسه هيتأكد" : formatEGP(row.shippingCost)}</dd></div>
             <div className="grand"><dt>الإجمالي</dt><dd>{row.total === null ? `${formatEGP(row.subtotal)} + الشحن` : formatEGP(row.total)}</dd></div>
             {row.confirmedValue !== null && row.confirmedValue !== row.value && <div><dt>اتحصل فعلاً</dt><dd>{formatEGP(row.confirmedValue)}</dd></div>}
+            {row.deposit && <div><dt>ديبوزيت مدفوع</dt><dd>− {formatEGP(row.deposit.amount)}</dd></div>}
+            {row.deposit && row.total !== null && <div className="grand"><dt>الباقي عند الاستلام</dt><dd>{formatEGP(Math.max(0, row.total - row.deposit.amount))}</dd></div>}
           </dl>
         </section>
       </div>
 
       <footer className="admin-order-actions actions">
         <button type="button" onClick={onJourney}><Eye size={15} /> رحلة العميلة</button>
+        <button type="button" disabled={busy} onClick={onDeposit} className={row.deposit ? "deposit-on" : undefined}><BadgeCheck size={15} /> {row.deposit ? "تعديل الديبوزيت" : "تأكيد بديبوزيت"}</button>
         <StatusActions orderId={row.orderId} value={row.value} status={row.status} busy={busy} onChange={onChange} />
       </footer>
     </article>

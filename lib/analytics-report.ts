@@ -6,6 +6,16 @@ import { SOURCE_TYPES, TRAFFIC_SOURCES, isTrafficSource, sourceTypeOf, type Sour
 /** "returned": a confirmed order that came back — not a sale, its pieces cost nothing to the store. */
 export const ORDER_STATUSES = ["submitted", "confirmed", "cancelled", "returned"] as const;
 
+/** Booking confirmed by a deposit the customer paid in advance (part of the order total, not extra). */
+export type Deposit = { amount: number; at: string };
+
+/** Deposit amount from the admin: a number > 0 (EGP), or null to remove it. undefined = invalid. */
+export function parseDepositAmount(value: unknown): number | null | undefined {
+  if (value === null || value === "" || value === 0) return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 && amount <= 1_000_000 ? Math.round(amount * 100) / 100 : undefined;
+}
+
 /** Factory cost per product line, saved when the order is confirmed (same order as `products`). */
 export type CostSnapshot = { unitCosts: (number | null)[]; at: string };
 
@@ -54,6 +64,7 @@ export type AnalyticsOrder = {
   confirmedValue: number | null;
   /** Unit factory costs at confirmation time (Financial Management); absent before that. */
   costSnapshot?: CostSnapshot;
+  deposit?: Deposit;
 };
 
 /** Fields of one day's visit hash: all, s:<source>, t:<type>, c:<campaign>, a:<ad content>. */
@@ -116,6 +127,7 @@ export type OrderRow = {
   lastTouch: string;
   landingPage: string;
   hasFbclid: boolean;
+  deposit: Deposit | null;
 };
 
 /** Per-product views / adds from the daily `products:{day}` hashes, for every visible product plus any hidden one with data. */
@@ -235,6 +247,7 @@ export function buildReport(input: {
       lastTouch: sourceLabel(order.lastTouch),
       landingPage: order.landingPage,
       hasFbclid: Boolean(order.lastTouch?.fbclid || order.firstTouch?.fbclid),
+      deposit: order.deposit ?? null,
     }));
 
   return {

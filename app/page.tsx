@@ -6,9 +6,9 @@ import { loadCustomProductsForPage } from "@/lib/custom-products-store";
 export const revalidate = 60;
 
 export default async function Home() {
-  const products = await loadCustomProductsForPage();
+  const { products, soldOut } = await loadCustomProductsForPage();
   return (
-    <CatalogSync products={products}>
+    <CatalogSync products={products} soldOut={soldOut}>
       <BlueMoodHome />
     </CatalogSync>
   );

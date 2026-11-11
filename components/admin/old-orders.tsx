@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CheckCircle2, Download, FileUp, Pencil, Plus, RotateCcw, Trash2, Undo2, X, XCircle } from "lucide-react";
+import { Archive, ArchiveRestore, BadgeCheck, CheckCircle2, Download, FileUp, Pencil, Plus, RotateCcw, Trash2, Undo2, X, XCircle } from "lucide-react";
 
+import { WhatsAppLink } from "@/components/admin/whatsapp-link";
 import type { OrderStatus } from "@/lib/analytics-report";
+import { orderMessage, unavailableMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import {
   aggregateQuantities,
@@ -429,6 +431,11 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
                               <li key={`${product.modelId}-${index}`}>
                                 <ProductThumb modelId={product.modelId} image={product.image} name={product.name} />
                                 <span>{product.name}{product.quantity > 1 ? ` × ${product.quantity}` : ""}</span>
+                                <WhatsAppLink
+                                  compact
+                                  href={whatsappChatUrl(order.phone, unavailableMessage({ name: order.customerName, orderId: order.orderId, productName: product.name, productId: product.modelId, origin: window.location.origin }))}
+                                  label={`${product.name} مش متوفر — ابعتي بدائل`}
+                                />
                               </li>
                             ))}
                           </ul>
@@ -437,9 +444,17 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
                         <td>
                           <span className={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
                           {order.archived && <small> · مؤرشف</small>}
+                          {order.deposit && <span className="admin-deposit"><BadgeCheck size={13} aria-hidden="true" /> ديبوزيت {formatEGP(order.deposit.amount)}</span>}
                         </td>
                         <td className="actions wrap-actions">
                           <button type="button" disabled={busy} onClick={() => setEditing(order.orderId)}><Pencil size={14} /> تعديل</button>
+                          <WhatsAppLink href={whatsappChatUrl(order.phone, orderMessage({ name: order.customerName, orderId: order.orderId }))} label="واتساب" />
+                          <button type="button" disabled={busy} className={order.deposit ? "deposit-on" : undefined} onClick={() => {
+                            const answer = window.prompt(`مبلغ الديبوزيت لتأكيد حجز ${order.orderId} (ج.م) — سيبيها فاضية لإلغاء الديبوزيت:`, order.deposit ? String(order.deposit.amount) : "");
+                            if (answer === null) return;
+                            const digits = answer.replace(/[^\d.]/g, "");
+                            void patch(order, { deposit: digits ? Number(digits) : null });
+                          }}><BadgeCheck size={14} /> {order.deposit ? "الديبوزيت" : "ديبوزيت"}</button>
                           {order.status !== "confirmed" && <button type="button" disabled={busy} onClick={() => void patch(order, { status: "confirmed" })}><CheckCircle2 size={14} /> تأكيد</button>}
                           {order.status !== "cancelled" && order.status !== "returned" && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "cancelled" })}><XCircle size={14} /> إلغاء</button>}
                           {order.status === "confirmed" && <button type="button" disabled={busy} className="danger" onClick={() => void patch(order, { status: "returned" })}><Undo2 size={14} /> مرتجع</button>}

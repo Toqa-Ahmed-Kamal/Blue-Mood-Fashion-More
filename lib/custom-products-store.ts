@@ -3,13 +3,15 @@
 // Keys (prefix bm:{prod|preview|dev}:v1:)
 //   catalog:custom         HASH  productId → JSON CatalogProduct
 //   productimg:{imageId}   STR   JSON { type, data (base64) } — the product photo, served by /api/product-images
+//   catalog:soldout        SET   product IDs marked "نفدت الكمية" (built-in or added)
 import { parseCustomProduct } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
-import { setCustomProducts, type CatalogProduct } from "./site-data.ts";
+import { setCustomProducts, setSoldOut, type CatalogProduct } from "./site-data.ts";
 
 export const CUSTOM_PRODUCTS_TAG = "custom-products";
 const PRODUCTS = () => `${keyPrefix()}catalog:custom`;
 const IMAGE = (imageId: string) => `${keyPrefix()}productimg:${imageId}`;
+const SOLD_OUT = () => `${keyPrefix()}catalog:soldout`;
 const CACHE_MS = 30_000;
 
 function parseList(flat: unknown): CatalogProduct[] {
@@ -32,6 +34,18 @@ export async function loadCustomProducts(): Promise<CatalogProduct[]> {
   return parseList(flat);
 }
 
+export async function loadSoldOut(): Promise<string[]> {
+  const [members] = await redisPipeline([["SMEMBERS", SOLD_OUT()]], "read", 5000);
+  return Array.isArray(members) ? members.map(String).toSorted() : [];
+}
+
+/** Marks / unmarks a product as sold out, then reads the flag back. */
+export async function setProductSoldOut(productId: string, soldOut: boolean) {
+  const [, member] = await redisPipeline([[soldOut ? "SADD" : "SREM", SOLD_OUT(), productId], ["SISMEMBER", SOLD_OUT(), productId]], "write");
+  cached = null;
+  return Number(member) === 1;
+}
+
 let cached: { at: number; products: CatalogProduct[] } | null = null;
 
 /**
@@ -41,9 +55,10 @@ let cached: { at: number; products: CatalogProduct[] } | null = null;
 export async function ensureCustomProducts(force = false) {
   if (!force && cached && Date.now() - cached.at < CACHE_MS) return cached.products;
   try {
-    const products = await loadCustomProducts();
+    const [products, soldOut] = await Promise.all([loadCustomProducts(), loadSoldOut()]);
     cached = { at: Date.now(), products };
     setCustomProducts(products);
+    setSoldOut(soldOut);
     return products;
   } catch {
     return cached?.products ?? [];
@@ -54,22 +69,25 @@ export async function ensureCustomProducts(force = false) {
  * For store pages: read through Next's data cache (tag "custom-products", refreshed every minute and
  * immediately when the admin changes a product), so a page view costs no Redis command.
  */
-export async function loadCustomProductsForPage(): Promise<CatalogProduct[]> {
+export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[] }> {
   const url = process.env.KV_REST_API_URL?.trim().replace(/\/+$/, "");
   const token = (process.env.KV_REST_API_READ_ONLY_TOKEN ?? process.env.KV_REST_API_TOKEN)?.trim();
-  if (!url || !token) return [];
-  try {
-    const response = await fetch(`${url}/hgetall/${encodeURIComponent(PRODUCTS())}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      next: { revalidate: 60, tags: [CUSTOM_PRODUCTS_TAG] },
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!response.ok) return [];
-    const body = (await response.json()) as { result?: unknown };
-    return parseList(body.result);
-  } catch {
-    return [];
-  }
+  if (!url || !token) return { products: [], soldOut: [] };
+  const read = async (command: string) => {
+    try {
+      const response = await fetch(`${url}/${command}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        next: { revalidate: 60, tags: [CUSTOM_PRODUCTS_TAG] },
+        signal: AbortSignal.timeout(4000),
+      });
+      if (!response.ok) return null;
+      return ((await response.json()) as { result?: unknown }).result ?? null;
+    } catch {
+      return null;
+    }
+  };
+  const [products, soldOut] = await Promise.all([read(`hgetall/${encodeURIComponent(PRODUCTS())}`), read(`smembers/${encodeURIComponent(SOLD_OUT())}`)]);
+  return { products: parseList(products), soldOut: Array.isArray(soldOut) ? soldOut.map(String) : [] };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */

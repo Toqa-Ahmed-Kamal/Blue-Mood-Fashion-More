@@ -1,5 +1,6 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
-import { isOrderStatus, loadOrderDetails, setOrderStatus } from "@/lib/analytics-store";
+import { parseDepositAmount } from "@/lib/analytics-report";
+import { isOrderStatus, loadOrderDetails, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
 
@@ -37,6 +38,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
     body = await request.json();
   } catch {
     return json(400, { success: false, error: { code: "INVALID_JSON" } });
+  }
+  // Deposit only: { deposit: amount | null }.
+  if (body.deposit !== undefined && body.status === undefined) {
+    const amount = parseDepositAmount(body.deposit);
+    if (amount === undefined) return json(400, { success: false, error: { code: "INVALID_DEPOSIT", message: "مبلغ الديبوزيت لازم يبقى رقم أكبر من صفر." } });
+    try {
+      const order = await setOrderDeposit(orderId, amount);
+      if (!order) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
+      return json(200, { success: true, order: { orderId: order.orderId, deposit: order.deposit ?? null } });
+    } catch (error) {
+      console.error("[admin] order deposit update failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+      return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
+    }
   }
   if (!isOrderStatus(body.status)) return json(400, { success: false, error: { code: "INVALID_STATUS" } });
 

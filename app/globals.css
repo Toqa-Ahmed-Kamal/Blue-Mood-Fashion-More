@@ -1533,3 +1533,62 @@ select.admin-inline-input { width: 160px; }
   .admin-product-form { grid-template-columns: minmax(0, 1fr); }
   .admin-photo-pick { max-width: 220px; justify-self: center; width: 100%; }
 }
+
+/* ── Store: sold out ── */
+.product-card.sold-out .product-media img, .pick-card.sold-out .pick-media img { filter: grayscale(.7); opacity: .7; }
+.sold-out-badge { position: absolute; top: 10px; inset-inline-start: 10px; z-index: 2; background: var(--navy); color: #fff; font-size: .78rem; font-weight: 800; border-radius: 999px; padding: 4px 12px; box-shadow: var(--shadow-sm); }
+.sold-out-btn:disabled { opacity: 1; color: var(--muted); border-color: var(--line); background: var(--bg); cursor: not-allowed; }
+.pick-card.sold-out .pick-state { color: var(--danger); font-weight: 700; }
+.sold-out-notice { background: #fff3dc; color: #8a5a10; border-radius: var(--radius); padding: 10px 14px; margin: 0 0 12px; font-size: .9rem; line-height: 1.7; }
+
+/* ── Admin: WhatsApp + deposit ── */
+.admin-wa { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; font-weight: 700; color: #fff; background: var(--whatsapp); border-radius: 999px; padding: 6px 12px; text-decoration: none; white-space: nowrap; }
+.admin-wa:hover { filter: brightness(1.05); }
+.admin-wa.compact { color: #157a3e; background: #e2f5ea; padding: 3px 8px; font-size: .74rem; font-weight: 700; }
+.admin-dl .admin-wa { color: #fff; }
+.admin-deposit { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; font-weight: 700; color: #155e75; background: #dff3f8; border-radius: 999px; padding: 2px 9px; }
+.admin-order-actions button.deposit-on, .admin-table .actions button.deposit-on { color: #155e75; border-color: #9fd7e6; background: #effafc; }
+.admin-order-items li { grid-template-columns: 56px minmax(0, 1fr) auto auto auto; }
+.admin-mini-products li .admin-wa.compact { margin-inline-start: auto; }
+.small-inline { font-size: .76rem; }
+@media (max-width: 760px) {
+  .admin-order-items li { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .admin-order-items li .admin-wa.compact { grid-column: 2 / -1; justify-self: start; }
+}
+
+/* ── Admin: pricing, stock, locked prices ── */
+.admin-locked { display: inline-block; min-width: 90px; padding: 6px 2px; color: var(--navy); }
+.admin-locked.strong { font-weight: 800; }
+.admin-stock { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: .76rem; font-weight: 700; border-radius: 999px; padding: 4px 10px; cursor: pointer; border: 1px solid #b8e3c8; color: #157a3e; background: #ecf8f0; white-space: nowrap; }
+.admin-stock.out { border-color: #f1c2c8; color: var(--danger); background: #fbe9eb; }
+.admin-stock:disabled { opacity: .5; cursor: default; }
+.admin-calc-inputs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; align-items: end; margin-bottom: 4px; }
+.admin-calc-share { display: grid; gap: 2px; background: var(--brand-soft); border-radius: var(--radius); padding: 8px 12px; font-size: .78rem; color: var(--brand-dark); }
+.admin-calc-share strong { font-size: 1.25rem; color: var(--navy); }
+.admin-positive { color: #157a3e; font-weight: 700; }
+.admin-warn { color: #8a5a10; font-weight: 700; }
+.admin-suggested { color: var(--pink-dark); font-size: .95rem; }
+.admin-panel-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+@media (max-width: 760px) {
+  .admin-calc-inputs { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── Admin: visual polish ── */
+.admin { background: linear-gradient(180deg, #fbf6f1 0%, #f6eee8 100%); min-height: 100dvh; }
+.admin-header h1 { font-family: var(--font-display); letter-spacing: .01em; }
+.admin-panel { border-radius: 18px; border-color: #efe3da; box-shadow: 0 10px 30px -22px rgba(31, 53, 80, .35); }
+.admin-panel-head { padding-bottom: 10px; border-bottom: 1px solid #f2e8e1; margin-bottom: 14px; }
+.admin-panel-head h2 { position: relative; padding-inline-start: 12px; }
+.admin-panel-head h2::before { content: ""; position: absolute; inset-inline-start: 0; top: 15%; bottom: 15%; width: 4px; border-radius: 4px; background: linear-gradient(180deg, var(--pink), var(--brand)); }
+.admin-card { position: relative; overflow: hidden; border-radius: 16px; transition: transform .15s ease, box-shadow .15s ease; }
+.admin-card::before { content: ""; position: absolute; inset-inline: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--brand), var(--pink)); opacity: .55; }
+.admin-card.good::before { background: var(--whatsapp); opacity: .8; }
+.admin-card.bad::before { background: var(--danger); opacity: .8; }
+.admin-card:hover { transform: translateY(-1px); box-shadow: 0 12px 26px -18px rgba(31, 53, 80, .45); }
+.admin-table tbody tr:nth-child(even) td { background: #fdfaf7; }
+.admin-table tbody tr:hover td { background: #f7f1ec; }
+.admin-table th { text-transform: none; letter-spacing: 0; }
+.admin-primary { box-shadow: 0 8px 18px -12px rgba(31, 53, 80, .7); transition: transform .12s ease; }
+.admin-primary:not(:disabled):hover { transform: translateY(-1px); }
+.admin-sidebar { background: linear-gradient(180deg, #ffffff 0%, #fdf8f4 100%); }
+.admin-order { box-shadow: 0 8px 22px -20px rgba(31, 53, 80, .5); }

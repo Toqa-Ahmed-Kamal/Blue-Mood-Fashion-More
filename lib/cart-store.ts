@@ -60,6 +60,16 @@ export function updateCart(updater: (cart: Cart) => Cart) {
   emit();
 }
 
+/** The cart exactly as saved in this browser, before invalid pieces are dropped (to tell the customer what was removed). */
+export function readSavedCartRaw(): { offer?: { productIds?: unknown } | null; items?: { productId?: unknown }[] } | null {
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useCart() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

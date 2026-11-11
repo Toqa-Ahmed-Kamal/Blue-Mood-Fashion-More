@@ -387,6 +387,18 @@ export async function setOrderStatus(orderId: string, status: OrderStatus, confi
   return result === "OK" ? updated : null;
 }
 
+/** Records (or removes, with null) the deposit that confirmed a booking. Keeps everything else as is. */
+export async function setOrderDeposit(orderId: string, amount: number | null) {
+  const [raw] = await redisPipeline([["GET", key(`order:${orderId}`)]], "write");
+  if (typeof raw !== "string") return null;
+  const order = JSON.parse(raw) as AnalyticsOrder;
+  const { deposit: _previous, ...rest } = order;
+  void _previous;
+  const updated: AnalyticsOrder = amount === null ? rest : { ...rest, deposit: { amount, at: new Date().toISOString() } };
+  const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
+  return result === "OK" ? updated : null;
+}
+
 export function isOrderStatus(value: unknown): value is OrderStatus {
   return typeof value === "string" && (ORDER_STATUSES as readonly string[]).includes(value);
 }

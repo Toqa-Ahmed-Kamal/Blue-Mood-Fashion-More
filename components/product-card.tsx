@@ -12,7 +12,7 @@ import { formatEGP } from "@/lib/format";
 import { trackCartRemove, trackProductView } from "@/lib/journey-tracker";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
-import { categoryInfo, landingPromotion, offerCategories, priceOf, type CatalogProduct } from "@/lib/site-data";
+import { categoryInfo, isSoldOut, landingPromotion, offerCategories, priceOf, type CatalogProduct } from "@/lib/site-data";
 
 function offerLinkFor(product: CatalogProduct) {
   return product.category === "wearable-blankets"
@@ -24,6 +24,14 @@ function offerLinkFor(product: CatalogProduct) {
 export function ProductAction({ product }: { product: CatalogProduct }) {
   const cart = useCart();
   const price = priceOf(product);
+
+  if (isSoldOut(product.id)) {
+    return (
+      <button type="button" className="btn btn-outline btn-block sold-out-btn" disabled aria-disabled="true">
+        نفدت الكمية
+      </button>
+    );
+  }
 
   if (price === null) {
     return (
@@ -73,7 +81,7 @@ export function PriceTag({ product }: { product: CatalogProduct }) {
 
 /** Pieces that also fit the winter offer point to it. */
 export function OfferHint({ product }: { product: CatalogProduct }) {
-  if (!offerCategories.includes(product.category) || priceOf(product) === null) return null;
+  if (isSoldOut(product.id) || !offerCategories.includes(product.category) || priceOf(product) === null) return null;
   return (
     <Link href={offerLinkFor(product)} className="offer-hint">
       أو ضمن عرض ٤ قطع بـ {landingPromotion.price}
@@ -83,9 +91,10 @@ export function OfferHint({ product }: { product: CatalogProduct }) {
 
 export function ProductCard({ product, onQuickView }: { product: CatalogProduct; onQuickView: (product: CatalogProduct) => void }) {
   return (
-    <article className="product-card">
+    <article className={`product-card${isSoldOut(product.id) ? " sold-out" : ""}`}>
       <button type="button" className="product-media" onClick={() => onQuickView(product)} aria-label={`عرض صورة ${product.name} بالكامل`}>
         <Image src={product.image} alt={product.imageAlt} fill sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 25vw" />
+        {isSoldOut(product.id) && <span className="sold-out-badge">نفدت الكمية</span>}
         <span className="media-zoom" aria-hidden="true"><Expand size={16} /></span>
       </button>
       <div className="product-body">

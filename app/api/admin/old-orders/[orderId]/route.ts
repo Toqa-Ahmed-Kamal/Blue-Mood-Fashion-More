@@ -1,4 +1,5 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { parseDepositAmount } from "@/lib/analytics-report";
 import { isOrderStatus } from "@/lib/analytics-store";
 import { OLD_ORDER_ID_PATTERN, sanitizeOldOrder } from "@/lib/old-orders";
 import { VaultNotConfiguredError, deleteOldOrder, loadOldOrder, updateOldOrder } from "@/lib/old-orders-store";
@@ -60,6 +61,13 @@ export async function PATCH(request: Request, context: Context) {
       if (!isOrderStatus(body.status)) return json(400, { success: false, error: { code: "INVALID_STATUS" } });
       if (body.status !== next.status) next = { ...next, status: body.status, statusAt: now.toISOString() };
     }
+    // Deposit: kept through edits; changed only by { deposit: amount | null }.
+    let deposit = current.deposit;
+    if (body.deposit !== undefined) {
+      const amount = parseDepositAmount(body.deposit);
+      if (amount === undefined) return json(400, { success: false, error: { code: "INVALID_DEPOSIT", message: "مبلغ الديبوزيت لازم يبقى رقم أكبر من صفر." } });
+      deposit = amount === null ? undefined : { amount, at: now.toISOString() };
+    }
     if (body.archived !== undefined) {
       if (typeof body.archived !== "boolean") return json(400, { success: false, error: { code: "INVALID_ARCHIVED" } });
       next = { ...next, archived: body.archived };
@@ -72,9 +80,10 @@ export async function PATCH(request: Request, context: Context) {
       const ids = next.products.map((product) => product.modelId);
       costSnapshot = snapshotCosts(ids, await productCostsFor(ids), now);
     }
-    const { costSnapshot: _ignored, ...withoutSnapshot } = next;
+    const { costSnapshot: _ignored, deposit: _ignoredDeposit, ...withoutSnapshot } = next;
     void _ignored;
-    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), updatedAt: now.toISOString() });
+    void _ignoredDeposit;
+    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(deposit ? { deposit } : {}), updatedAt: now.toISOString() });
     return saved ? json(200, { success: true, order: saved }) : json(404, NOT_FOUND);
   } catch (error) {
     return storageError(error, "update");

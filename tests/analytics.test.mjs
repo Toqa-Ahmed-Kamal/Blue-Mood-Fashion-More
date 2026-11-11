@@ -49,6 +49,10 @@ function fakeRedis(command) {
     case "HSETNX": { const hash = get(args[0]) ?? {}; if (args[1] in hash) return 0; if (dropWrites) return 1; hash[args[1]] = args[2]; store.set(args[0], hash); return 1; }
     case "HLEN": return Object.keys(get(args[0]) ?? {}).length;
     case "HMGET": { const hash = get(args[0]) ?? {}; return args.slice(1).map((field) => hash[field] ?? null); }
+    case "SADD": { const set = get(args[0]) instanceof Set ? get(args[0]) : new Set(); const before = set.size; args.slice(1).forEach((v) => set.add(String(v))); store.set(args[0], set); return set.size - before; }
+    case "SREM": { const set = get(args[0]) instanceof Set ? get(args[0]) : new Set(); let removed = 0; args.slice(1).forEach((v) => { if (set.delete(String(v))) removed += 1; }); store.set(args[0], set); return removed; }
+    case "SISMEMBER": { const set = get(args[0]); return set instanceof Set && set.has(String(args[1])) ? 1 : 0; }
+    case "SMEMBERS": { const set = get(args[0]); return set instanceof Set ? [...set] : []; }
     case "HDEL": { const hash = get(args[0]) ?? {}; const had = args[1] in hash; delete hash[args[1]]; return had ? 1 : 0; }
     case "EXISTS": return store.has(args[0]) ? 1 : 0;
     case "PFADD": { const set = get(args[0]) ?? new Set(); const before = set.size; args.slice(1).forEach((v) => set.add(v)); store.set(args[0], set); return set.size > before ? 1 : 0; }
@@ -77,7 +81,7 @@ globalThis.fetch = async (url, options) => {
   const commands = JSON.parse(options.body);
   calls.push({ token, commands });
   // Like real Redis ACLs, PFCOUNT counts as a write command, so the read-only token is refused.
-  const isWrite = commands.some(([name]) => !["GET", "HGET", "HMGET", "HGETALL", "ZRANGE", "MGET", "LRANGE", "EXISTS"].includes(name.toUpperCase()));
+  const isWrite = commands.some(([name]) => !["GET", "HGET", "HMGET", "HGETALL", "ZRANGE", "MGET", "LRANGE", "EXISTS", "SMEMBERS", "SISMEMBER"].includes(name.toUpperCase()));
   if (token === READ_TOKEN && isWrite) return new Response(JSON.stringify({ error: "NOPERM" }), { status: 403 });
   return new Response(JSON.stringify(commands.map((command) => {
     const result = fakeRedis(command);
@@ -778,5 +782,32 @@ test("added products: saved with their photo, read back, loaded into the server 
     assert.equal(await productsStore.loadProductImage("img-missing1"), null);
   } finally {
     setCustomProducts([]);
+  }
+});
+
+test("deposit and sold-out flags are stored and read back without touching anything else", async () => {
+  store.clear();
+  const productsStore = await import("../lib/custom-products-store.ts");
+  const { isSoldOut, setSoldOut } = await import("../lib/site-data.ts");
+  try {
+    await analytics.saveOrder(analytics.toAnalyticsOrder(orderRecord, null));
+    const before = JSON.parse(store.get(`bm:dev:v1:order:${orderRecord.orderId}`));
+    const withDeposit = await analytics.setOrderDeposit(orderRecord.orderId, 150);
+    assert.equal(withDeposit.deposit.amount, 150);
+    assert.deepEqual({ ...withDeposit, deposit: undefined }, { ...before, deposit: undefined }, "nothing else changed");
+    const report = await analytics.loadReport([analytics.cairoDay(new Date(orderRecord.createdAt))]);
+    assert.equal(report.orders[0].deposit.amount, 150, "shown on the order row");
+    assert.equal((await analytics.setOrderDeposit(orderRecord.orderId, null)).deposit, undefined);
+    assert.equal(await analytics.setOrderDeposit("BM-99999999999999999999", 100), null);
+
+    assert.equal(await productsStore.setProductSoldOut("bm-robe-003", true), true);
+    assert.deepEqual(await productsStore.loadSoldOut(), ["bm-robe-003"]);
+    await productsStore.ensureCustomProducts(true);
+    assert.equal(isSoldOut("bm-robe-003"), true, "server catalog knows it");
+    assert.equal(await productsStore.setProductSoldOut("bm-robe-003", false), false);
+    await productsStore.ensureCustomProducts(true);
+    assert.equal(isSoldOut("bm-robe-003"), false);
+  } finally {
+    setSoldOut([]);
   }
 });

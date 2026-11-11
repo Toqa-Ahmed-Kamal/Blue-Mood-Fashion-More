@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImageOff, ImagePlus, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { Calculator, CircleSlash, ImageOff, ImagePlus, PackageCheck, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 
-import { EXPENSE_CATEGORIES, type Expense, type ExpenseCategory, type FinanceReport } from "@/lib/finance";
+import { EXPENSE_CATEGORIES, OFFER_PIECE_PRICE, pricingRows, type Expense, type ExpenseCategory, type FinanceReport } from "@/lib/finance";
 import { formatEGP } from "@/lib/format";
 import { categoryInfo, categoryOrder, categoryPrices, type CatalogCategory } from "@/lib/site-data";
 
@@ -20,6 +20,8 @@ type ProductRow = {
   costUpdatedAt: string | null;
   /** Added from the admin (editable here); built-in products live in the code. */
   custom: boolean;
+  /** Shown to customers as "نفدت الكمية" and cannot be ordered. */
+  soldOut: boolean;
   imageAlt: string;
   /** The product's own price (null = the category price / offer only). */
   price: number | null;
@@ -129,6 +131,7 @@ export function FinanceTab() {
       {data && (
         <>
           <ProductsPricing products={data.products} factories={data.factories} onSaved={load} />
+          {report && <PricingCalculator key={`${report.range.from}|${report.range.to}|${report.totals.expenses}`} products={data.products} report={report} />}
           <Expenses expenses={data.expenses} range={range} onChanged={load} />
           {report && <OrdersProfit report={report} />}
         </>
@@ -159,6 +162,34 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
   const [query, setQuery] = useState("");
   const [showHidden, setShowHidden] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, { factory: string; cost: string }>>({});
+  // A saved factory price is locked; "تعديل" opens it again (e.g. the factory changed its price).
+  const [unlocked, setUnlocked] = useState<Set<string>>(new Set());
+  const relock = (productId: string) => {
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[productId];
+      return next;
+    });
+    setUnlocked((current) => {
+      const next = new Set(current);
+      next.delete(productId);
+      return next;
+    });
+  };
+
+  async function toggleSoldOut(product: ProductRow) {
+    if (!product.soldOut && !window.confirm(`${product.name}: يظهر للعميلات "نفدت الكمية" ومحدش يقدر يطلبه لحد ما ترجّعيه متاح؟`)) return;
+    setBusy(product.productId);
+    setError("");
+    try {
+      await api(`/api/admin/products/${product.productId}/stock`, { method: "PUT", body: JSON.stringify({ soldOut: !product.soldOut }) });
+      await onSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ.");
+    } finally {
+      setBusy("");
+    }
+  }
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const words = query.trim().toLowerCase();
@@ -177,11 +208,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
     setError("");
     try {
       await api(`/api/admin/finance/costs/${product.productId}`, { method: "PUT", body: JSON.stringify({ factory: draft.factory, cost }) });
-      setDrafts((current) => {
-        const next = { ...current };
-        delete next[product.productId];
-        return next;
-      });
+      relock(product.productId);
       await onSaved();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ.");
@@ -203,7 +230,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
       {error && <p className="admin-error" role="alert">{error}</p>}
       <div className="admin-table-wrap">
         <table className="admin-table admin-fin-products">
-          <thead><tr><th>المنتج</th><th>الكود</th><th>المصنع</th><th>سعر المصنع للقطعة</th><th>سعر البيع للقطعة</th><th>هامش القطعة</th><th /></tr></thead>
+          <thead><tr><th>المنتج</th><th>الكود</th><th>المصنع</th><th>سعر المصنع للقطعة</th><th>سعر البيع للقطعة</th><th>هامش القطعة</th><th>المخزون</th><th /></tr></thead>
           <tbody>
             {rows.map((product) => {
               const draft = drafts[product.productId];
@@ -213,6 +240,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
               const margin = product.salePrice !== null && cost !== null && Number.isFinite(cost) ? product.salePrice - cost : null;
               const edit = (change: Partial<{ factory: string; cost: string }>) =>
                 setDrafts((current) => ({ ...current, [product.productId]: { factory, cost: costText, ...change } }));
+              const locked = product.cost !== null && !unlocked.has(product.productId) && !draft;
               return (
                 <tr key={product.productId} className={product.hidden ? "dim" : ""}>
                   <td>
@@ -226,6 +254,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
                   </td>
                   <td dir="ltr" className="mono">{product.productId}</td>
                   <td>
+                    {locked ? <span className="admin-locked">{factory}</span> : (
                     <select
                       className="admin-inline-input"
                       value={factory}
@@ -239,12 +268,24 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
                       {[...new Set([...factories, factory])].map((name) => <option key={name} value={name}>{name}</option>)}
                       <option value="__new">＋ مصنع جديد…</option>
                     </select>
+                    )}
                   </td>
-                  <td><input className="admin-inline-input narrow" type="number" min={0} inputMode="decimal" value={costText} placeholder="—" onChange={(event) => edit({ cost: event.target.value })} aria-label={`سعر المصنع ${product.name}`} /></td>
+                  <td>
+                    {locked
+                      ? <span className="admin-locked strong">{money(product.cost ?? 0)}</span>
+                      : <input className="admin-inline-input narrow" type="number" min={0} inputMode="decimal" value={costText} placeholder="—" onChange={(event) => edit({ cost: event.target.value })} aria-label={`سعر المصنع ${product.name}`} />}
+                  </td>
                   <td>{product.salePrice === null ? <span className="admin-muted">ضمن العرض بس</span> : money(product.salePrice)}</td>
                   <td>{margin === null ? "—" : <span className={margin < 0 ? "admin-negative" : ""}>{money(margin)}</span>}</td>
+                  <td>
+                    <button type="button" className={`admin-stock${product.soldOut ? " out" : ""}`} disabled={busy === product.productId} onClick={() => void toggleSoldOut(product)} aria-pressed={product.soldOut} title={product.soldOut ? "دوسي علشان يرجع متاح" : "دوسي لو الكمية خلصت"}>
+                      {product.soldOut ? <><CircleSlash size={13} aria-hidden="true" /> نفدت الكمية</> : <><PackageCheck size={13} aria-hidden="true" /> متاح</>}
+                    </button>
+                  </td>
                   <td className="actions">
-                    {draft && <button type="button" disabled={busy === product.productId} onClick={() => void save(product)}><Save size={14} /> حفظ</button>}
+                    {locked && <button type="button" onClick={() => setUnlocked((current) => new Set(current).add(product.productId))}><Pencil size={14} /> تعديل السعر</button>}
+                    {!locked && draft && <button type="button" disabled={busy === product.productId} onClick={() => void save(product)}><Save size={14} /> حفظ</button>}
+                    {!locked && product.cost !== null && <button type="button" onClick={() => relock(product.productId)} aria-label="إلغاء التعديل"><X size={14} /></button>}
                     {product.custom && <button type="button" onClick={() => setDialog({ mode: "edit", product })}><Pencil size={14} /> تعديل المنتج</button>}
                   </td>
                 </tr>
@@ -579,5 +620,63 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
         </footer>
       </div>
     </dialog>
+  );
+}
+
+// ── Pricing calculator ────────────────────────────────────────────────────
+
+function PricingCalculator({ products, report }: { products: ProductRow[]; report: FinanceReport }) {
+  const soldPieces = report.orders.filter((row) => row.status === "confirmed").reduce((sum, row) => sum + row.pieces, 0);
+  const [expenses, setExpenses] = useState(String(report.totals.expenses || ""));
+  const [pieces, setPieces] = useState(String(soldPieces || ""));
+  const [percent, setPercent] = useState("30");
+  const [onlyMine, setOnlyMine] = useState(false);
+  const input = { expenses: Number(expenses) || 0, pieces: Math.max(0, Math.round(Number(pieces) || 0)), profitPercent: Number(percent) || 0 };
+  const rows = pricingRows(products.filter((product) => !product.hidden || product.cost !== null), input).filter((row) => !onlyMine || row.currentProfitPercent < input.profitPercent);
+  const missing = products.filter((product) => !product.hidden && product.cost === null).length;
+  const share = input.pieces > 0 ? input.expenses / input.pieces : 0;
+
+  return (
+    <section className="admin-panel">
+      <div className="admin-panel-head">
+        <h2><Calculator size={18} aria-hidden="true" /> حاسبة التسعير والهامش</h2>
+      </div>
+      <div className="admin-calc-inputs">
+        <label className="admin-field"><span>المصروفات اللي هتتوزع (ج.م)</span><input type="number" min={0} value={expenses} onChange={(event) => setExpenses(event.target.value)} /></label>
+        <label className="admin-field"><span>على كام قطعة؟</span><input type="number" min={0} value={pieces} onChange={(event) => setPieces(event.target.value)} /></label>
+        <label className="admin-field"><span>هامش الربح اللي عايزاه (%)</span><input type="number" min={0} value={percent} onChange={(event) => setPercent(event.target.value)} /></label>
+        <div className="admin-calc-share">
+          <span>كل قطعة بتشيل من المصروفات</span>
+          <strong>{money(share)}</strong>
+        </div>
+      </div>
+      <p className="admin-muted small">
+        المصروفات والقطع متعبّية تلقائيًا من الفترة المختارة فوق ({money(report.totals.expenses)} مصروفات مخصومة، {soldPieces} قطعة اتباعت في أوردرات مؤكدة) — غيّريهم براحتك، مثلاً حطي مصروفات الشهر وعدد القطع اللي متوقعة تبيعيها.
+        الهامش محسوب على التكلفة الكاملة للقطعة (سعر المصنع + نصيبها من المصروفات)، والسعر المقترح مقرّب لأقرب ٥ ج.م لفوق.
+      </p>
+      <label className="admin-check"><input type="checkbox" checked={onlyMine} onChange={(event) => setOnlyMine(event.target.checked)} /> اعرضي بس المنتجات اللي هامشها الحالي أقل من {input.profitPercent}%</label>
+      {rows.length === 0 ? <p className="admin-muted empty">{missing > 0 ? "سجّلي سعر المصنع للمنتجات في الجدول اللي فوق علشان الحاسبة تشتغل." : "مفيش منتجات بالاختيار ده."}</p> : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead><tr><th>المنتج</th><th>سعر المصنع</th><th>نصيبها من المصروفات</th><th>التكلفة الكاملة</th><th>السعر الحالي</th><th>المكسب الحالي في القطعة</th><th>السعر المقترح ({input.profitPercent}%)</th></tr></thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.productId}>
+                  <td>{row.name}</td>
+                  <td>{money(row.cost)}</td>
+                  <td>{money(row.expenseShare)}</td>
+                  <td><strong>{money(row.fullCost)}</strong></td>
+                  <td>{money(row.currentPrice)}{row.inOfferOnly && <small className="admin-muted"> (في العرض)</small>}</td>
+                  <td><span className={row.currentProfit < 0 ? "admin-negative" : row.currentProfitPercent < input.profitPercent ? "admin-warn" : "admin-positive"}>{money(row.currentProfit)} · {row.currentProfitPercent}%</span></td>
+                  <td><strong className="admin-suggested">{money(row.suggestedPrice)}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {missing > 0 && rows.length > 0 && <p className="admin-muted small">{missing} منتج مالوش سعر مصنع لسه ومش ظاهر في الحاسبة.</p>}
+      <p className="admin-muted small">قطع العرض بتتحسب بسعر القطعة جوه العرض ({money(OFFER_PIECE_PRICE)} = سعر العرض ÷ عدد قطعه). الحاسبة للتخطيط بس ومش بتغيّر أسعار الموقع.</p>
+    </section>
   );
 }

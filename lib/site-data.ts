@@ -106,6 +106,19 @@ export function isBuiltInProduct(id: string) {
   return builtInIds.has(id);
 }
 
+// ── Sold out (set from the admin, stored in Redis) ──
+// A sold-out product stays on the store with a "نفدت الكمية" label but cannot be added or ordered.
+const soldOutIds = new Set<string>();
+
+export function setSoldOut(ids: readonly string[]) {
+  soldOutIds.clear();
+  for (const id of ids) soldOutIds.add(id);
+}
+
+export function isSoldOut(id: string) {
+  return soldOutIds.has(id);
+}
+
 /** Replaces the admin-added products (idempotent; called by the server and on each store page). */
 export function setCustomProducts(products: readonly CatalogProduct[]) {
   const valid = products.filter((product) => !builtInIds.has(product.id) && product.category in categoryInfo);

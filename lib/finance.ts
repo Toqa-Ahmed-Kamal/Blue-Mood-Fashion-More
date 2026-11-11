@@ -12,7 +12,7 @@
 // - Net profit = sales − products cost − expenses, all in EGP, for the chosen dates.
 import { confirmedValueOf, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
 import { oldOrderValue, type OldOrder } from "./old-orders.ts";
-import { catalog } from "./site-data.ts";
+import { catalog, landingPromotion } from "./site-data.ts";
 
 /** Factory of every product that has none saved yet (all products at launch come from it). */
 export const DEFAULT_FACTORY = "مصنع القاهرة";
@@ -250,4 +250,61 @@ export function buildFinanceReport(input: {
     })),
     orders: rows.toSorted((a, b) => b.day.localeCompare(a.day) || a.orderId.localeCompare(b.orderId)),
   };
+}
+
+// ── Pricing calculator ──────────────────────────────────────────────────────
+
+/** Price of one piece inside the winter offer (offer price ÷ pieces in the offer). */
+export const OFFER_PIECE_PRICE = Math.round(landingPromotion.price / (landingPromotion.options[0].pajamaCount + landingPromotion.options[0].wearableBlanketCount));
+
+export type PricingInput = {
+  /** Expenses to spread over the pieces (EGP). */
+  expenses: number;
+  /** Pieces the expenses are spread over (sold, or expected to sell, in the same period). */
+  pieces: number;
+  /** Wanted profit, % added on top of the full cost of a piece. */
+  profitPercent: number;
+};
+
+export type PricingRow = {
+  productId: string;
+  name: string;
+  cost: number;
+  /** Share of the expenses carried by one piece. */
+  expenseShare: number;
+  fullCost: number;
+  /** Current price of one piece (the offer's per-piece price for offer-only products). */
+  currentPrice: number;
+  inOfferOnly: boolean;
+  currentProfit: number;
+  /** Current profit as % of the full cost. */
+  currentProfitPercent: number;
+  /** Price that gives the wanted profit, rounded up to 5 EGP. */
+  suggestedPrice: number;
+};
+
+const roundUpTo5 = (value: number) => Math.ceil(value / 5) * 5;
+
+/** For every product with a factory cost: what one piece really costs with its share of the expenses, and the price for the wanted profit. */
+export function pricingRows(products: { productId: string; name: string; cost: number | null; salePrice: number | null }[], input: PricingInput): PricingRow[] {
+  const share = input.pieces > 0 && input.expenses > 0 ? input.expenses / input.pieces : 0;
+  const percent = Number.isFinite(input.profitPercent) ? Math.max(0, input.profitPercent) : 0;
+  return products.flatMap((product) => {
+    if (product.cost === null) return [];
+    const fullCost = round(product.cost + share);
+    const currentPrice = product.salePrice ?? OFFER_PIECE_PRICE;
+    const currentProfit = round(currentPrice - fullCost);
+    return [{
+      productId: product.productId,
+      name: product.name,
+      cost: product.cost,
+      expenseShare: round(share),
+      fullCost,
+      currentPrice,
+      inOfferOnly: product.salePrice === null,
+      currentProfit,
+      currentProfitPercent: fullCost > 0 ? Math.round((currentProfit / fullCost) * 1000) / 10 : 0,
+      suggestedPrice: roundUpTo5(fullCost * (1 + percent / 100)),
+    }];
+  });
 }

@@ -16,6 +16,7 @@ import { formatEGP } from "@/lib/format";
 import {
   findOffer,
   findProduct,
+  isSoldOut,
   landingPromotion,
   productsIn,
   type CatalogProduct,
@@ -58,7 +59,8 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
 
   const offer = findOffer(offerId)!;
   const savedIds = cart.offer?.offerId === offerId ? cart.offer.productIds : [];
-  const selectedIds = draft ?? savedIds;
+  // A piece that sold out meanwhile is dropped from the selection (it can no longer be ordered).
+  const selectedIds = (draft ?? savedIds).filter((id) => !isSoldOut(id));
   const selected = selectedIds.map(findProduct).filter((product): product is CatalogProduct => product !== undefined);
   const neededTotal = offer.pajamaCount + offer.wearableBlanketCount;
   const countOf = (category: OfferCategory) => selected.filter((product) => product.category === category).length;
@@ -80,6 +82,10 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
     if (selectedIds.includes(product.id)) {
       setDraft(selectedIds.filter((id) => id !== product.id));
       setNotice("");
+      return;
+    }
+    if (isSoldOut(product.id)) {
+      setNotice(`${product.name}: نفدت الكمية. اختاري موديل تاني.`);
       return;
     }
     const limit = limitFor(offerId, product.category);
@@ -164,16 +170,17 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
           {visibleProducts.map((product) => {
             const isSelected = selectedIds.includes(product.id);
             const order = selectedIds.indexOf(product.id) + 1;
+            const soldOut = isSoldOut(product.id);
             return (
-              <div className={`pick-card${isSelected ? " selected" : ""}${!isSelected && tabFull ? " muted" : ""}`} key={product.id}>
-                <button type="button" className="pick-toggle" aria-pressed={isSelected} onClick={() => toggle(product)}>
+              <div className={`pick-card${isSelected ? " selected" : ""}${!isSelected && (tabFull || soldOut) ? " muted" : ""}${soldOut ? " sold-out" : ""}`} key={product.id}>
+                <button type="button" className="pick-toggle" aria-pressed={isSelected} aria-disabled={soldOut} onClick={() => toggle(product)}>
                   <span className="pick-media">
                     <Image src={product.image} alt={product.imageAlt} fill sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 25vw" />
                     <span className="pick-check" aria-hidden="true">{isSelected ? order : <Check size={16} />}</span>
                   </span>
                   <span className="pick-name">{product.name}</span>
                   <FitNote product={product} />
-                  <span className="pick-state">{isSelected ? "مختارة · دوسي للإلغاء" : tabFull ? "العدد كمل" : "دوسي للاختيار"}</span>
+                  <span className="pick-state">{soldOut ? "نفدت الكمية" : isSelected ? "مختارة · دوسي للإلغاء" : tabFull ? "العدد كمل" : "دوسي للاختيار"}</span>
                 </button>
                 <button type="button" className="pick-zoom" onClick={() => setQuickView(product)} aria-label={`عرض صورة ${product.name} بالكامل`}>
                   <Expand size={15} />

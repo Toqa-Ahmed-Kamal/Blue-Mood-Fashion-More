@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { ArrowLeft, Check, ChevronRight, Copy, Minus, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 
 import { addCartItem, emptyCart, MAX_ITEM_QUANTITY, resolveCart, setCartItemQuantity, setCartOffer, type ResolvedCart } from "@/lib/cart";
-import { updateCart, useCart } from "@/lib/cart-store";
+import { readSavedCartRaw, updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
 import { currentVisitIds, readAttribution } from "@/lib/attribution-store";
 import { takePendingJourney, trackCartRemove } from "@/lib/journey-tracker";
@@ -19,7 +19,7 @@ import {
   productLink,
 } from "@/lib/order-flow";
 import { UNSERVED_AREA_NOTE, findShippingRate, governorateShippingFee, isValidShippingArea, shippingAreasFor, shippingGovernorates, unservedAreasIn } from "@/lib/shipping-rates";
-import { landingPromotion, priceOf, visibleCatalog } from "@/lib/site-data";
+import { findProduct, isSoldOut, landingPromotion, priceOf, visibleCatalog } from "@/lib/site-data";
 import { SiteHeader } from "@/components/store-chrome";
 
 type CustomerDetails = {
@@ -80,6 +80,28 @@ export function Checkout() {
   const attemptRef = useRef<{ submissionId: string; fingerprint: string } | null>(null);
   const checkoutTrackedRef = useRef(false);
   const cartKey = JSON.stringify(cart);
+  const [soldOutNotice, setSoldOutNotice] = useState("");
+
+  // A piece that sold out after it was put in the cart is taken out (the cart drops it on load), and
+  // the customer is told which — read from the cart as it was saved, before that cleanup.
+  useEffect(() => {
+    const saved = readSavedCartRaw();
+    const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
+    const offerIds = ids(saved?.offer?.productIds);
+    const itemIds = ids(saved?.items?.map((item) => item?.productId));
+    const offerGone = offerIds.some(isSoldOut);
+    const goneItems = itemIds.filter(isSoldOut);
+    if (!offerGone && goneItems.length === 0) return;
+    const names = [...offerIds.filter(isSoldOut), ...goneItems].map((id) => findProduct(id)?.name ?? id);
+    // Saves the cleaned cart, so the notice is shown once.
+    updateCart((current) => ({
+      offer: offerGone ? null : current.offer,
+      items: current.items.filter((item) => !isSoldOut(item.productId)),
+    }));
+    // Telling the customer is the purpose of this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSoldOutNotice(`للأسف نفدت الكمية من: ${names.join("، ")}، فاتشالت من السلة${offerGone ? " (ومعاها اختيارات العرض — اختاري موديل تاني من صفحة العرض)" : ""}.`);
+  }, [cartKey]);
 
   // Meta Pixel InitiateCheckout: once per checkout visit, as soon as the saved cart has loaded.
   useEffect(() => {
@@ -197,6 +219,7 @@ export function Checkout() {
         <SiteHeader />
         <main className="container empty-cart">
           <h1>السلة فاضية</h1>
+          {soldOutNotice && <p className="sold-out-notice" role="status">{soldOutNotice}</p>}
           <p>ابدئي بعرض الشتاء أو اختاري عباية أو روب.</p>
           <div className="hero-actions">
             <Link href="/#offer" className="btn btn-primary btn-lg">عرض الشتاء <ArrowLeft size={18} /></Link>
@@ -223,6 +246,7 @@ export function Checkout() {
 
         <div className="checkout-grid">
           <div className="checkout-main">
+            {soldOutNotice && <p className="sold-out-notice" role="status">{soldOutNotice}</p>}
             <CartLines cart={resolved.cart} disabled={isSubmitting} />
 
             {missingUpsells.length > 0 && (
