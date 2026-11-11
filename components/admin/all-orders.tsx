@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BadgeCheck, CheckCircle2, PackageCheck, RefreshCw, RotateCcw, Undo2, XCircle } from "lucide-react";
+import { BadgeCheck, CheckCircle2, PackageCheck, Pencil, RefreshCw, RotateCcw, Undo2, XCircle } from "lucide-react";
 
+import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
-import { ORDER_FILTERS, filterCounts, matchesFilter, matchesSearch, type OrderFilter, type UnifiedOrder } from "@/lib/all-orders";
+import { ORDER_FILTERS, filterCounts, matchesFilter, matchesSearch, withEdit, type OrderFilter, type UnifiedOrder } from "@/lib/all-orders";
 import type { OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
@@ -27,6 +28,7 @@ export function AllOrdersTab() {
   const [showArchived, setShowArchived] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busyId, setBusyId] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +62,7 @@ export function AllOrdersTab() {
   const counts = useMemo(() => filterCounts(scoped), [scoped]);
   const rows = scoped.filter((order) => matchesFilter(order, filter));
   const shown = rows.slice(0, limit);
+  const editing = editingId ? orders?.find((order) => order.orderId === editingId) ?? null : null;
 
   /** Sends a status or deposit change to the right API (site order or imported Telegram order), then updates the row. */
   async function change(order: UnifiedOrder, body: { status?: OrderStatus; deposit?: number | null }) {
@@ -125,17 +128,29 @@ export function AllOrdersTab() {
       {orders && rows.length === 0 && <p className="admin-muted empty">مفيش أوردرات بالاختيار ده.</p>}
 
       <div className="admin-orders">
-        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} />)}
+        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onEdit={() => setEditingId(order.orderId)} />)}
       </div>
       {rows.length > shown.length && (
         <button type="button" className="admin-more" onClick={() => setLimit((current) => current + PAGE_SIZE)}>اعرضي {Math.min(PAGE_SIZE, rows.length - shown.length)} أوردر كمان ({rows.length - shown.length} باقيين)</button>
       )}
-      <p className="admin-muted small">أوردرات الموقع والأوردرات القديمة من تيليجرام في مكان واحد، وكل أوردر مرة واحدة. أي تغيير هنا (الحالة أو الديبوزيت) بيتحفظ في نفس الأوردر وبيظهر في باقي الأقسام والحسابات.</p>
+      {editing && (
+        <OrderEditDialog
+          order={editing}
+          onClose={() => setEditingId(null)}
+          onSaved={(_saved, edit) => {
+            setEditingId(null);
+            // Shown at once; the reload then brings the stored copy (and keeps every total in step).
+            setOrders((current) => current?.map((item) => (item.orderId === editing.orderId ? withEdit(item, edit) : item)) ?? null);
+            void load();
+          }}
+        />
+      )}
+      <p className="admin-muted small">أوردرات الموقع والأوردرات القديمة من تيليجرام في مكان واحد، وكل أوردر مرة واحدة. أي تغيير هنا (الحالة أو الديبوزيت أو تعديل المنتجات) بيتحفظ في نفس الأوردر وبيظهر في باقي الأقسام والحسابات.</p>
     </section>
   );
 }
 
-function UnifiedOrderCard({ order, busy, onStatus, onDeposit }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void }) {
+function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onEdit: () => void }) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const chat = (text: string) => (order.phone ? whatsappChatUrl(order.phone, text) : null);
   const remaining = order.deposit && order.total !== null ? Math.max(0, order.total - order.deposit.amount) : null;
@@ -217,6 +232,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit }: { order: Unified
       </div>
 
       <footer className="admin-order-actions actions">
+        <button type="button" disabled={busy || !order.editable} onClick={onEdit} title={order.editable ? "تبديل أو إضافة أو شيل منتجات، وتعديل البيانات والشحن" : "تفاصيل الأوردر مش متسجلة علشان يتعدل"}><Pencil size={15} /> تعديل الأوردر</button>
         <button type="button" disabled={busy} onClick={onDeposit} className={order.deposit ? "deposit-on" : undefined}><BadgeCheck size={15} /> {order.deposit ? "تعديل الديبوزيت" : "تأكيد بديبوزيت"}</button>
         {order.status !== "confirmed" && order.status !== "delivered" && <button type="button" disabled={busy} onClick={() => onStatus("confirmed")} title="بيع مؤكد"><CheckCircle2 size={16} /> تأكيد</button>}
         {order.status === "confirmed" && <button type="button" disabled={busy} className="good" onClick={() => onStatus("delivered")} title="العميلة استلمت"><PackageCheck size={16} /> تم الاستلام</button>}

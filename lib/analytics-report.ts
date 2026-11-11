@@ -73,6 +73,8 @@ export type AnalyticsOrder = {
   /** Unit factory costs at confirmation time (Financial Management); absent before that. */
   costSnapshot?: CostSnapshot;
   deposit?: Deposit;
+  /** Last time the admin edited the order (pieces, customer, shipping). */
+  editedAt?: string;
 };
 
 /** Fields of one day's visit hash: all, s:<source>, t:<type>, c:<campaign>, a:<ad content>. */

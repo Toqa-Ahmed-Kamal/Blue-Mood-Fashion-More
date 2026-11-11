@@ -38,7 +38,8 @@ import { parseJourney, type ClientJourneyEvent, type JourneyEntry } from "./jour
 import type { OrderRecord } from "./order-record.ts";
 import { snapshotCosts } from "./finance.ts";
 import { productCostsFor } from "./finance-store.ts";
-import { openOrderDetails, type OrderDetails } from "./order-vault.ts";
+import { applyEditToSiteOrder, type OrderEdit } from "./order-edit.ts";
+import { openOrderDetails, sealOrderDetails, type OrderDetails } from "./order-vault.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import { sourceTypeOf, trafficSourceOf, type TrafficSource } from "./traffic-source.ts";
 
@@ -399,6 +400,31 @@ export async function setOrderDeposit(orderId: string, amount: number | null) {
   const updated: AnalyticsOrder = amount === null ? rest : { ...rest, deposit: { amount, at: new Date().toISOString() } };
   const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
   return result === "OK" ? updated : null;
+}
+
+/**
+ * Saves an admin edit of a site order: the stats record and its encrypted customer details together.
+ * "no_key" when ORDER_DATA_KEY is missing (customer details could not be stored encrypted).
+ */
+export async function editSiteOrder(orderId: string, edit: OrderEdit): Promise<AnalyticsOrder | null | "no_key"> {
+  const [raw, sealed] = await redisPipeline([["GET", key(`order:${orderId}`)], ["GET", key(`orderdetails:${orderId}`)]], "write");
+  if (typeof raw !== "string") return null;
+  const order = JSON.parse(raw) as AnalyticsOrder;
+  const details = typeof sealed === "string" ? openOrderDetails(orderId, sealed) : null;
+  const result = applyEditToSiteOrder(order, details, edit);
+  let updated: AnalyticsOrder = result.order;
+  // New pieces on a sold order: their factory cost is taken now.
+  if (result.linesChanged && isSaleStatus(updated.status)) {
+    const ids = updated.products.map((product) => product.modelId);
+    updated = { ...updated, costSnapshot: snapshotCosts(ids, await productCostsFor(ids)) };
+  }
+  const newSealed = sealOrderDetails(result.details);
+  if (!newSealed) return "no_key";
+  const [stored] = await redisPipeline([
+    ["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"],
+    ["SET", key(`orderdetails:${orderId}`), newSealed, "EX", ORDER_DETAILS_TTL_SECONDS],
+  ], "write");
+  return stored === "OK" ? updated : null;
 }
 
 export function isOrderStatus(value: unknown): value is OrderStatus {

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, ChartColumn, ClipboardList, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, ChartColumn, ClipboardList, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -20,6 +20,8 @@ import {
 } from "recharts";
 
 import { AllOrdersTab } from "@/components/admin/all-orders";
+import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
+import { editRecordProducts, editTotals } from "@/lib/order-edit";
 import { OldOrdersTab } from "@/components/admin/old-orders";
 import { WhatsAppLink, WhatsAppMenu, WhatsAppTargetPicker } from "@/components/admin/whatsapp-link";
 import { FinanceTab } from "@/components/admin/finance";
@@ -256,8 +258,8 @@ export function AnalyticsDashboard() {
             {tab === "all" && <AllOrdersTab />}
             {tab === "traffic" && <TrafficTab report={report} />}
             {tab === "journey" && <JourneyTab report={report} />}
-            {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} />}
-            {oldOpened && <div hidden={tab !== "old"}><OldOrdersTab /></div>}
+            {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} onEdited={() => void load(range.from, range.to)} />}
+            {oldOpened && <div hidden={tab !== "old"}><OldOrdersTab active={tab === "old"} /></div>}
             {tab === "quantities" && <QuantitySummaryTab />}
             {tab === "finance" && <FinanceTab />}
           </div>
@@ -730,7 +732,8 @@ function StatusActions({ orderId, value, status, busy, onChange }: { orderId: st
   );
 }
 
-function OrdersPanel({ report, onOrderUpdated, onDepositUpdated }: { report: Report; onOrderUpdated: OrderUpdate; onDepositUpdated: DepositUpdate }) {
+function OrdersPanel({ report, onOrderUpdated, onDepositUpdated, onEdited }: { report: Report; onOrderUpdated: OrderUpdate; onDepositUpdated: DepositUpdate; onEdited: () => void }) {
+  const [editId, setEditId] = useState<string | null>(null);
   const [source, setSource] = useState("");
   const [type, setType] = useState("");
   const [campaign, setCampaign] = useState("");
@@ -800,6 +803,7 @@ function OrdersPanel({ report, onOrderUpdated, onDepositUpdated }: { report: Rep
                 onChange={(id, value, next) => void update(id, value, next)}
                 onJourney={() => setOpenId(row.orderId)}
                 onDeposit={() => void setDeposit(row.orderId, row.deposit?.amount ?? null)}
+                onEdit={() => setEditId(row.orderId)}
               />
             ))}
           </div>
@@ -855,6 +859,25 @@ function OrdersPanel({ report, onOrderUpdated, onDepositUpdated }: { report: Rep
           onClose={() => setOpenId(null)}
         />
       )}
+      {editId && details.byId[editId] && (() => {
+        const editRow = report.orders.find((row) => row.orderId === editId);
+        const current = details.byId[editId]!;
+        if (!editRow) return null;
+        return (
+          <OrderEditDialog
+            order={{ ...current, source: "site", offerName: current.offerName || editRow.offerName, products: current.products.map((product) => ({ modelId: product.modelId, name: product.name, quantity: product.quantity, unitPrice: product.unitPrice })) }}
+            onClose={() => setEditId(null)}
+            onSaved={(_saved, edit) => {
+              setEditId(null);
+              const totals = editTotals(edit);
+              // Shown at once; then the stored copy and the report are fetched again.
+              details.put(editId, { ...current, ...edit, governorate: edit.governorate || current.governorate, offerName: edit.offerName || current.offerName, products: editRecordProducts(edit), itemsTotal: totals.itemsTotal, subtotal: totals.subtotal, total: totals.total });
+              details.reload(editId);
+              onEdited();
+            }}
+          />
+        );
+      })()}
     </Panel>
   );
 }
@@ -863,6 +886,7 @@ const PAGE_SIZE = 30;
 
 /** Loads (and caches) the decrypted details of the orders currently shown. */
 function useOrdersDetails(orderIds: string[]) {
+  const [version, setVersion] = useState(0);
   const router = useRouter();
   const [byId, setById] = useState<Record<string, OrderDetails | null | undefined>>({});
   const [vaultConfigured, setVaultConfigured] = useState(true);
@@ -896,12 +920,22 @@ function useOrdersDetails(orderIds: string[]) {
         setError("مفيش اتصال. جربي تاني.");
       }
     })();
-  }, [idsKey, router]);
+  }, [idsKey, router, version]);
 
-  return { byId, vaultConfigured, error };
+  /** Fetches one order's details again (after it was edited). */
+  function reload(orderId: string) {
+    requested.current.delete(orderId);
+    setVersion((current) => current + 1);
+  }
+
+  function put(orderId: string, value: OrderDetails) {
+    setById((current) => ({ ...current, [orderId]: value }));
+  }
+
+  return { byId, vaultConfigured, error, reload, put };
 }
 
-function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney, onDeposit }: {
+function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney, onDeposit, onEdit }: {
   row: OrderRow;
   /** undefined = still loading, null = not stored / unreadable. */
   details: OrderDetails | null | undefined;
@@ -910,6 +944,7 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney, o
   onChange: (id: string, value: number, next: OrderStatus) => void;
   onJourney: () => void;
   onDeposit: () => void;
+  onEdit: () => void;
 }) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const chat = (text: string) => (details ? whatsappChatUrl(details.phone, text) : null);
@@ -1011,6 +1046,7 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney, o
 
       <footer className="admin-order-actions actions">
         <button type="button" onClick={onJourney}><Eye size={15} /> رحلة العميلة</button>
+        <button type="button" disabled={busy || !details} onClick={onEdit} title={details ? "تبديل أو إضافة أو شيل منتجات، وتعديل البيانات والشحن" : "بيانات الأوردر مش متسجلة علشان يتعدل"}><Pencil size={15} /> تعديل الأوردر</button>
         <button type="button" disabled={busy} onClick={onDeposit} className={row.deposit ? "deposit-on" : undefined}><BadgeCheck size={15} /> {row.deposit ? "تعديل الديبوزيت" : "تأكيد بديبوزيت"}</button>
         <StatusActions orderId={row.orderId} value={row.value} status={row.status} busy={busy} onChange={onChange} />
       </footer>

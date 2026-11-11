@@ -3,7 +3,9 @@ import { isSaleStatus, parseDepositAmount } from "@/lib/analytics-report";
 import { isOrderStatus } from "@/lib/analytics-store";
 import { OLD_ORDER_ID_PATTERN, sanitizeOldOrder } from "@/lib/old-orders";
 import { VaultNotConfiguredError, deleteOldOrder, loadOldOrder, updateOldOrder } from "@/lib/old-orders-store";
+import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { snapshotCosts } from "@/lib/finance";
+import { applyEditToOldOrder, sanitizeOrderEdit } from "@/lib/order-edit";
 import { productCostsFor } from "@/lib/finance-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -56,6 +58,13 @@ export async function PATCH(request: Request, context: Context) {
       const edited = sanitizeOldOrder({ ...(body.order as object), orderId, importedAt: current.importedAt }, now);
       if (!edited) return json(400, { success: false, error: { code: "INVALID_ORDER", message: "راجعي التاريخ والمنتجات." } });
       next = { ...edited, statusAt: edited.status === current.status ? current.statusAt : now.toISOString() };
+    }
+    // Edit from "كل الأوردرات": { edit } — pieces chosen from the catalog, totals recalculated.
+    if (body.edit !== undefined) {
+      await ensureCustomProducts();
+      const checked = sanitizeOrderEdit(body.edit);
+      if ("error" in checked) return json(400, { success: false, error: { code: "INVALID_EDIT", message: checked.error } });
+      next = applyEditToOldOrder(next, checked.edit, now);
     }
     if (body.status !== undefined) {
       if (!isOrderStatus(body.status)) return json(400, { success: false, error: { code: "INVALID_STATUS" } });

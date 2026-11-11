@@ -4,6 +4,7 @@
 // when its customer details were never stored, the matching Telegram message fills them in.
 import type { AnalyticsOrder, Deposit, OrderStatus } from "./analytics-report.ts";
 import type { OldOrder } from "./old-orders.ts";
+import { editRecordProducts, editTotals, type OrderEdit } from "./order-edit.ts";
 import type { OrderDetails } from "./order-vault.ts";
 import { findProduct } from "./site-data.ts";
 
@@ -26,6 +27,10 @@ export type UnifiedOrder = {
   address: string;
   notes: string;
   offerName: string;
+  /** Price of the offer in this order (0 when none). */
+  offerPrice: number;
+  /** true when the pieces and prices are known, so the order can be edited safely. */
+  editable: boolean;
   products: UnifiedProduct[];
   shippingCost: number | null;
   total: number | null;
@@ -89,6 +94,8 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       address: customer?.address ?? "",
       notes: customer?.notes ?? "",
       offerName: order.offerName,
+      offerPrice: details ? details.offerPrice : copy && copyMatches ? copy.offerPrice : 0,
+      editable: details !== null || (copy !== undefined && copyMatches),
       products,
       shippingCost: order.shippingCost,
       total: order.total,
@@ -116,6 +123,8 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       address: order.address,
       notes: order.notes,
       offerName: order.offerName,
+      offerPrice: order.offerPrice,
+      editable: true,
       products: order.products.map((product) => ({ modelId: product.modelId, name: product.name, quantity: product.quantity, size: product.size, unitPrice: product.unitPrice })),
       shippingCost: order.shippingCost,
       total: order.total,
@@ -125,6 +134,28 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
   }
 
   return rows.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** The row as it looks right after an edit was saved (shown at once, before the list is reloaded). */
+export function withEdit(order: UnifiedOrder, edit: OrderEdit): UnifiedOrder {
+  const totals = editTotals(edit);
+  return {
+    ...order,
+    customerName: edit.customerName,
+    phone: edit.phone,
+    alternatePhone: edit.alternatePhone,
+    governorate: edit.governorate || order.governorate,
+    area: edit.area,
+    address: edit.address,
+    notes: edit.notes,
+    offerName: edit.offerName || order.offerName,
+    offerPrice: edit.offerPrice,
+    products: editRecordProducts(edit).map((product) => ({ modelId: product.modelId, name: product.name, quantity: product.quantity, size: product.fit, unitPrice: product.unitPrice })),
+    shippingCost: edit.shippingCost,
+    total: totals.total,
+    value: totals.total ?? totals.subtotal,
+    hasCustomer: true,
+  };
 }
 
 /** Search over order number, customer, phone, place, address and products. */

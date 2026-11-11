@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, BadgeCheck, CheckCircle2, PackageCheck, Download, FileUp, Pencil, Plus, RotateCcw, Trash2, Undo2, X, XCircle } from "lucide-react";
 
+import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
 import type { OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
@@ -51,7 +52,8 @@ function useAdminApi() {
   }, [router]);
 }
 
-export function OldOrdersTab() {
+/** `active`: the tab is on screen. It stays mounted (to keep an import preview) and reloads each time it is opened again. */
+export function OldOrdersTab({ active = true }: { active?: boolean }) {
   const api = useAdminApi();
   const [orders, setOrders] = useState<OldOrder[] | null>(null);
   const [unreadable, setUnreadable] = useState(0);
@@ -72,10 +74,10 @@ export function OldOrdersTab() {
   }, [api]);
 
   useEffect(() => {
-    // Loading the saved orders when the tab opens is the intended side effect.
+    // Loading the saved orders whenever the tab is opened (edits in other sections show up) is the intended side effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
+    if (active) void load();
+  }, [load, active]);
 
   function replace(order: OldOrder) {
     setOrders((current) => current?.map((item) => (item.orderId === order.orderId ? order : item)) ?? null);
@@ -406,24 +408,34 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
         ) : (
           <>
             <div className="admin-table-wrap">
-              <table className="admin-table orders">
+              {/* Fits the page width: 5 columns, text and buttons wrap inside their cell (cards on phones). */}
+              <table className="admin-table orders old-orders-table">
+                <colgroup>
+                  <col className="col-order" /><col className="col-customer" /><col className="col-products" /><col className="col-total" /><col className="col-actions" />
+                </colgroup>
                 <thead>
-                  <tr><th>رقم الطلب / التاريخ</th><th>العميلة</th><th>الموبايل</th><th>المكان</th><th>المنتجات</th><th>الإجمالي</th><th>الحالة</th><th>إجراء</th></tr>
+                  <tr><th>رقم الطلب والحالة</th><th>العميلة</th><th>المنتجات</th><th>الإجمالي</th><th>إجراء</th></tr>
                 </thead>
                 <tbody>
                   {shown.map((order) => {
                     const busy = busyId === order.orderId;
                     return (
                       <tr key={order.orderId} className={order.archived ? "dim" : ""}>
-                        <td className="mono">
-                          <button type="button" className="admin-link" dir="ltr" onClick={() => setEditing(order.orderId)}>{order.orderId}</button>
-                          <br />
+                        <td className="old-order-id" data-label="الطلب">
+                          <button type="button" className="admin-link mono" dir="ltr" onClick={() => setEditing(order.orderId)}>{order.orderId}</button>
                           <small dir="ltr">{cairoTime(order.createdAt)}</small>
+                          <span className="old-order-badges">
+                            <span className={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
+                            {order.deposit && <span className="admin-deposit"><BadgeCheck size={13} aria-hidden="true" /> ديبوزيت {formatEGP(order.deposit.amount)}</span>}
+                            {order.archived && <small className="admin-muted">مؤرشف</small>}
+                          </span>
                         </td>
-                        <td>{order.customerName || "—"}</td>
-                        <td dir="ltr">{order.phone ? <a href={`tel:${order.phone}`}>{order.phone}</a> : "—"}</td>
-                        <td>{[order.governorate, order.area].filter(Boolean).join(" — ") || "—"}</td>
-                        <td className="wrap">
+                        <td className="old-order-customer" data-label="العميلة">
+                          <strong>{order.customerName || "—"}</strong>
+                          {order.phone ? <a href={`tel:${order.phone}`} dir="ltr">{order.phone}</a> : <span>—</span>}
+                          <small>{[order.governorate, order.area].filter(Boolean).join(" — ") || "—"}</small>
+                        </td>
+                        <td className="wrap" data-label="المنتجات">
                           <span className="admin-muted">{order.offerName}</span>
                           <br />
                           <ul className="admin-mini-products">
@@ -448,13 +460,8 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
                             ))}
                           </ul>
                         </td>
-                        <td>{order.total === null ? `${formatEGP(oldOrderValue(order))} + الشحن` : formatEGP(order.total)}</td>
-                        <td>
-                          <span className={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
-                          {order.archived && <small> · مؤرشف</small>}
-                          {order.deposit && <span className="admin-deposit"><BadgeCheck size={13} aria-hidden="true" /> ديبوزيت {formatEGP(order.deposit.amount)}</span>}
-                        </td>
-                        <td className="actions wrap-actions">
+                        <td className="old-order-total" data-label="الإجمالي">{order.total === null ? <>{formatEGP(oldOrderValue(order))}<small> + الشحن</small></> : formatEGP(order.total)}</td>
+                        <td className="actions old-order-actions" data-label="إجراء">
                           <button type="button" disabled={busy} onClick={() => setEditing(order.orderId)}><Pencil size={14} /> تعديل</button>
                           <WhatsAppMenu options={[
                             { label: "✅ تأكيد الطلب والتوصيل (إنستا باي)", href: whatsappChatUrl(order.phone, confirmationMessage({ name: order.customerName, orderId: order.orderId, shippingCost: order.shippingCost })) },
@@ -495,12 +502,12 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
       <QuantitiesPanel orders={rows} />
 
       {editingOrder && (
-        <OldOrderEditor
-          order={editingOrder}
-          title="تعديل الأوردر"
+        <OrderEditDialog
+          order={{ ...editingOrder, source: "telegram" }}
           onClose={() => setEditing(null)}
-          onSave={async (edited) => {
-            if (await patch(editingOrder, { order: edited })) setEditing(null);
+          onSaved={(saved) => {
+            onUpdated(saved as OldOrder);
+            setEditing(null);
           }}
         />
       )}

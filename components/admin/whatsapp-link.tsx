@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { ChevronDown, MessageCircle } from "lucide-react";
 
 import { retargetWhatsApp, type WhatsAppTarget } from "@/lib/customer-whatsapp";
@@ -63,16 +63,33 @@ export function WhatsAppLink({ href, label, compact = false, text }: { href: str
 /** WhatsApp button with ready messages to choose from (each opens the chat with that message). */
 export function WhatsAppMenu({ options }: { options: { label: string; href: string | null }[] }) {
   const target = useWhatsAppTarget();
+  const menuRef = useRef<HTMLDetailsElement>(null);
+
+  // Closes when the admin clicks anywhere else or presses Escape, so it never covers other buttons.
+  useEffect(() => {
+    const close = (event: Event) => {
+      const menu = menuRef.current;
+      if (!menu?.open) return;
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !menu.contains(event.target as Node)) menu.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, []);
+
   const usable = options.filter((option): option is { label: string; href: string } => option.href !== null);
   if (usable.length === 0) return <span className="admin-muted small-inline">رقم الموبايل مش رقم واتساب مصري</span>;
   return (
-    <details className="admin-wa-menu">
+    <details className="admin-wa-menu" ref={menuRef}>
       <summary className="admin-wa">
         <MessageCircle size={16} aria-hidden="true" /> <span>واتساب العميلة</span> <ChevronDown size={14} aria-hidden="true" />
       </summary>
       <div className="admin-wa-options" role="menu">
         {usable.map((option) => (
-          <a key={option.label} role="menuitem" {...linkProps(retargetWhatsApp(option.href, target), target)}>{option.label}</a>
+          <a key={option.label} role="menuitem" {...linkProps(retargetWhatsApp(option.href, target), target)} onClick={() => { if (menuRef.current) menuRef.current.open = false; }}>{option.label}</a>
         ))}
       </div>
     </details>

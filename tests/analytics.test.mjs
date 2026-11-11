@@ -824,3 +824,38 @@ test("delivered: confirming saves the cost; delivering keeps the collected amoun
   assert.equal(report.totals.confirmed, 1, "a delivered order counts as a confirmed sale");
   assert.equal(report.totals.confirmedValue, 650);
 });
+
+test("order edit: pieces, totals and encrypted details saved together; a sold order gets the new pieces' cost", async () => {
+  store.clear();
+  process.env.ORDER_DATA_KEY = TEST_ORDER_KEY;
+  try {
+    const finance = await import("../lib/finance-store.ts");
+    const { sanitizeProductCost } = await import("../lib/finance.ts");
+    const { sanitizeOrderEdit } = await import("../lib/order-edit.ts");
+    await analytics.saveOrder(analytics.toAnalyticsOrder(orderRecord, null), { sealedDetails: vault.sealOrderDetails(vault.orderDetailsOf(orderRecord)) });
+    await finance.saveProductCost(sanitizeProductCost("bm-abaya-001", { factory: "مصنع أ", cost: 180 }));
+    await finance.saveProductCost(sanitizeProductCost("bm-robe-003", { factory: "مصنع أ", cost: 120 }));
+    await analytics.setOrderStatus(orderRecord.orderId, "confirmed", null);
+    await analytics.setOrderDeposit(orderRecord.orderId, 100);
+
+    const { edit } = sanitizeOrderEdit({ customerName: orderRecord.customerName, phone: orderRecord.phone, alternatePhone: "", governorate: "الجيزة", area: "الهرم", address: "عنوان بعد التعديل", notes: "", offerName: orderRecord.offerName, offerPrice: 0, shippingCost: 60, lines: [{ modelId: "bm-abaya-001", quantity: 1, unitPrice: 350 }, { modelId: "bm-robe-003", quantity: 1, unitPrice: 250 }] });
+    const saved = await analytics.editSiteOrder(orderRecord.orderId, edit);
+    assert.equal(saved.total, 660);
+    assert.equal(saved.status, "confirmed");
+    assert.equal(saved.deposit.amount, 100, "deposit kept");
+    assert.deepEqual(saved.costSnapshot.unitCosts, [180, 120], "cost taken for the new pieces");
+
+    const view = await analytics.loadOrderDetails(orderRecord.orderId);
+    assert.equal(view.details.address, "عنوان بعد التعديل");
+    assert.equal(view.details.area, "الهرم");
+    assert.deepEqual(view.details.products.map((product) => [product.modelId, product.unitPrice]), [["bm-abaya-001", 350], ["bm-robe-003", 250]]);
+    assert.equal(view.details.total, 660);
+    const everything = JSON.stringify([...store.entries()].map(([k, v]) => [k, v instanceof Set ? [...v] : v instanceof Map ? [...v] : v]));
+    assert.equal(everything.includes("عنوان بعد التعديل"), false, "edited address stored encrypted");
+    assert.equal(await analytics.editSiteOrder("BM-00000000000000000000", edit), null);
+    delete process.env.ORDER_DATA_KEY;
+    assert.equal(await analytics.editSiteOrder(orderRecord.orderId, edit), "no_key");
+  } finally {
+    delete process.env.ORDER_DATA_KEY;
+  }
+});

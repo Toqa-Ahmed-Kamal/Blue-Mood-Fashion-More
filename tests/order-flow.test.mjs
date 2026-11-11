@@ -95,7 +95,7 @@ test("shipping fee comes from the governorate price table", async () => {
     "بورسعيد": 100, "الإسماعيلية": 100, "السويس": 100,
     "الفيوم": 110, "المنيا": 110, "أسيوط": 110,
     "سوهاج": 120, "قنا": 120, "الأقصر": 120, "أسوان": 120,
-    "مطروح": 80,
+    "مطروح": 100,
   };
   for (const [governorate, fee] of Object.entries(expected)) {
     assert.equal(findShippingRate(governorate, "أي مدينة").fee, fee, governorate);
@@ -107,7 +107,7 @@ test("shipping fee comes from the governorate price table", async () => {
   }
   assert.deepEqual(calculateOrderTotals(1100, findShippingRate("القاهرة", "المطرية").fee), { subtotal: 1100, shipping: 80, total: 1180 });
   assert.deepEqual(calculateOrderTotals(1100, findShippingRate("أسوان", "إدفو").fee), { subtotal: 1100, shipping: 120, total: 1220 });
-  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("مطروح", "مرسى مطروح").fee), { subtotal: 1100, shipping: 80, total: 1180 });
+  assert.deepEqual(calculateOrderTotals(1100, findShippingRate("مطروح", "مرسى مطروح").fee), { subtotal: 1100, shipping: 100, total: 1200 });
   assert.equal(findShippingRate("محافظة وهمية", "x"), undefined);
   assert.equal(shippingRates.every((rate) => rate.fee === null || [80, 90, 100, 110, 120].includes(rate.fee)), true);
 });
@@ -249,7 +249,7 @@ test("productLink builds an absolute photo link and the WhatsApp text includes i
 
 test("unserved areas: no price, customer service confirms it; served neighbours keep their price", async () => {
   const { findShippingRate: rate, unservedAreaFor, governorateShippingFee } = await import("../lib/shipping-rates.ts");
-  assert.equal(governorateShippingFee("مطروح"), 80);
+  assert.equal(governorateShippingFee("مطروح"), 100);
   const unserved = [
     ["مطروح", "السلوم", "السلوم"],
     ["السويس", "العين السخنة", "العين السخنة"],
@@ -274,9 +274,9 @@ test("unserved areas: no price, customer service confirms it; served neighbours 
   // Served places that only look similar keep their normal price.
   assert.equal(rate("القاهرة", "الواحة - مدينة نصر").fee, 80, "الواحة in Nasr City is served");
   assert.equal(rate("القاهرة", "مصر الجديدة").fee, 80, "Heliopolis (old) is served");
-  assert.equal(rate("مطروح", "مرسى مطروح").fee, 80);
+  assert.equal(rate("مطروح", "مرسى مطروح").fee, 100);
   assert.equal(rate("السويس", "الأربعين").fee, 100);
   assert.equal(unservedAreaFor("الجيزة", "فيصل"), null);
-  assert.equal(rate("مطروح", "*").fee, 80, "before an area is typed the governorate price shows");
+  assert.equal(rate("مطروح", "*").fee, 100, "before an area is typed the governorate price shows");
   assert.equal(rate("شمال سيناء", "*").fee, null);
 });

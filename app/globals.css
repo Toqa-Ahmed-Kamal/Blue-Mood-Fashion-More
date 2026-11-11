@@ -1627,3 +1627,56 @@ select.admin-inline-input { width: 160px; }
 .admin-source-badge { display: inline-block; font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 2px 9px; }
 .admin-source-badge.site { background: var(--brand-soft); color: var(--brand-dark); }
 .admin-source-badge.telegram { background: #e7f0fb; color: #1d5fa8; }
+
+/* ── Admin: saved old orders table fits the width (no sideways scroll) ── */
+.admin-table.old-orders-table { table-layout: fixed; width: 100%; white-space: normal; }
+.old-orders-table .col-order { width: 19%; }
+.old-orders-table .col-customer { width: 17%; }
+.old-orders-table .col-products { width: 30%; }
+.old-orders-table .col-total { width: 10%; }
+.old-orders-table .col-actions { width: 24%; }
+.old-orders-table th, .old-orders-table td { padding: 10px 8px; vertical-align: top; overflow-wrap: anywhere; }
+.old-orders-table .old-order-id, .old-orders-table .old-order-customer { display: table-cell; }
+.old-orders-table .old-order-id > *, .old-orders-table .old-order-customer > * { display: block; }
+.old-orders-table .old-order-id .mono { font-size: .74rem; text-align: start; }
+.old-orders-table .old-order-id small { color: var(--muted); margin-top: 2px; }
+.old-orders-table .old-order-badges { display: flex !important; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.old-orders-table .old-order-customer strong { font-size: .86rem; }
+.old-orders-table .old-order-customer small { color: var(--muted); margin-top: 2px; }
+.old-orders-table .admin-mini-products li { flex-wrap: wrap; row-gap: 4px; }
+.old-orders-table .admin-mini-products li > span:not(.admin-thumb) { flex: 1 1 120px; min-width: 0; }
+.old-orders-table .old-order-total { font-weight: 700; }
+.old-orders-table .old-order-total small { display: block; font-weight: 400; color: var(--muted); }
+.admin-table .actions.old-order-actions { display: table-cell; }
+.old-orders-table .old-order-actions > * { display: inline-flex; margin: 0 0 6px 6px; }
+.old-orders-table .old-order-actions button { padding: 4px 8px; }
+.old-orders-table .old-order-actions .admin-wa-menu { display: inline-block; }
+@media (max-width: 1100px) {
+  .admin-table.old-orders-table, .old-orders-table tbody, .old-orders-table tr, .old-orders-table td { display: block; width: 100%; }
+  .old-orders-table colgroup, .old-orders-table thead { display: none; }
+  .old-orders-table tr { border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; padding: 6px 4px; background: var(--paper); }
+  .old-orders-table td { border-bottom: 1px dashed var(--line); }
+  .old-orders-table td:last-child { border-bottom: 0; }
+  .old-orders-table td::before { content: attr(data-label); display: block; font-size: .72rem; color: var(--muted); margin-bottom: 4px; }
+  .old-orders-table tbody tr:nth-child(even) td, .old-orders-table tbody tr:hover td { background: transparent; }
+}
+
+/* "تعديل الأوردر" window: one row per piece (photo, product from the store, quantity, price). */
+.order-edit-dialog .admin-dialog-inner { max-width: 860px; }
+.order-edit-lines { display: grid; gap: 10px; margin-bottom: 10px; }
+.order-edit-line { display: grid; grid-template-columns: 48px minmax(0, 1fr) 80px 110px 90px 36px; gap: 8px; align-items: end; padding: 8px; border: 1px solid var(--admin-border, #e5e7eb); border-radius: 10px; }
+.order-edit-line .admin-order-thumb { width: 48px; height: 48px; display: grid; place-items: center; overflow: hidden; border-radius: 8px; background: #f3f4f6; }
+.order-edit-line .admin-order-thumb img { width: 48px; height: 48px; object-fit: cover; }
+.order-edit-line .admin-field select, .order-edit-line .admin-field input { width: 100%; min-width: 0; }
+.order-edit-line-total { padding-bottom: 8px; font-weight: 600; white-space: nowrap; }
+.order-edit-line .admin-warn { color: #b45309; }
+.order-edit-add { margin-bottom: 12px; }
+@media (max-width: 700px) {
+  .order-edit-line { grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr) 36px; }
+  .order-edit-line .admin-field.product { grid-column: 2 / 4; grid-row: 1; }
+  .order-edit-line > button { grid-column: 4; grid-row: 1; }
+  .order-edit-line .admin-field.qty { grid-column: 2; grid-row: 2; }
+  .order-edit-line .admin-field.price { grid-column: 3; grid-row: 2; }
+  .order-edit-line-total { grid-column: 2 / 5; grid-row: 3; padding: 0; }
+}
+

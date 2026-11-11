@@ -68,7 +68,7 @@ export const shippingRates: ShippingRate[] = [
   { governorate: "الأقصر", area: "*", fee: 120 },
   { governorate: "أسوان", area: "*", fee: 120 },
   // ── مطروح ──
-  { governorate: "مطروح", area: "*", fee: 80 },
+  { governorate: "مطروح", area: "*", fee: 100 },
   // ── لسه مفيش سعر — الشحن بيتأكد مع العميلة ──
   { governorate: "بني سويف", area: "*", fee: null },
   { governorate: "البحر الأحمر", area: "*", fee: null },

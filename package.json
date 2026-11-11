@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:order": "node --experimental-strip-types --experimental-default-type=module --test tests/order-flow.test.mjs tests/telegram.test.mjs tests/cart.test.mjs tests/attribution.test.mjs tests/analytics.test.mjs tests/old-orders.test.mjs tests/quantity-summary.test.mjs tests/finance.test.mjs tests/custom-products.test.mjs tests/admin-tools.test.mjs tests/all-orders.test.mjs",
+    "test:order": "node --experimental-strip-types --experimental-default-type=module --test tests/order-flow.test.mjs tests/telegram.test.mjs tests/cart.test.mjs tests/attribution.test.mjs tests/analytics.test.mjs tests/old-orders.test.mjs tests/quantity-summary.test.mjs tests/finance.test.mjs tests/custom-products.test.mjs tests/admin-tools.test.mjs tests/all-orders.test.mjs tests/order-edit.test.mjs",
     "admin:hash": "node scripts/hash-admin-password.mjs",
     "admin:order-key": "node scripts/generate-order-key.mjs",
     "orders:check-export": "node --experimental-strip-types --experimental-default-type=module --no-warnings scripts/check-telegram-export.mjs"

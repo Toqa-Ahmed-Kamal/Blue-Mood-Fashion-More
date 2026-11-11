@@ -1,6 +1,8 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
 import { parseDepositAmount } from "@/lib/analytics-report";
-import { isOrderStatus, loadOrderDetails, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
+import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
+import { ensureCustomProducts } from "@/lib/custom-products-store";
+import { sanitizeOrderEdit } from "@/lib/order-edit";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
 
@@ -38,6 +40,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
     body = await request.json();
   } catch {
     return json(400, { success: false, error: { code: "INVALID_JSON" } });
+  }
+  // Edit: { edit: { customer fields, lines, offerPrice, shippingCost, offerName } }.
+  if (body.edit !== undefined) {
+    await ensureCustomProducts();
+    const checked = sanitizeOrderEdit(body.edit);
+    if ("error" in checked) return json(400, { success: false, error: { code: "INVALID_EDIT", message: checked.error } });
+    try {
+      const order = await editSiteOrder(orderId, checked.edit);
+      if (order === "no_key") return json(503, { success: false, error: { code: "ORDER_DATA_KEY_MISSING", message: "لازم ORDER_DATA_KEY يبقى متضاف علشان نحفظ بيانات العميلة." } });
+      if (!order) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
+      console.info("[admin] order edited", { orderId, lines: order.products.length });
+      return json(200, { success: true, order: { orderId: order.orderId, status: order.status, total: order.total, editedAt: order.editedAt } });
+    } catch (error) {
+      console.error("[admin] order edit failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+      return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
+    }
   }
   // Deposit only: { deposit: amount | null }.
   if (body.deposit !== undefined && body.status === undefined) {
