@@ -1680,3 +1680,26 @@ select.admin-inline-input { width: 160px; }
   .order-edit-line-total { grid-column: 2 / 5; grid-row: 3; padding: 0; }
 }
 
+
+/* "مكسب الأوردر" on each order card: sale, factory cost, margin, share of expenses, net profit. */
+.admin-order-money { margin: 12px 0 0; max-width: 360px; margin-inline-start: auto; padding: 10px 12px; border-radius: 10px; background: var(--brand-soft); }
+.admin-order-money.expected { background: transparent; border: 1px dashed var(--line); }
+.admin-order-money h4 { margin: 0 0 6px; font-size: .9rem; }
+.admin-order-money dl { display: grid; gap: 5px; margin: 0; }
+.admin-order-money div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: .86rem; }
+.admin-order-money dt { color: var(--muted); }
+.admin-order-money dt small { font-size: .74rem; }
+.admin-order-money dd { margin: 0; font-weight: 600; white-space: nowrap; }
+.admin-order-money .sub { border-top: 1px dashed var(--line); padding-top: 5px; }
+.admin-order-money .grand { border-top: 1px solid var(--line); padding-top: 6px; font-size: 1rem; }
+.admin-order-money .grand dt { color: inherit; font-weight: 700; }
+.admin-order-money .grand dd { font-weight: 800; }
+.admin-positive { color: #157a3e; }
+.admin-order-money-note { margin: 10px 0 0; font-size: .82rem; color: var(--muted); text-align: end; }
+
+/* Selling price cell: price, edit pencil, "كان X · رجّعيه" after a change. */
+.admin-sale-price { white-space: nowrap; }
+.admin-price-btn { margin-inline-start: 6px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; vertical-align: middle; }
+.admin-price-edit { display: inline-flex; gap: 4px; align-items: center; }
+.admin-price-edit button { padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; }
+.admin-price-was { display: block; color: var(--muted); font-size: .74rem; margin-top: 2px; }

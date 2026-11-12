@@ -4,14 +4,39 @@
 //   catalog:custom         HASH  productId → JSON CatalogProduct
 //   productimg:{imageId}   STR   JSON { type, data (base64) } — the product photo, served by /api/product-images
 //   catalog:soldout        SET   product IDs marked "نفدت الكمية" (built-in or added)
+//   catalog:prices         HASH  productId → selling price changed from the admin (built-in products)
 import { parseCustomProduct } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
-import { setCustomProducts, setSoldOut, type CatalogProduct } from "./site-data.ts";
+import { setCustomProducts, setPriceOverrides, setSoldOut, type CatalogProduct } from "./site-data.ts";
 
 export const CUSTOM_PRODUCTS_TAG = "custom-products";
 const PRODUCTS = () => `${keyPrefix()}catalog:custom`;
 const IMAGE = (imageId: string) => `${keyPrefix()}productimg:${imageId}`;
 const SOLD_OUT = () => `${keyPrefix()}catalog:soldout`;
+const PRICES = () => `${keyPrefix()}catalog:prices`;
+
+/** HGETALL result → { productId: price } (bad entries skipped). */
+function parsePrices(flat: unknown): Record<string, number> {
+  const list = Array.isArray(flat) ? flat : [];
+  const prices: Record<string, number> = {};
+  for (let index = 0; index + 1 < list.length; index += 2) {
+    const price = Number(list[index + 1]);
+    if (Number.isFinite(price) && price > 0) prices[String(list[index])] = price;
+  }
+  return prices;
+}
+
+export async function loadPrices(): Promise<Record<string, number>> {
+  const [flat] = await redisPipeline([["HGETALL", PRICES()]], "read", 5000);
+  return parsePrices(flat);
+}
+
+/** Saves a built-in product's new selling price (null = back to the original price), then reads it back. */
+export async function setProductPrice(productId: string, price: number | null) {
+  const [, stored] = await redisPipeline([price === null ? ["HDEL", PRICES(), productId] : ["HSET", PRICES(), productId, String(price)], ["HGET", PRICES(), productId]], "write");
+  cached = null;
+  return stored === null || stored === undefined ? null : Number(stored);
+}
 const CACHE_MS = 30_000;
 
 function parseList(flat: unknown): CatalogProduct[] {
@@ -55,10 +80,11 @@ let cached: { at: number; products: CatalogProduct[] } | null = null;
 export async function ensureCustomProducts(force = false) {
   if (!force && cached && Date.now() - cached.at < CACHE_MS) return cached.products;
   try {
-    const [products, soldOut] = await Promise.all([loadCustomProducts(), loadSoldOut()]);
+    const [products, soldOut, prices] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadPrices()]);
     cached = { at: Date.now(), products };
     setCustomProducts(products);
     setSoldOut(soldOut);
+    setPriceOverrides(prices);
     return products;
   } catch {
     return cached?.products ?? [];
@@ -69,10 +95,10 @@ export async function ensureCustomProducts(force = false) {
  * For store pages: read through Next's data cache (tag "custom-products", refreshed every minute and
  * immediately when the admin changes a product), so a page view costs no Redis command.
  */
-export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[] }> {
+export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number> }> {
   const url = process.env.KV_REST_API_URL?.trim().replace(/\/+$/, "");
   const token = (process.env.KV_REST_API_READ_ONLY_TOKEN ?? process.env.KV_REST_API_TOKEN)?.trim();
-  if (!url || !token) return { products: [], soldOut: [] };
+  if (!url || !token) return { products: [], soldOut: [], prices: {} };
   const read = async (command: string) => {
     try {
       const response = await fetch(`${url}/${command}`, {
@@ -86,8 +112,12 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
       return null;
     }
   };
-  const [products, soldOut] = await Promise.all([read(`hgetall/${encodeURIComponent(PRODUCTS())}`), read(`smembers/${encodeURIComponent(SOLD_OUT())}`)]);
-  return { products: parseList(products), soldOut: Array.isArray(soldOut) ? soldOut.map(String) : [] };
+  const [products, soldOut, prices] = await Promise.all([
+    read(`hgetall/${encodeURIComponent(PRODUCTS())}`),
+    read(`smembers/${encodeURIComponent(SOLD_OUT())}`),
+    read(`hgetall/${encodeURIComponent(PRICES())}`),
+  ]);
+  return { products: parseList(products), soldOut: Array.isArray(soldOut) ? soldOut.map(String) : [], prices: parsePrices(prices) };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */

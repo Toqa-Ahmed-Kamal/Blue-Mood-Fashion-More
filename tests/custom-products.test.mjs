@@ -94,3 +94,24 @@ test("stock purchases from the factory are recorded but not deducted from net pr
   assert.deepEqual(report.totals, { sales: 580, productsCost: 240, expenses: 300, stockPurchases: 5000, netProfit: 40 });
   assert.equal(report.expensesByCategory.find((row) => row.category === "stock-purchase").amount, 5000);
 });
+
+test("selling price changed from the admin: the store, cart and order use it; a bad price is ignored", async () => {
+  const { basePriceOf, findProduct, priceOf, setPriceOverrides } = await import("../lib/site-data.ts");
+  const { resolveCart } = await import("../lib/cart.ts");
+  const robe = findProduct("bm-robe-003");
+  const original = basePriceOf(robe);
+  try {
+    setPriceOverrides({ "bm-robe-003": 299, "bm-winter-pajama-001": 150, "bm-abaya-001": -5 });
+    assert.equal(priceOf(robe), 299);
+    assert.equal(basePriceOf(robe), original, "the original price is still known");
+    assert.equal(priceOf(findProduct("bm-winter-pajama-001")), 150, "pajamas (sold singly too) take the new price");
+    assert.equal(priceOf(findProduct("bm-abaya-001")), basePriceOf(findProduct("bm-abaya-001")), "a bad price is ignored");
+    const { cart } = resolveCart({ offer: null, items: [{ productId: "bm-robe-003", quantity: 2 }] });
+    assert.equal(cart.items[0].unitPrice, 299);
+    assert.equal(cart.items[0].lineTotal, 598);
+    setPriceOverrides({});
+    assert.equal(priceOf(robe), original, "back to the original price");
+  } finally {
+    setPriceOverrides({});
+  }
+});

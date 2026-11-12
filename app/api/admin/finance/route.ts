@@ -5,7 +5,7 @@ import { loadExpenses, loadFactories, loadProductCosts } from "@/lib/finance-sto
 import { loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
-import { catalog, isBuiltInProduct, isSoldOut, priceOf } from "@/lib/site-data";
+import { basePriceOf, catalog, isBuiltInProduct, isSoldOut, priceOf } from "@/lib/site-data";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
@@ -37,6 +37,8 @@ export async function GET(request: Request) {
       image: product.image,
       hidden: Boolean(product.hidden),
       salePrice: priceOf(product),
+      // Original price (code, or saved with an added product); differs from salePrice after a change.
+      basePrice: basePriceOf(product),
       // Every product without a saved factory comes from the default factory.
       factory: costs[product.id]?.factory || DEFAULT_FACTORY,
       custom: !isBuiltInProduct(product.id),

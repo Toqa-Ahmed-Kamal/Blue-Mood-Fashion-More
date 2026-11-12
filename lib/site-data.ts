@@ -130,8 +130,24 @@ export function findProduct(id: string) {
   return catalog.find((product) => product.id === id);
 }
 
-export function priceOf(product: CatalogProduct) {
+// ── Prices changed from the admin (stored in Redis) ──
+// A built-in product's selling price can be changed without editing code. Offer-only products
+// (no single-piece price) stay offer-only.
+const priceOverrides = new Map<string, number>();
+
+export function setPriceOverrides(prices: Readonly<Record<string, number>>) {
+  priceOverrides.clear();
+  for (const [id, price] of Object.entries(prices)) if (Number.isFinite(price) && price > 0) priceOverrides.set(id, price);
+}
+
+/** The price written in the code (or saved with an added product), before any admin change. */
+export function basePriceOf(product: CatalogProduct) {
   return product.price ?? categoryPrices[product.category];
+}
+
+export function priceOf(product: CatalogProduct) {
+  const base = basePriceOf(product);
+  return base === null ? null : priceOverrides.get(product.id) ?? base;
 }
 
 /** Lowest single-piece price among the visible products of a category. */

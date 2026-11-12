@@ -82,6 +82,8 @@ export function AllOrdersTab() {
         return;
       }
       const saved = result.order as { status?: OrderStatus; deposit?: UnifiedOrder["deposit"] };
+      // A new status changes the order's profit and its month's expense share: fetch the numbers again.
+      if (body.status) void load();
       setOrders((current) => current?.map((item) => item.orderId === order.orderId
         ? { ...item, ...(saved.status ? { status: saved.status } : body.status ? { status: body.status } : {}), ...("deposit" in body ? { deposit: saved.deposit ?? null } : {}) }
         : item) ?? null);
@@ -228,6 +230,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit }: { order:
             {order.deposit && <div><dt>ديبوزيت مدفوع</dt><dd>− {formatEGP(order.deposit.amount)}</dd></div>}
             {remaining !== null && <div className="grand"><dt>الباقي عند الاستلام</dt><dd>{formatEGP(remaining)}</dd></div>}
           </dl>
+          <OrderMoneyBox order={order} />
         </section>
       </div>
 
@@ -241,5 +244,26 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit }: { order:
         {order.status !== "submitted" && <button type="button" disabled={busy} onClick={() => onStatus("submitted")} title="رجوع لمستني تأكيد" aria-label="رجوع لمستني تأكيد"><RotateCcw size={15} /></button>}
       </footer>
     </article>
+  );
+}
+
+/** "مكسب الأوردر": what the order brings after the factory cost and its share of the month's expenses. */
+function OrderMoneyBox({ order }: { order: UnifiedOrder }) {
+  if (order.status === "returned") return <p className="admin-order-money-note">مرتجع: مالوش مكسب (شحن المرتجع بيتسجل كمصروف).</p>;
+  if (order.status === "cancelled") return null;
+  const money = order.money;
+  if (!money) return null;
+  const cost = money.costState === "missing" ? <span className="admin-flag warn">ناقص سعر مصنع {money.missingLines} منتج</span> : money.costState === "estimated" ? <span className="admin-flag warn">بسعر المصنع الحالي</span> : null;
+  return (
+    <section className={`admin-order-money${money.expected ? " expected" : ""}`} aria-label="مكسب الأوردر">
+      <h4>{money.expected ? "مكسب الأوردر لو اتأكد (متوقع)" : "مكسب الأوردر"}</h4>
+      <dl>
+        <div><dt>البيع</dt><dd>{formatEGP(money.sales)}</dd></div>
+        <div><dt>تكلفة المنتجات {cost}</dt><dd>− {formatEGP(money.productsCost)}</dd></div>
+        <div className="sub"><dt>هامش الربح</dt><dd className={money.margin < 0 ? "admin-negative" : undefined}>{formatEGP(money.margin)}</dd></div>
+        <div><dt>نصيبه من مصروفات الشهر <small>({formatEGP(money.perPiece)} للقطعة)</small></dt><dd>− {formatEGP(money.expenseShare)}</dd></div>
+        <div className="grand"><dt>مكسبك الصافي</dt><dd className={money.netProfit < 0 ? "admin-negative" : "admin-positive"}>{formatEGP(money.netProfit)}</dd></div>
+      </dl>
+    </section>
   );
 }

@@ -11,9 +11,9 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function CheckoutPage() {
-  const { products, soldOut } = await loadCustomProductsForPage();
+  const { products, soldOut, prices } = await loadCustomProductsForPage();
   return (
-    <CatalogSync products={products} soldOut={soldOut}>
+    <CatalogSync products={products} soldOut={soldOut} prices={prices}>
       <Checkout />
     </CatalogSync>
   );

@@ -3,6 +3,7 @@
 // Each order appears once. A site order is taken from the site (its status, deposit and totals);
 // when its customer details were never stored, the matching Telegram message fills them in.
 import type { AnalyticsOrder, Deposit, OrderStatus } from "./analytics-report.ts";
+import type { OrderMoney } from "./finance.ts";
 import type { OldOrder } from "./old-orders.ts";
 import { editRecordProducts, editTotals, type OrderEdit } from "./order-edit.ts";
 import type { OrderDetails } from "./order-vault.ts";
@@ -38,6 +39,8 @@ export type UnifiedOrder = {
   value: number;
   /** Where the visit came from (site orders), e.g. "Facebook Ads · winter_2026". */
   origin: string;
+  /** Cost, margin, share of expenses and net profit (added by the API; none for cancelled/returned). */
+  money?: OrderMoney | null;
 };
 
 export const ORDER_FILTERS = [

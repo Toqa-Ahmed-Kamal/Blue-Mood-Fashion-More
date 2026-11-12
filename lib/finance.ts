@@ -119,7 +119,14 @@ export type FinanceOrderRow = {
   /** Sale value (0 for returned orders, which are not sales). */
   sales: number;
   productsCost: number;
+  /** Sale − products cost (same as margin; kept for older screens). */
   profit: number;
+  /** Sale − products cost. */
+  margin: number;
+  /** Share of the month's expenses carried by this order (by its pieces). */
+  expenseShare: number;
+  /** Margin − expense share. */
+  netProfit: number;
   /** exact = every line has its confirmation cost; estimated = at least one line uses today's cost; missing = at least one line has no cost at all. */
   costState: CostState;
   /** Lines without any cost (not added to products cost). */
@@ -141,23 +148,15 @@ type OrderLine = { productId: string; quantity: number };
 type Normalized = { orderId: string; source: "site" | "telegram"; day: string; status: OrderStatus; value: number; lines: OrderLine[]; snapshot?: CostSnapshot };
 
 const round = (value: number) => Math.round(value * 100) / 100;
+const monthOf = (day: string) => day.slice(0, 7);
+const piecesOf = (order: Normalized) => order.lines.reduce((sum, line) => sum + line.quantity, 0);
 
-export function buildFinanceReport(input: {
-  live: AnalyticsOrder[];
-  old: OldOrder[];
-  costs: Record<string, ProductCost | undefined>;
-  expenses: Expense[];
-  from?: string | null;
-  to?: string | null;
-}): FinanceReport {
-  const from = isDay(input.from) ? input.from : null;
-  const to = isDay(input.to) ? input.to : null;
-  const inRange = (day: string) => (!from || day >= from) && (!to || day <= to);
-
-  const siteIds = new Set(input.live.map((order) => order.orderId));
+/** Site orders and imported Telegram orders, each once (a Telegram copy of a site order is the site order). */
+function normalizeOrders(live: AnalyticsOrder[], old: OldOrder[]): Normalized[] {
+  const siteIds = new Set(live.map((order) => order.orderId));
   const seenOld = new Set<string>();
-  const orders: Normalized[] = [
-    ...input.live.map((order) => ({
+  return [
+    ...live.map((order) => ({
       orderId: order.orderId,
       source: "site" as const,
       day: order.day,
@@ -166,7 +165,7 @@ export function buildFinanceReport(input: {
       lines: order.products.map((product) => ({ productId: product.modelId, quantity: product.quantity })),
       snapshot: order.costSnapshot,
     })),
-    ...input.old.flatMap((order) => {
+    ...old.flatMap((order) => {
       if (siteIds.has(order.orderId) || seenOld.has(order.orderId)) return [];
       seenOld.add(order.orderId);
       return [{
@@ -180,39 +179,114 @@ export function buildFinanceReport(input: {
       }];
     }),
   ];
+}
 
+/** Factory cost of an order's pieces: the cost saved at confirmation, else today's cost (estimated). */
+function productsCostOf(order: Normalized, costs: Record<string, ProductCost | undefined>) {
+  let cost = 0;
+  let estimated = false;
+  let missingLines = 0;
+  order.lines.forEach((line, index) => {
+    const saved = order.snapshot?.unitCosts[index];
+    if (typeof saved === "number") {
+      cost += saved * line.quantity;
+      return;
+    }
+    const today = costs[line.productId]?.cost;
+    if (typeof today === "number") {
+      cost += today * line.quantity;
+      estimated = true;
+    } else {
+      missingLines += 1;
+    }
+  });
+  const costState: CostState = missingLines > 0 ? "missing" : estimated ? "estimated" : "exact";
+  return { cost: round(cost), costState, missingLines };
+}
+
+type MonthTotals = Map<string, { expenses: number; pieces: number }>;
+
+/** Per month: deducted expenses and pieces sold (confirmed + delivered). */
+function monthlyExpenses(orders: Normalized[], expenses: Expense[]): MonthTotals {
+  const months: MonthTotals = new Map();
+  const month = (key: string) => {
+    if (!months.has(key)) months.set(key, { expenses: 0, pieces: 0 });
+    return months.get(key)!;
+  };
+  for (const expense of expenses) if (!NOT_DEDUCTED_CATEGORIES.includes(expense.category)) month(monthOf(expense.date)).expenses += expense.amount;
+  for (const order of orders) if (isSaleStatus(order.status)) month(monthOf(order.day)).pieces += piecesOf(order);
+  return months;
+}
+
+/** What one order brings: sale, factory cost, margin, its share of the month's expenses and the net profit. */
+export type OrderMoney = {
+  sales: number;
+  productsCost: number;
+  /** Sale − factory cost of the pieces. */
+  margin: number;
+  /** Share of the month's expenses: (month's deducted expenses ÷ pieces sold that month) × this order's pieces. */
+  expenseShare: number;
+  /** Margin − expense share: what the order really earned. */
+  netProfit: number;
+  /** Expense share of one piece in the order's month. */
+  perPiece: number;
+  month: string;
+  costState: CostState;
+  missingLines: number;
+  /** Order still waiting for confirmation: what it would bring once confirmed. */
+  expected: boolean;
+};
+
+function moneyOf(order: Normalized, costs: Record<string, ProductCost | undefined>, months: MonthTotals): OrderMoney {
+  const pieces = piecesOf(order);
+  const month = monthOf(order.day);
+  const totals = months.get(month) ?? { expenses: 0, pieces: 0 };
+  const expected = !isSaleStatus(order.status);
+  // A pending order is counted as if it were confirmed (its pieces join the month's sold pieces).
+  const base = totals.pieces + (expected ? pieces : 0);
+  const perPiece = base > 0 ? totals.expenses / base : 0;
+  const { cost, costState, missingLines } = productsCostOf(order, costs);
+  const margin = round(order.value - cost);
+  const expenseShare = round(perPiece * pieces);
+  return { sales: order.value, productsCost: cost, margin, expenseShare, netProfit: round(margin - expenseShare), perPiece: round(perPiece), month, costState, missingLines, expected };
+}
+
+/** Money of every order that is sold or still waiting (cancelled and returned orders bring nothing). Keyed by order ID. */
+export function orderFinance(input: { live: AnalyticsOrder[]; old: OldOrder[]; costs: Record<string, ProductCost | undefined>; expenses: Expense[] }): Record<string, OrderMoney> {
+  const orders = normalizeOrders(input.live, input.old);
+  const months = monthlyExpenses(orders, input.expenses);
+  return Object.fromEntries(orders.filter((order) => isSaleStatus(order.status) || order.status === "submitted").map((order) => [order.orderId, moneyOf(order, input.costs, months)]));
+}
+
+export function buildFinanceReport(input: {
+  live: AnalyticsOrder[];
+  old: OldOrder[];
+  costs: Record<string, ProductCost | undefined>;
+  expenses: Expense[];
+  from?: string | null;
+  to?: string | null;
+}): FinanceReport {
+  const from = isDay(input.from) ? input.from : null;
+  const to = isDay(input.to) ? input.to : null;
+  const inRange = (day: string) => (!from || day >= from) && (!to || day <= to);
+
+  const orders = normalizeOrders(input.live, input.old);
+  const months = monthlyExpenses(orders, input.expenses);
   const rows: FinanceOrderRow[] = [];
   let sales = 0;
   let productsCost = 0;
   let returnedValue = 0;
   for (const order of orders) {
     if (!inRange(order.day) || (!isSaleStatus(order.status) && order.status !== "returned")) continue;
-    const pieces = order.lines.reduce((sum, line) => sum + line.quantity, 0);
+    const pieces = piecesOf(order);
     if (order.status === "returned") {
       returnedValue += order.value;
-      rows.push({ orderId: order.orderId, source: order.source, day: order.day, status: order.status, pieces, sales: 0, productsCost: 0, profit: 0, costState: "exact", missingLines: 0 });
+      rows.push({ orderId: order.orderId, source: order.source, day: order.day, status: order.status, pieces, sales: 0, productsCost: 0, profit: 0, margin: 0, expenseShare: 0, netProfit: 0, costState: "exact", missingLines: 0 });
       continue;
     }
-    let cost = 0;
-    let estimated = false;
-    let missingLines = 0;
-    order.lines.forEach((line, index) => {
-      const saved = order.snapshot?.unitCosts[index];
-      if (typeof saved === "number") {
-        cost += saved * line.quantity;
-        return;
-      }
-      const today = input.costs[line.productId]?.cost;
-      if (typeof today === "number") {
-        cost += today * line.quantity;
-        estimated = true;
-      } else {
-        missingLines += 1;
-      }
-    });
-    cost = round(cost);
+    const money = moneyOf(order, input.costs, months);
     sales += order.value;
-    productsCost += cost;
+    productsCost += money.productsCost;
     rows.push({
       orderId: order.orderId,
       source: order.source,
@@ -220,10 +294,13 @@ export function buildFinanceReport(input: {
       status: order.status,
       pieces,
       sales: order.value,
-      productsCost: cost,
-      profit: round(order.value - cost),
-      costState: missingLines > 0 ? "missing" : estimated ? "estimated" : "exact",
-      missingLines,
+      productsCost: money.productsCost,
+      profit: money.margin,
+      margin: money.margin,
+      expenseShare: money.expenseShare,
+      netProfit: money.netProfit,
+      costState: money.costState,
+      missingLines: money.missingLines,
     });
   }
 

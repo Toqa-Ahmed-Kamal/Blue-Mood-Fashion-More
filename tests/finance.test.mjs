@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildFinanceReport, sanitizeExpense, sanitizeProductCost, snapshotCosts } from "../lib/finance.ts";
+import { buildFinanceReport, orderFinance, sanitizeExpense, sanitizeProductCost, snapshotCosts } from "../lib/finance.ts";
 import { sanitizeOldOrder } from "../lib/old-orders.ts";
 
 const NOW = new Date("2026-11-11T10:00:00Z");
@@ -92,4 +92,35 @@ test("input checks for costs and expenses", () => {
   assert.equal(sanitizeExpense({ name: "", category: "ads", amount: 10, date: "2026-11-10" }, "id"), null);
   assert.equal(sanitizeExpense({ name: "x", category: "ads", amount: 10, date: "10/11/2026" }, "id"), null);
   assert.deepEqual(snapshotCosts(["bm-robe-003", "bm-x"], costs, NOW), { unitCosts: [120, null], at: NOW.toISOString() });
+});
+
+test("per order: margin, share of the month's expenses by pieces, and net profit; they add up to the month's net profit", () => {
+  // November: deducted expenses 300 + 150 + 60 = 510; sold pieces 2 (A1) + 1 (A2) + 5 (B1) = 8 → 63.75 per piece.
+  const money = orderFinance({ live, old: oldOrders, costs, expenses });
+  const a1 = money["BM-AAAAAAAAAAAAAAAAAAA1"];
+  assert.deepEqual([a1.sales, a1.productsCost, a1.margin, a1.perPiece, a1.expenseShare, a1.netProfit, a1.expected], [580, 200, 380, 63.75, 127.5, 252.5, false]);
+  const a2 = money["BM-AAAAAAAAAAAAAAAAAAA2"];
+  assert.deepEqual([a2.margin, a2.expenseShare, a2.netProfit, a2.costState], [230, 63.75, 166.25, "estimated"]);
+  assert.equal(money["BM-AAAAAAAAAAAAAAAAAAA3"], undefined, "cancelled: nothing");
+  assert.equal(money["BM-AAAAAAAAAAAAAAAAAAA4"], undefined, "returned: nothing");
+  // Pending: counted as if confirmed (3 more pieces → 510 ÷ 11 per piece), marked expected.
+  const a5 = money["BM-AAAAAAAAAAAAAAAAAAA5"];
+  assert.equal(a5.expected, true);
+  assert.equal(a5.expenseShare, Math.round((510 / 11) * 3 * 100) / 100);
+  assert.equal(a5.netProfit, Math.round((1130 - 600 - a5.expenseShare) * 100) / 100);
+
+  const report = buildFinanceReport({ live, old: oldOrders, costs, expenses, from: "2026-11-01", to: "2026-11-30" });
+  const sold = report.orders.filter((row) => row.status !== "returned");
+  assert.equal(Math.round(sold.reduce((sum, row) => sum + row.netProfit, 0) * 100) / 100, report.totals.netProfit, "orders' net profits = the month's net profit");
+  assert.equal(sold.reduce((sum, row) => sum + row.expenseShare, 0), 510, "every pound of expenses is carried by an order");
+  const row = report.orders.find((item) => item.orderId === "BM-AAAAAAAAAAAAAAAAAAA1");
+  assert.deepEqual([row.margin, row.expenseShare, row.netProfit], [380, 127.5, 252.5]);
+});
+
+test("per order: a stock purchase is not shared over orders; a month without expenses leaves the margin as profit", () => {
+  const stock = [sanitizeExpense({ name: "بضاعة", category: "stock-purchase", amount: 5000, date: "2026-11-09", notes: "" }, "s1", NOW)];
+  const money = orderFinance({ live, old: oldOrders, costs, expenses: stock });
+  const a1 = money["BM-AAAAAAAAAAAAAAAAAAA1"];
+  assert.equal(a1.expenseShare, 0);
+  assert.equal(a1.netProfit, a1.margin);
 });

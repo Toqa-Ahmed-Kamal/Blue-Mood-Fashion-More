@@ -859,3 +859,21 @@ test("order edit: pieces, totals and encrypted details saved together; a sold or
     delete process.env.ORDER_DATA_KEY;
   }
 });
+
+test("selling prices: saved, read back, loaded into the server catalog, and removed to go back to the original", async () => {
+  store.clear();
+  const productsStore = await import("../lib/custom-products-store.ts");
+  const { findProduct, priceOf, basePriceOf, setPriceOverrides } = await import("../lib/site-data.ts");
+  const robe = findProduct("bm-robe-003");
+  try {
+    assert.equal(await productsStore.setProductPrice("bm-robe-003", 310), 310);
+    assert.deepEqual(await productsStore.loadPrices(), { "bm-robe-003": 310 });
+    await productsStore.ensureCustomProducts(true);
+    assert.equal(priceOf(robe), 310, "orders on this server use the new price");
+    assert.equal(await productsStore.setProductPrice("bm-robe-003", null), null);
+    await productsStore.ensureCustomProducts(true);
+    assert.equal(priceOf(robe), basePriceOf(robe));
+  } finally {
+    setPriceOverrides({});
+  }
+});

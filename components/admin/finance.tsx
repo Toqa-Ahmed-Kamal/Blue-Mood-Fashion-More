@@ -15,6 +15,7 @@ type ProductRow = {
   image: string;
   hidden: boolean;
   salePrice: number | null;
+  basePrice: number | null;
   factory: string;
   cost: number | null;
   costUpdatedAt: string | null;
@@ -192,6 +193,28 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
   }
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  // Selling price shown to customers: edited in place, one product at a time.
+  const [priceDraft, setPriceDraft] = useState<{ productId: string; value: string } | null>(null);
+
+  async function savePrice(product: ProductRow, value: number | null) {
+    if (value !== null && (!Number.isInteger(value) || value < 1)) {
+      setError("سعر البيع لازم يبقى رقم صحيح أكبر من صفر.");
+      return;
+    }
+    if (value !== null && product.basePrice !== null && Math.abs(value - product.salePrice!) / product.salePrice! > 0.5
+      && !window.confirm(`${product.name}: السعر هيتغير من ${product.salePrice} لـ ${value} ج.م. متأكدة؟`)) return;
+    setBusy(product.productId);
+    setError("");
+    try {
+      await api(`/api/admin/products/${product.productId}/price`, { method: "PUT", body: JSON.stringify({ price: value }) });
+      setPriceDraft(null);
+      await onSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ السعر.");
+    } finally {
+      setBusy("");
+    }
+  }
   const words = query.trim().toLowerCase();
   const rows = products.filter((product) => (showHidden || !product.hidden || product.cost !== null) && (!words || `${product.name} ${product.productId}`.toLowerCase().includes(words)));
   const priced = products.filter((product) => product.cost !== null).length;
@@ -275,7 +298,26 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
                       ? <span className="admin-locked strong">{money(product.cost ?? 0)}</span>
                       : <input className="admin-inline-input narrow" type="number" min={0} inputMode="decimal" value={costText} placeholder="—" onChange={(event) => edit({ cost: event.target.value })} aria-label={`سعر المصنع ${product.name}`} />}
                   </td>
-                  <td>{product.salePrice === null ? <span className="admin-muted">ضمن العرض بس</span> : money(product.salePrice)}</td>
+                  <td className="admin-sale-price">
+                    {product.salePrice === null ? <span className="admin-muted">ضمن العرض بس</span> : priceDraft?.productId === product.productId ? (
+                      <form className="admin-price-edit" onSubmit={(event) => { event.preventDefault(); void savePrice(product, Number(priceDraft.value)); }}>
+                        <input className="admin-inline-input narrow" type="number" min={1} step={1} inputMode="numeric" autoFocus value={priceDraft.value} onChange={(event) => setPriceDraft({ productId: product.productId, value: event.target.value })} aria-label={`سعر البيع ${product.name}`} />
+                        <button type="submit" disabled={busy === product.productId} aria-label="حفظ سعر البيع" title="حفظ"><Save size={14} /></button>
+                        <button type="button" onClick={() => setPriceDraft(null)} aria-label="إلغاء" title="إلغاء"><X size={14} /></button>
+                      </form>
+                    ) : (
+                      <>
+                        <span className="admin-locked strong">{money(product.salePrice)}</span>
+                        <button type="button" className="admin-price-btn" disabled={busy === product.productId} onClick={() => setPriceDraft({ productId: product.productId, value: String(product.salePrice) })} aria-label={`تعديل سعر البيع ${product.name}`} title="تعديل السعر اللي بيظهر للعميلات"><Pencil size={13} /></button>
+                        {!product.custom && product.basePrice !== null && product.basePrice !== product.salePrice && (
+                          <small className="admin-price-was">
+                            كان {money(product.basePrice)} ·{" "}
+                            <button type="button" className="admin-link" disabled={busy === product.productId} onClick={() => void savePrice(product, null)}>رجّعيه</button>
+                          </small>
+                        )}
+                      </>
+                    )}
+                  </td>
                   <td>{margin === null ? "—" : <span className={margin < 0 ? "admin-negative" : ""}>{money(margin)}</span>}</td>
                   <td>
                     <button type="button" className={`admin-stock${product.soldOut ? " out" : ""}`} disabled={busy === product.productId} onClick={() => void toggleSoldOut(product)} aria-pressed={product.soldOut} title={product.soldOut ? "دوسي علشان يرجع متاح" : "دوسي لو الكمية خلصت"}>
@@ -303,7 +345,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
           onSaved={async () => { setDialog(null); await onSaved(); }}
         />
       )}
-      <p className="admin-muted small">المنتجات هي نفسها منتجات كتالوج الموقع ومربوطة بالكود. المنتج اللي بتضيفيه من هنا بيظهر على الموقع للبيع خلال ثواني، وبيتعدل من زرار &quot;تعديل المنتج&quot;؛ منتجات الموقع الأساسية بتتعدل من الكود. المصنع الافتراضي لكل المنتجات &quot;مصنع القاهرة&quot;. سعر البيع هو السعر الحالي على الموقع (بيتعدل من بيانات المنتج)؛ قطع البيجامات والبلانكيت جوه العرض بتتباع بسعر العرض. سعر المصنع بيتحفظ مع كل أوردر وقت تأكيده، فتغييره بعد كده مش بيغيّر أرباح الأوردرات المؤكدة قبل كده.</p>
+      <p className="admin-muted small">المنتجات هي نفسها منتجات كتالوج الموقع ومربوطة بالكود. المنتج اللي بتضيفيه من هنا بيظهر على الموقع للبيع خلال ثواني، وبيتعدل من زرار &quot;تعديل المنتج&quot;؛ صور وأسماء منتجات الموقع الأساسية بتتعدل من الكود. المصنع الافتراضي لكل المنتجات &quot;مصنع القاهرة&quot;. سعر البيع هو السعر اللي بيظهر للعميلات على الموقع: بيتعدل من زرار القلم جنبه ويظهر على الموقع خلال ثواني، والأوردرات اللي اتعملت قبل كده بتفضل بسعرها؛ قطع البيجامات والبلانكيت جوه العرض بتتباع بسعر العرض. سعر المصنع بيتحفظ مع كل أوردر وقت تأكيده، فتغييره بعد كده مش بيغيّر أرباح الأوردرات المؤكدة قبل كده.</p>
     </section>
   );
 }
@@ -429,7 +471,7 @@ function OrdersProfit({ report }: { report: FinanceReport }) {
       {report.orders.length === 0 ? <p className="admin-muted empty">مفيش أوردرات مؤكدة أو مرتجعة في الفترة دي.</p> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>رقم الطلب</th><th>التاريخ</th><th>المصدر</th><th>الحالة</th><th>القطع</th><th>المبيعات</th><th>تكلفة المنتجات</th><th>المكسب قبل المصروفات</th></tr></thead>
+            <thead><tr><th>رقم الطلب</th><th>التاريخ</th><th>المصدر</th><th>الحالة</th><th>القطع</th><th>المبيعات</th><th>تكلفة المنتجات</th><th>هامش الربح</th><th>نصيبه من المصروفات</th><th>المكسب الصافي</th></tr></thead>
             <tbody>
               {report.orders.map((row) => (
                 <tr key={row.orderId} className={row.status === "returned" ? "dim" : ""}>
@@ -444,14 +486,16 @@ function OrdersProfit({ report }: { report: FinanceReport }) {
                     {row.costState === "estimated" && <span className="admin-flag warn">تقديرية</span>}
                     {row.costState === "missing" && <span className="admin-flag warn">ناقصة {row.missingLines} منتج</span>}
                   </td>
-                  <td>{row.status === "returned" ? "—" : <span className={row.profit < 0 ? "admin-negative" : ""}>{money(row.profit)}</span>}</td>
+                  <td>{row.status === "returned" ? "—" : <span className={row.margin < 0 ? "admin-negative" : ""}>{money(row.margin)}</span>}</td>
+                  <td>{row.status === "returned" ? "—" : money(row.expenseShare)}</td>
+                  <td>{row.status === "returned" ? "—" : <strong className={row.netProfit < 0 ? "admin-negative" : ""}>{money(row.netProfit)}</strong>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      <p className="admin-muted small">التاريخ هو يوم الأوردر. الأوردر اللي موجود في الموقع وفي تيليجرام بيتحسب مرة واحدة من الموقع. &quot;تقديرية&quot; = اتأكد قبل تسجيل سعر المصنع، فمحسوب بالسعر الحالي.</p>
+      <p className="admin-muted small">التاريخ هو يوم الأوردر. الأوردر اللي موجود في الموقع وفي تيليجرام بيتحسب مرة واحدة من الموقع. &quot;تقديرية&quot; = اتأكد قبل تسجيل سعر المصنع، فمحسوب بالسعر الحالي. هامش الربح = المبيعات − تكلفة المنتجات. نصيب الأوردر من المصروفات = مصروفات شهره (من غير شراء البضاعة) ÷ القطع المتباعة في الشهر × قطع الأوردر. المكسب الصافي = هامش الربح − نصيبه من المصروفات، وبيتحدث لوحده مع كل مصروف أو أوردر جديد في نفس الشهر.</p>
     </section>
   );
 }
