@@ -124,3 +124,18 @@ test("per order: a stock purchase is not shared over orders; a month without exp
   assert.equal(a1.expenseShare, 0);
   assert.equal(a1.netProfit, a1.margin);
 });
+
+test("an order keeps the price it was sold at: changing the store price later does not change its money", async () => {
+  const { setPriceOverrides } = await import("../lib/site-data.ts");
+  try {
+    setPriceOverrides({});
+    const before = orderFinance({ live, old: oldOrders, costs, expenses });
+    const reportBefore = buildFinanceReport({ live, old: oldOrders, costs, expenses });
+    // The owner raises (and lowers) selling prices after the deal with the customer.
+    setPriceOverrides({ "bm-robe-003": 400, "bm-abaya-001": 999, "bm-winter-pajama-002": 100 });
+    assert.deepEqual(orderFinance({ live, old: oldOrders, costs, expenses }), before, "sale, margin and profit unchanged");
+    assert.deepEqual(buildFinanceReport({ live, old: oldOrders, costs, expenses }), reportBefore, "finance report unchanged");
+  } finally {
+    setPriceOverrides({});
+  }
+});

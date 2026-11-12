@@ -16,6 +16,7 @@ type ProductRow = {
   hidden: boolean;
   salePrice: number | null;
   basePrice: number | null;
+  wasPrice: number | null;
   factory: string;
   cost: number | null;
   costUpdatedAt: string | null;
@@ -194,11 +195,17 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   // Selling price shown to customers: edited in place, one product at a time.
-  const [priceDraft, setPriceDraft] = useState<{ productId: string; value: string } | null>(null);
+  const [priceDraft, setPriceDraft] = useState<{ productId: string; value: string; was: string } | null>(null);
 
-  async function savePrice(product: ProductRow, value: number | null) {
+  /** value: new selling price (null = original). was: price before the discount (null = none, undefined = unchanged). */
+  async function savePrice(product: ProductRow, value: number | null, was?: number | null) {
     if (value !== null && (!Number.isInteger(value) || value < 1)) {
       setError("سعر البيع لازم يبقى رقم صحيح أكبر من صفر.");
+      return;
+    }
+    const finalPrice = value ?? product.basePrice;
+    if (was != null && (!Number.isInteger(was) || finalPrice === null || was <= finalPrice)) {
+      setError("السعر قبل الخصم لازم يبقى رقم صحيح أكبر من سعر البيع (أو فاضي من غير خصم).");
       return;
     }
     if (value !== null && product.basePrice !== null && Math.abs(value - product.salePrice!) / product.salePrice! > 0.5
@@ -206,7 +213,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
     setBusy(product.productId);
     setError("");
     try {
-      await api(`/api/admin/products/${product.productId}/price`, { method: "PUT", body: JSON.stringify({ price: value }) });
+      await api(`/api/admin/products/${product.productId}/price`, { method: "PUT", body: JSON.stringify(was === undefined ? { price: value } : { price: value, was }) });
       setPriceDraft(null);
       await onSaved();
     } catch (caught) {
@@ -300,15 +307,17 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
                   </td>
                   <td className="admin-sale-price">
                     {product.salePrice === null ? <span className="admin-muted">ضمن العرض بس</span> : priceDraft?.productId === product.productId ? (
-                      <form className="admin-price-edit" onSubmit={(event) => { event.preventDefault(); void savePrice(product, Number(priceDraft.value)); }}>
-                        <input className="admin-inline-input narrow" type="number" min={1} step={1} inputMode="numeric" autoFocus value={priceDraft.value} onChange={(event) => setPriceDraft({ productId: product.productId, value: event.target.value })} aria-label={`سعر البيع ${product.name}`} />
+                      <form className="admin-price-edit" onSubmit={(event) => { event.preventDefault(); void savePrice(product, Number(priceDraft.value), priceDraft.was.trim() === "" ? null : Number(priceDraft.was)); }}>
+                        <label><span>السعر</span><input className="admin-inline-input narrow" type="number" min={1} step={1} inputMode="numeric" autoFocus value={priceDraft.value} onChange={(event) => setPriceDraft({ ...priceDraft, value: event.target.value })} aria-label={`سعر البيع ${product.name}`} /></label>
+                        <label><span>بدل (قبل الخصم)</span><input className="admin-inline-input narrow" type="number" min={1} step={1} inputMode="numeric" value={priceDraft.was} placeholder="من غير خصم" onChange={(event) => setPriceDraft({ ...priceDraft, was: event.target.value })} aria-label={`السعر قبل الخصم ${product.name}`} /></label>
                         <button type="submit" disabled={busy === product.productId} aria-label="حفظ سعر البيع" title="حفظ"><Save size={14} /></button>
                         <button type="button" onClick={() => setPriceDraft(null)} aria-label="إلغاء" title="إلغاء"><X size={14} /></button>
                       </form>
                     ) : (
                       <>
                         <span className="admin-locked strong">{money(product.salePrice)}</span>
-                        <button type="button" className="admin-price-btn" disabled={busy === product.productId} onClick={() => setPriceDraft({ productId: product.productId, value: String(product.salePrice) })} aria-label={`تعديل سعر البيع ${product.name}`} title="تعديل السعر اللي بيظهر للعميلات"><Pencil size={13} /></button>
+                        {product.wasPrice !== null && <s className="admin-price-strike">{money(product.wasPrice)}</s>}
+                        <button type="button" className="admin-price-btn" disabled={busy === product.productId} onClick={() => setPriceDraft({ productId: product.productId, value: String(product.salePrice), was: product.wasPrice === null ? "" : String(product.wasPrice) })} aria-label={`تعديل سعر البيع ${product.name}`} title="تعديل السعر اللي بيظهر للعميلات"><Pencil size={13} /></button>
                         {!product.custom && product.basePrice !== null && product.basePrice !== product.salePrice && (
                           <small className="admin-price-was">
                             كان {money(product.basePrice)} ·{" "}

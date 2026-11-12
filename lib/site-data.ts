@@ -150,6 +150,28 @@ export function priceOf(product: CatalogProduct) {
   return base === null ? null : priceOverrides.get(product.id) ?? base;
 }
 
+// ── "بدل كذا": price before the discount (set from the admin, stored in Redis) ──
+const wasPrices = new Map<string, number>();
+
+export function setWasPrices(prices: Readonly<Record<string, number>>) {
+  wasPrices.clear();
+  for (const [id, price] of Object.entries(prices)) if (Number.isFinite(price) && price > 0) wasPrices.set(id, price);
+}
+
+/** The price before the discount, shown struck through — only while it is higher than today's price. */
+export function wasPriceOf(product: CatalogProduct) {
+  const price = priceOf(product);
+  const was = wasPrices.get(product.id);
+  return price !== null && was !== undefined && was > price ? was : null;
+}
+
+/** Discount in whole percent (e.g. 20 for 250 instead of 315), or null. */
+export function discountPercentOf(product: CatalogProduct) {
+  const was = wasPriceOf(product);
+  const price = priceOf(product);
+  return was === null || price === null ? null : Math.round(((was - price) / was) * 100);
+}
+
 /** Lowest single-piece price among the visible products of a category. */
 export function startingPriceOf(category: CatalogCategory) {
   const prices = productsIn(category).map(priceOf).filter((price): price is number => price !== null);

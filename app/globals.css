@@ -1168,7 +1168,7 @@ h1, h2, h3 { font-family: var(--font-display); }
 .admin-grid-2 > .admin-panel { margin-bottom: 16px; }
 .admin-chart { width: 100%; min-width: 0; font-size: 12px; }
 .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.admin-table { width: 100%; border-collapse: collapse; font-size: .84rem; white-space: nowrap; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
 .admin-table th, .admin-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: start; }
 .admin-table th { color: var(--muted); font-weight: 600; font-size: .78rem; background: var(--bg); position: sticky; top: 0; }
 .admin-table tr.dim td { color: #b5aeb6; }
@@ -1703,3 +1703,44 @@ select.admin-inline-input { width: 160px; }
 .admin-price-edit { display: inline-flex; gap: 4px; align-items: center; }
 .admin-price-edit button { padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; }
 .admin-price-was { display: block; color: var(--muted); font-size: .74rem; margin-top: 2px; }
+
+/* Discount: today's price, the old price struck through, and the percent off. */
+.price-tag.on-sale { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.price-was { font-size: 13px; font-weight: 600; color: var(--muted); text-decoration-thickness: 1.5px; }
+.price-off { font-size: 11.5px; font-weight: 800; color: #fff; background: var(--pink-dark); border-radius: 999px; padding: 1px 8px; }
+.sale-badge { position: absolute; top: 10px; inset-inline-start: 10px; z-index: 2; background: var(--pink-dark); color: #fff; font-size: .78rem; font-weight: 800; border-radius: 999px; padding: 4px 12px; box-shadow: var(--shadow-sm); }
+.admin-price-edit label { display: inline-flex; flex-direction: column; gap: 2px; font-size: .7rem; color: var(--muted); }
+.admin-price-strike { margin-inline-start: 6px; color: var(--muted); font-size: .78rem; }
+
+/* Admin tables fit their card (components/admin/table-fit.tsx): text and headers wrap, numbers stay on one line,
+   and a table still wider than its card becomes one card per row (data-stack), each value with its column name. */
+.admin-table th { white-space: normal; line-height: 1.35; }
+.admin-table td { white-space: normal; overflow-wrap: break-word; }
+.admin-table td[data-num], .admin-table td.mono, .admin-table td .mono, .admin-table .status, .admin-table .admin-locked { white-space: nowrap; }
+.admin-table td.actions { flex-wrap: wrap; }
+.admin-table[data-stack], .admin-table[data-stack] > tbody, .admin-table[data-stack] > tfoot { display: block; width: 100%; }
+.admin-table[data-stack] > thead { display: none; }
+.admin-table[data-stack] > tbody > tr, .admin-table[data-stack] > tfoot > tr {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 4px 16px;
+  border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; background: var(--paper);
+}
+.admin-table[data-stack] > tbody > tr > td, .admin-table[data-stack] > tfoot > tr > td {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0; border: 0; padding: 4px 0;
+}
+.admin-table[data-stack] > tbody > tr > td::before, .admin-table[data-stack] > tfoot > tr > td::before {
+  content: attr(data-label); color: var(--muted); font-size: .74rem; font-weight: 600; white-space: nowrap;
+}
+.admin-table[data-stack] > tbody > tr > td[data-label=""]::before { content: none; }
+.admin-table[data-stack] > tbody > tr > td:first-child { grid-column: 1 / -1; font-weight: 700; border-bottom: 1px dashed var(--line); padding-bottom: 6px; }
+.admin-table[data-stack] > tbody > tr > td.actions { grid-column: 1 / -1; justify-content: flex-start; }
+.admin-table[data-stack] > tbody > tr > td.actions::before { content: none; }
+.admin-table[data-stack] > tbody > tr > td > * { min-width: 0; }
+/* Action cells stay real table cells (a flex cell breaks the row lines); their buttons wrap. */
+.admin-table td.actions { display: table-cell; }
+.admin-table td.actions > * { display: inline-flex; margin: 2px 0 2px 6px; vertical-align: middle; }
+/* Product names keep a readable width instead of one word per line. */
+.admin-table td .admin-product { min-width: 140px; }
+.admin-fin-products select.admin-inline-input { max-width: 132px; }
+.admin-fin-products input.admin-inline-input.narrow { width: 84px; }
+.admin-table[data-stack] > tbody > tr > td { background: transparent; }
+.admin-fin-products td.mono { white-space: normal; overflow-wrap: anywhere; min-width: 96px; }

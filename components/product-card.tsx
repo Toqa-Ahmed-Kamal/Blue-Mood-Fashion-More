@@ -12,7 +12,7 @@ import { formatEGP } from "@/lib/format";
 import { trackCartRemove, trackProductView } from "@/lib/journey-tracker";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
-import { categoryInfo, isSoldOut, landingPromotion, offerCategories, priceOf, type CatalogProduct } from "@/lib/site-data";
+import { categoryInfo, discountPercentOf, isSoldOut, landingPromotion, offerCategories, priceOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
 
 function offerLinkFor(product: CatalogProduct) {
   return product.category === "wearable-blankets"
@@ -74,9 +74,16 @@ export function FitNote({ product }: { product: CatalogProduct }) {
 
 export function PriceTag({ product }: { product: CatalogProduct }) {
   const price = priceOf(product);
-  return price === null
-    ? <span className="price-tag offer-only">ضمن عرض الـ {landingPromotion.price}</span>
-    : <span className="price-tag">{formatEGP(price)}</span>;
+  if (price === null) return <span className="price-tag offer-only">ضمن عرض الـ {landingPromotion.price}</span>;
+  const was = wasPriceOf(product);
+  if (was === null) return <span className="price-tag">{formatEGP(price)}</span>;
+  return (
+    <span className="price-tag on-sale">
+      {formatEGP(price)}
+      <s className="price-was" aria-label={`بدل ${formatEGP(was)}`}>بدل {formatEGP(was)}</s>
+      <span className="price-off">خصم {discountPercentOf(product)}٪</span>
+    </span>
+  );
 }
 
 /** Pieces that also fit the winter offer point to it. */
@@ -95,6 +102,7 @@ export function ProductCard({ product, onQuickView }: { product: CatalogProduct;
       <button type="button" className="product-media" onClick={() => onQuickView(product)} aria-label={`عرض صورة ${product.name} بالكامل`}>
         <Image src={product.image} alt={product.imageAlt} fill sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 25vw" />
         {isSoldOut(product.id) && <span className="sold-out-badge">نفدت الكمية</span>}
+        {!isSoldOut(product.id) && discountPercentOf(product) !== null && <span className="sale-badge">خصم {discountPercentOf(product)}٪</span>}
         <span className="media-zoom" aria-hidden="true"><Expand size={16} /></span>
       </button>
       <div className="product-body">

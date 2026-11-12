@@ -115,3 +115,22 @@ test("selling price changed from the admin: the store, cart and order use it; a 
     setPriceOverrides({});
   }
 });
+
+test("discount: 'بدل كذا' shows only while it is higher than today's price; percent off is rounded", async () => {
+  const { discountPercentOf, findProduct, priceOf, setPriceOverrides, setWasPrices, wasPriceOf } = await import("../lib/site-data.ts");
+  const robe = findProduct("bm-robe-003");
+  try {
+    setPriceOverrides({ "bm-robe-003": 250 });
+    setWasPrices({ "bm-robe-003": 320 });
+    assert.equal(wasPriceOf(robe), 320);
+    assert.equal(discountPercentOf(robe), 22, "(320 − 250) ÷ 320 = 21.9%");
+    assert.equal(priceOf(robe), 250, "the customer pays today's price");
+    // Raising the price above the old one hides the discount instead of showing a fake one.
+    setPriceOverrides({ "bm-robe-003": 330 });
+    assert.equal(wasPriceOf(robe), null);
+    assert.equal(discountPercentOf(robe), null);
+  } finally {
+    setPriceOverrides({});
+    setWasPrices({});
+  }
+});

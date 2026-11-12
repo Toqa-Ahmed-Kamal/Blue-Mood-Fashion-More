@@ -21,6 +21,7 @@ import {
 
 import { AllOrdersTab } from "@/components/admin/all-orders";
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
+import { useAdminTableFit } from "@/components/admin/table-fit";
 import { editRecordProducts, editTotals } from "@/lib/order-edit";
 import { OldOrdersTab } from "@/components/admin/old-orders";
 import { WhatsAppLink, WhatsAppMenu, WhatsAppTargetPicker } from "@/components/admin/whatsapp-link";
@@ -98,6 +99,9 @@ export function AnalyticsDashboard() {
   const [oldOpened, setOldOpened] = useState(false);
   // Sections sidebar: open by default on wide screens, closed on phones; the choice is remembered.
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Every table fits its card: wraps, and turns into cards when it still does not fit.
+  const shellRef = useRef<HTMLDivElement>(null);
+  useAdminTableFit(shellRef);
 
   useEffect(() => {
     let saved: string | null = null;
@@ -182,7 +186,7 @@ export function AnalyticsDashboard() {
   }
 
   return (
-    <div className={`admin admin-shell${sidebarOpen ? " sidebar-open" : ""}`} dir="rtl">
+    <div ref={shellRef} className={`admin admin-shell${sidebarOpen ? " sidebar-open" : ""}`} dir="rtl">
       <aside className="admin-sidebar" id="admin-sidebar" aria-label="أقسام الداشبورد" hidden={!sidebarOpen}>
         <div className="admin-sidebar-head">
           <strong>الأقسام</strong>
