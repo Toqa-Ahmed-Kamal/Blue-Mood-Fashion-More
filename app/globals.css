@@ -1744,3 +1744,6 @@ select.admin-inline-input { width: 160px; }
 .admin-fin-products input.admin-inline-input.narrow { width: 84px; }
 .admin-table[data-stack] > tbody > tr > td { background: transparent; }
 .admin-fin-products td.mono { white-space: normal; overflow-wrap: anywhere; min-width: 96px; }
+
+/* Offer with fewer pieces "in the offer" than it should have (order card / edit window). */
+p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }

@@ -8,7 +8,7 @@ import { formatEGP } from "@/lib/format";
 import { editTotals, type OrderEdit } from "@/lib/order-edit";
 import { productImage } from "@/lib/quantity-summary";
 import { governorateShippingFee, shippingGovernorates } from "@/lib/shipping-rates";
-import { catalog, categoryInfo, categoryOrder, findProduct, isSoldOut, priceOf } from "@/lib/site-data";
+import { catalog, categoryInfo, categoryOrder, findProduct, isSoldOut, offerCategories, offerPieceCount, priceOf } from "@/lib/site-data";
 
 /** What the edit window needs from any order (site order or imported Telegram order). */
 export type EditableOrder = {
@@ -71,11 +71,22 @@ export function OrderEditDialog({ order, onClose, onSaved }: { order: EditableOr
   const setField = (field: keyof typeof customer, value: string) => setCustomer((current) => ({ ...current, [field]: value }));
   const setLine = (key: number, change: Partial<DraftLine>) => setLines((current) => current.map((line) => (line.key === key ? { ...line, ...change } : line)));
 
+  const hasOffer = Number(offerPrice) > 0;
+  const offerSlots = hasOffer ? offerPieceCount(customer.offerName) : 0;
+  const offerPieces = (except?: number) => lines
+    .filter((line) => line.key !== except && line.modelId !== "" && line.price.trim() === "")
+    .reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
+  const piecesInOffer = offerPieces();
+
   function chooseProduct(line: DraftLine, modelId: string) {
     const product = findProduct(modelId);
-    // A piece that was part of the offer stays in the offer; otherwise it takes the store price.
-    const inOffer = line.modelId !== "" && line.price === "";
-    const price = !product || inOffer ? line.price : String(priceOf(product) ?? "");
+    // A piece that was part of the offer stays in the offer. A new pajama / blanket fills a free place
+    // in the offer (a swapped piece is not charged again); anything else takes the store price.
+    const wasInOffer = line.modelId !== "" && line.price === "";
+    const fillsOffer = line.modelId === "" && !!product && hasOffer && offerCategories.includes(product.category)
+      && offerPieces(line.key) + (Number(line.quantity) || 1) <= offerSlots;
+    const inOffer = wasInOffer || fillsOffer;
+    const price = !product || inOffer ? (fillsOffer ? "" : line.price) : String(priceOf(product) ?? "");
     setLine(line.key, { modelId, price, was: "" });
   }
 
@@ -194,6 +205,12 @@ export function OrderEditDialog({ order, onClose, onSaved }: { order: EditableOr
                 )}
               </label>
             </div>
+            {hasOffer && piecesInOffer !== offerSlots && (
+              <p className="admin-flag warn" role="status">
+                العرض {offerSlots} قطع، وفيه {piecesInOffer} بس &quot;ضمن العرض&quot;.
+                {piecesInOffer < offerSlots ? " لو القطع التانية بدل قطع من العرض، امسحي سعرها علشان تدخل في العرض ومتتحسبش مرتين." : " شيلي قطعة أو حطيلها سعر."}
+              </p>
+            )}
             {totals && (
               <dl className="admin-totals">
                 {totals.itemsTotal > 0 && <div><dt>القطع المنفردة</dt><dd>{formatEGP(totals.itemsTotal)}</dd></div>}

@@ -211,6 +211,12 @@ export const landingPromotion = {
 
 export type LandingPromotionOptionId = (typeof landingPromotion.options)[number]["id"];
 
+/** Pieces in an order's winter offer, from the offer name it carries (both options are 4 pieces). */
+export function offerPieceCount(offerName: string) {
+  const option = landingPromotion.options.find((item) => offerName.includes(item.label)) ?? landingPromotion.options[0];
+  return option.pajamaCount + option.wearableBlanketCount;
+}
+
 export function findOffer(id: string) {
   return landingPromotion.options.find((option) => option.id === id);
 }

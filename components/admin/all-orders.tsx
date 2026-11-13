@@ -11,7 +11,7 @@ import type { OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import { productImage } from "@/lib/quantity-summary";
-import { findProduct } from "@/lib/site-data";
+import { findProduct, offerPieceCount } from "@/lib/site-data";
 
 const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", delivered: "تم الاستلام", cancelled: "اتلغى", returned: "مرتجع" };
 const PAGE_SIZE = 30;
@@ -224,6 +224,13 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit }: { order:
               );
             })}
           </ul>
+          {order.offerPrice > 0 && (() => {
+            const slots = offerPieceCount(order.offerName);
+            const inOffer = order.products.filter((product) => product.unitPrice === null).reduce((sum, product) => sum + product.quantity, 0);
+            return inOffer < slots && order.products.some((product) => product.unitPrice !== null) ? (
+              <p className="admin-flag warn">العرض {slots} قطع وفيه {inOffer} بس ضمن العرض، والباقي محسوب بسعره. لو دول بدل قطع من العرض: &quot;تعديل الأوردر&quot; وامسحي سعرهم.</p>
+            ) : null;
+          })()}
           <dl className="admin-totals">
             <div><dt>الشحن</dt><dd>{order.shippingCost === null ? "لسه هيتأكد" : formatEGP(order.shippingCost)}</dd></div>
             <div className="grand"><dt>الإجمالي</dt><dd>{order.total === null ? `${formatEGP(order.value)} + الشحن` : formatEGP(order.total)}</dd></div>
