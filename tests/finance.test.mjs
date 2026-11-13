@@ -128,6 +128,18 @@ test("nothing confirmed yet: pending orders share the month's expenses, none car
   assert.equal(money["BM-AAAAAAAAAAAAAAAAAAA2"].expenseShare, 42.5, "a one-piece order carries one piece's share, not all 510");
 });
 
+test("profit by stage: confirmed (expected), delivered (collected), waiting (if confirmed)", () => {
+  const withDelivered = live.map((order) => (order.orderId === "BM-AAAAAAAAAAAAAAAAAAA2" ? { ...order, status: "delivered" } : order));
+  const report = buildFinanceReport({ live: withDelivered, old: oldOrders, costs, expenses });
+  const { confirmed, delivered, pending } = report.stages;
+  assert.deepEqual([confirmed.orders, confirmed.pieces, confirmed.sales], [2, 7, 580 + 1430], "A1 + old B1");
+  assert.deepEqual([delivered.orders, delivered.pieces, delivered.sales], [1, 1, 430], "A2");
+  assert.equal(Math.round((confirmed.netProfit + delivered.netProfit) * 100) / 100, report.totals.netProfit, "confirmed + delivered = net profit");
+  assert.deepEqual([pending.orders, pending.pieces, pending.sales], [2, 12, 1130 + 2250], "A5 + old B2, not in the net profit");
+  const byRow = Object.fromEntries(report.orders.map((row) => [row.orderId, row]));
+  assert.equal(delivered.netProfit, byRow["BM-AAAAAAAAAAAAAAAAAAA2"].netProfit);
+});
+
 test("per order: a stock purchase is not shared over orders; a month without expenses leaves the margin as profit", () => {
   const stock = [sanitizeExpense({ name: "بضاعة", category: "stock-purchase", amount: 5000, date: "2026-11-09", notes: "" }, "s1", NOW)];
   const money = orderFinance({ live, old: oldOrders, costs, expenses: stock });

@@ -10,7 +10,10 @@
 //   its own expense, so nothing is deducted twice.
 // - Each order counts once: an imported Telegram order that is also a site order is the site order.
 // - Net profit = sales − products cost − expenses, all in EGP, for the chosen dates.
+// - Direct sales to friends and family (lib/direct-sales.ts) are sales too: their sale and factory cost join
+//   the totals and their own extra cost comes off the net profit. The month's expenses stay on online orders.
 import { confirmedValueOf, isSaleStatus, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
+import { directSaleMoney, type DirectSale } from "./direct-sales.ts";
 import { oldOrderValue, type OldOrder } from "./old-orders.ts";
 import { catalog, landingPromotion } from "./site-data.ts";
 
@@ -141,8 +144,17 @@ export type FinanceReport = {
   /** Value of returned orders (information only, not deducted anywhere). */
   returnedValue: number;
   expensesByCategory: { category: ExpenseCategory; label: string; amount: number }[];
+  /**
+   * Profit by where the order stands: confirmed but not delivered yet (expected — may still come back),
+   * delivered (collected), and still waiting for confirmation (if they were all confirmed).
+   */
+  stages: Record<"confirmed" | "delivered" | "pending", FinanceStage>;
+  /** Direct sales to friends and family in the period (already inside totals.sales / productsCost / netProfit). */
+  direct: { count: number; pieces: number; sales: number; productsCost: number; extraCost: number; profit: number; missingCostLines: number };
   orders: FinanceOrderRow[];
 };
+
+export type FinanceStage = { orders: number; pieces: number; sales: number; productsCost: number; netProfit: number };
 
 type OrderLine = { productId: string; quantity: number };
 type Normalized = { orderId: string; source: "site" | "telegram"; day: string; status: OrderStatus; value: number; lines: OrderLine[]; snapshot?: CostSnapshot };
@@ -267,6 +279,7 @@ export function buildFinanceReport(input: {
   old: OldOrder[];
   costs: Record<string, ProductCost | undefined>;
   expenses: Expense[];
+  direct?: DirectSale[];
   from?: string | null;
   to?: string | null;
 }): FinanceReport {
@@ -280,8 +293,19 @@ export function buildFinanceReport(input: {
   let sales = 0;
   let productsCost = 0;
   let returnedValue = 0;
+  const stage = (): FinanceStage => ({ orders: 0, pieces: 0, sales: 0, productsCost: 0, netProfit: 0 });
+  const stages = { confirmed: stage(), delivered: stage(), pending: stage() };
+  const addTo = (target: FinanceStage, pieces: number, money: OrderMoney) => {
+    target.orders += 1;
+    target.pieces += pieces;
+    target.sales += money.sales;
+    target.productsCost += money.productsCost;
+    target.netProfit += money.netProfit;
+  };
   for (const order of orders) {
-    if (!inRange(order.day) || (!isSaleStatus(order.status) && order.status !== "returned")) continue;
+    if (!inRange(order.day)) continue;
+    if (order.status === "submitted") addTo(stages.pending, piecesOf(order), moneyOf(order, input.costs, months));
+    if (!isSaleStatus(order.status) && order.status !== "returned") continue;
     const pieces = piecesOf(order);
     if (order.status === "returned") {
       returnedValue += order.value;
@@ -289,6 +313,7 @@ export function buildFinanceReport(input: {
       continue;
     }
     const money = moneyOf(order, input.costs, months);
+    addTo(order.status === "delivered" ? stages.delivered : stages.confirmed, pieces, money);
     sales += order.value;
     productsCost += money.productsCost;
     rows.push({
@@ -313,9 +338,25 @@ export function buildFinanceReport(input: {
   const expensesTotal = round(deducted.reduce((sum, expense) => sum + expense.amount, 0));
   const stockPurchases = round(expenses.filter((expense) => NOT_DEDUCTED_CATEGORIES.includes(expense.category)).reduce((sum, expense) => sum + expense.amount, 0));
   const confirmed = rows.filter((row) => isSaleStatus(row.status));
+  const direct = { count: 0, pieces: 0, sales: 0, productsCost: 0, extraCost: 0, profit: 0, missingCostLines: 0 };
+  for (const sale of input.direct ?? []) {
+    if (!inRange(sale.date)) continue;
+    const value = directSaleMoney(sale);
+    direct.count += 1;
+    direct.pieces += value.pieces;
+    direct.sales += value.sales;
+    direct.productsCost += value.productsCost;
+    direct.extraCost += value.extraCost;
+    direct.profit += value.profit;
+    direct.missingCostLines += value.missingCostLines;
+  }
+  const allSales = sales + direct.sales;
+  const allProductsCost = productsCost + direct.productsCost;
   return {
     range: { from, to },
-    totals: { sales: round(sales), productsCost: round(productsCost), expenses: expensesTotal, stockPurchases, netProfit: round(sales - productsCost - expensesTotal) },
+    // Direct sales are sales too; their extra cost (delivery, packaging) comes off the net profit.
+    totals: { sales: round(allSales), productsCost: round(allProductsCost), expenses: expensesTotal, stockPurchases, netProfit: round(allSales - allProductsCost - expensesTotal - direct.extraCost) },
+    direct: { ...direct, sales: round(direct.sales), productsCost: round(direct.productsCost), extraCost: round(direct.extraCost), profit: round(direct.profit) },
     counts: {
       confirmedOrders: confirmed.length,
       returnedOrders: rows.length - confirmed.length,
@@ -329,6 +370,7 @@ export function buildFinanceReport(input: {
       label: category.label,
       amount: round(expenses.filter((expense) => expense.category === category.id).reduce((sum, expense) => sum + expense.amount, 0)),
     })),
+    stages: Object.fromEntries(Object.entries(stages).map(([key, value]) => [key, { ...value, sales: round(value.sales), productsCost: round(value.productsCost), netProfit: round(value.netProfit) }])) as FinanceReport["stages"],
     orders: rows.toSorted((a, b) => b.day.localeCompare(a.day) || a.orderId.localeCompare(b.orderId)),
   };
 }

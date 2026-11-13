@@ -1,7 +1,7 @@
 import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
 import { loadAllOrdersForSummary } from "@/lib/analytics-store";
 import { DEFAULT_FACTORY, buildFinanceReport } from "@/lib/finance";
-import { loadExpenses, loadFactories, loadProductCosts } from "@/lib/finance-store";
+import { loadDirectSales, loadExpenses, loadFactories, loadProductCosts } from "@/lib/finance-store";
 import { loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -22,13 +22,14 @@ export async function GET(request: Request) {
   try {
     await ensureCustomProducts();
     const vault = isOrderVaultConfigured();
-    const [live, old, costs, expenses] = await Promise.all([
+    const [live, old, costs, expenses, directSales] = await Promise.all([
       loadAllOrdersForSummary(),
       vault ? loadOldOrders() : Promise.resolve({ orders: [], unreadable: 0 }),
       loadProductCosts(),
       loadExpenses(),
+      loadDirectSales(),
     ]);
-    const report = buildFinanceReport({ live: live.map((item) => item.order), old: old.orders, costs, expenses, from: params.get("from"), to: params.get("to") });
+    const report = buildFinanceReport({ live: live.map((item) => item.order), old: old.orders, costs, expenses, direct: directSales, from: params.get("from"), to: params.get("to") });
     const factories = await loadFactories(costs);
     const products = catalog.map((product) => ({
       productId: product.id,
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
       cost: costs[product.id]?.cost ?? null,
       costUpdatedAt: costs[product.id]?.updatedAt ?? null,
     }));
-    return json(200, { success: true, report, products, expenses, factories, vaultConfigured: vault, unreadableOldOrders: old.unreadable });
+    return json(200, { success: true, report, products, expenses, directSales, factories, vaultConfigured: vault, unreadableOldOrders: old.unreadable });
   } catch (error) {
     console.error("[admin] finance report failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
     return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحسب الماليات دلوقتي. جربي تاني." } });

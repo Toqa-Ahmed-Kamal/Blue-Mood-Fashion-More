@@ -4,13 +4,16 @@
 //   finance:costs      HASH  productId → JSON ProductCost (factory name + factory price per piece)
 //   finance:expenses   HASH  expenseId → JSON Expense
 //   finance:factories  SET   factory names added by the admin (DEFAULT_FACTORY is always there)
-// No customer data is stored here.
+//   finance:direct     HASH  saleId → JSON DirectSale (sales to friends and family; the buyer is a short optional label)
+// No customer data (phones, addresses) is stored here.
+import type { DirectSale } from "./direct-sales.ts";
 import { DEFAULT_FACTORY, type Expense, type ProductCost } from "./finance.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 
 const COSTS = () => `${keyPrefix()}finance:costs`;
 const EXPENSES = () => `${keyPrefix()}finance:expenses`;
 const FACTORIES = () => `${keyPrefix()}finance:factories`;
+const DIRECT = () => `${keyPrefix()}finance:direct`;
 
 /** Factory names: the default, every one added by the admin, and any already used on a product. */
 export async function loadFactories(costs: Record<string, ProductCost> = {}) {
@@ -84,5 +87,26 @@ export async function saveExpense(expense: Expense) {
 
 export async function deleteExpense(id: string) {
   const [removed] = await redisPipeline([["HDEL", EXPENSES(), id]], "write");
+  return Number(removed) === 1;
+}
+
+export async function loadDirectSales(): Promise<DirectSale[]> {
+  const [flat] = await redisPipeline([["HGETALL", DIRECT()]], "read", 5000);
+  return parseHash<DirectSale>(flat).toSorted((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function loadDirectSale(id: string) {
+  const [raw] = await redisPipeline([["HGET", DIRECT(), id]], "write");
+  return typeof raw === "string" ? (JSON.parse(raw) as DirectSale) : null;
+}
+
+/** Adds or replaces a direct sale, and reads it back before reporting success. */
+export async function saveDirectSale(sale: DirectSale) {
+  const [, stored] = await redisPipeline([["HSET", DIRECT(), sale.id, JSON.stringify(sale)], ["HGET", DIRECT(), sale.id]], "write");
+  return typeof stored === "string" ? (JSON.parse(stored) as DirectSale) : null;
+}
+
+export async function deleteDirectSale(id: string) {
+  const [removed] = await redisPipeline([["HDEL", DIRECT(), id]], "write");
   return Number(removed) === 1;
 }

@@ -1747,3 +1747,27 @@ select.admin-inline-input { width: 160px; }
 
 /* Offer with fewer pieces "in the offer" than it should have (order card / edit window). */
 p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
+
+/* Finance: profit by where the order stands (confirmed / delivered / waiting). */
+.admin-fin-stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; margin: 14px 0; }
+.admin-fin-stage { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--paper); border-inline-start: 4px solid var(--line); }
+.admin-fin-stage.confirmed { border-inline-start-color: #e0a526; }
+.admin-fin-stage.delivered { border-inline-start-color: #157a3e; }
+.admin-fin-stage.pending { border-inline-start-color: var(--muted); opacity: .9; }
+.admin-fin-stage-head { font-weight: 700; color: var(--navy); }
+.admin-fin-stage-head small { font-weight: 500; color: var(--muted); }
+.admin-fin-stage-row { display: flex; justify-content: space-between; gap: 10px; font-size: .9rem; }
+.admin-fin-stage-row strong { white-space: nowrap; }
+
+/* Finance: direct sales (friends and family). */
+.direct-lines { display: grid; gap: 10px; margin: 10px 0; }
+.direct-line { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: flex-end; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--paper); }
+.direct-line > .admin-field { flex: 1 1 120px; min-width: 0; }
+.direct-line > .admin-field.product { flex: 2 1 220px; }
+.direct-line > .admin-field.qty { flex: 0 1 80px; }
+.direct-line .admin-field select, .direct-line .admin-field input { width: 100%; min-width: 0; }
+.direct-line-total { font-weight: 700; white-space: nowrap; padding-bottom: 8px; }
+.direct-lines > .admin-chip { justify-self: start; }
+.direct-preview { max-width: 360px; margin: 8px 0 12px; }
+.direct-item { display: block; }
+.admin-fin-stage.direct { border-inline-start-color: #7a4cc2; }
