@@ -89,10 +89,13 @@ export async function PATCH(request: Request, context: Context) {
       const ids = next.products.map((product) => product.modelId);
       costSnapshot = snapshotCosts(ids, await productCostsFor(ids), now);
     }
-    const { costSnapshot: _ignored, deposit: _ignoredDeposit, ...withoutSnapshot } = next;
+    // Time it became a sale (inventory): kept while it stays a sale, cleared otherwise. Never from the browser.
+    const soldAt = isSaleStatus(next.status) ? (isSaleStatus(current.status) ? current.soldAt : now.toISOString()) : undefined;
+    const { costSnapshot: _ignored, deposit: _ignoredDeposit, soldAt: _ignoredSoldAt, ...withoutSnapshot } = next;
     void _ignored;
     void _ignoredDeposit;
-    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(deposit ? { deposit } : {}), updatedAt: now.toISOString() });
+    void _ignoredSoldAt;
+    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(soldAt ? { soldAt } : {}), ...(deposit ? { deposit } : {}), updatedAt: now.toISOString() });
     return saved ? json(200, { success: true, order: saved }) : json(404, NOT_FOUND);
   } catch (error) {
     return storageError(error, "update");

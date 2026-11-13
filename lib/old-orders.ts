@@ -54,6 +54,8 @@ export type OldOrder = {
   updatedAt: string;
   /** Unit factory costs saved when the order was confirmed (set by the server only). */
   costSnapshot?: CostSnapshot;
+  /** When the order became a sale; kept while it stays one (set by the server only; inventory uses it). */
+  soldAt?: string;
   /** Booking confirmed with a deposit (set from the admin only). */
   deposit?: Deposit;
 };

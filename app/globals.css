@@ -1771,3 +1771,13 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
 .direct-preview { max-width: 360px; margin: 8px 0 12px; }
 .direct-item { display: block; }
 .admin-fin-stage.direct { border-inline-start-color: #7a4cc2; }
+
+/* Inventory (components/admin/inventory.tsx). */
+.inventory-table tr.stock-out td:first-child { box-shadow: inset -4px 0 0 var(--danger); }
+.inventory-table tr.stock-low td:first-child { box-shadow: inset -4px 0 0 #e0a526; }
+.inventory-table .admin-product > span { display: grid; gap: 2px; }
+.inventory-table .admin-product img { width: 40px; height: 40px; }
+.inventory-alerts .admin-link { margin-inline-start: 8px; }
+.admin-dialog.inventory-move { width: min(440px, calc(100vw - 24px)); }
+.inventory-move-body { display: grid; gap: 12px; }
+.inventory-move-body .admin-field input { width: 100%; }

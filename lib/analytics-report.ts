@@ -72,6 +72,8 @@ export type AnalyticsOrder = {
   confirmedValue: number | null;
   /** Unit factory costs at confirmation time (Financial Management); absent before that. */
   costSnapshot?: CostSnapshot;
+  /** When the order became a sale (confirmed, or delivered straight away); kept while it stays one. Inventory uses it. */
+  soldAt?: string;
   deposit?: Deposit;
   /** Last time the admin edited the order (pieces, customer, shipping). */
   editedAt?: string;

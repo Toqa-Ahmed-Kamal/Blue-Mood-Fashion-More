@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, ChartColumn, ClipboardList, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, Boxes, ChartColumn, ClipboardList, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -26,6 +26,7 @@ import { editRecordProducts, editTotals } from "@/lib/order-edit";
 import { OldOrdersTab } from "@/components/admin/old-orders";
 import { WhatsAppLink, WhatsAppMenu, WhatsAppTargetPicker } from "@/components/admin/whatsapp-link";
 import { FinanceTab } from "@/components/admin/finance";
+import { InventoryTab } from "@/components/admin/inventory";
 import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
@@ -68,6 +69,7 @@ const TABS = [
   { id: "orders", label: "الأوردرات", icon: ShoppingBag },
   { id: "old", label: "الأوردرات القديمة", icon: Archive },
   { id: "quantities", label: "حصر كميات المصنع", icon: Package },
+  { id: "inventory", label: "المخزون", icon: Boxes },
   { id: "finance", label: "الإدارة المالية", icon: Wallet },
 ] as const;
 const SIDEBAR_KEY = "bm-admin-sidebar";
@@ -265,6 +267,7 @@ export function AnalyticsDashboard() {
             {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} onEdited={() => void load(range.from, range.to)} />}
             {oldOpened && <div hidden={tab !== "old"}><OldOrdersTab active={tab === "old"} /></div>}
             {tab === "quantities" && <QuantitySummaryTab />}
+            {tab === "inventory" && <InventoryTab />}
             {tab === "finance" && <FinanceTab />}
           </div>
         </>

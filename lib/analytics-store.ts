@@ -378,10 +378,16 @@ export async function setOrderStatus(orderId: string, status: OrderStatus, confi
   const costSnapshot = order.costSnapshot ?? (isSaleStatus(status)
     ? snapshotCosts(order.products.map((product) => product.modelId), await productCostsFor(order.products.map((product) => product.modelId)))
     : undefined);
+  const now = new Date().toISOString();
+  const { soldAt: _soldAt, ...withoutSoldAt } = order;
+  void _soldAt;
+  // Time it became a sale: kept from confirmed to delivered, cleared when cancelled / returned / back to waiting.
+  const soldAt = isSaleStatus(status) ? (isSaleStatus(order.status) ? order.soldAt : now) : undefined;
   const updated: AnalyticsOrder = {
-    ...order,
+    ...withoutSoldAt,
+    ...(soldAt ? { soldAt } : {}),
     status,
-    statusAt: new Date().toISOString(),
+    statusAt: now,
     // Delivered keeps the amount entered at confirmation (unless a new one is given).
     confirmedValue: status === "confirmed" ? confirmedValue : status === "delivered" ? confirmedValue ?? order.confirmedValue : null,
     ...(costSnapshot ? { costSnapshot } : {}),

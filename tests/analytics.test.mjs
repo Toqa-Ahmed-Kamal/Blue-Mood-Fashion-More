@@ -744,6 +744,22 @@ test("finance: confirming an order saves today's factory costs; later price chan
   assert.equal((await analytics.setOrderStatus(other.orderId, "cancelled", null)).costSnapshot, undefined);
 });
 
+test("inventory: the time an order became a sale is kept from confirmed to delivered and cleared when it stops being one", async () => {
+  store.clear();
+  const record = { ...orderRecord, orderId: "BM-77777777777777777777" };
+  await analytics.saveOrder(analytics.toAnalyticsOrder(record, null));
+  let order = await analytics.setOrderStatus(record.orderId, "confirmed", null);
+  const soldAt = order.soldAt;
+  assert.ok(soldAt);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  order = await analytics.setOrderStatus(record.orderId, "delivered", null);
+  assert.equal(order.soldAt, soldAt, "delivered keeps the confirmation time");
+  order = await analytics.setOrderStatus(record.orderId, "cancelled", null);
+  assert.equal(order.soldAt, undefined, "cancelled: no longer sold");
+  order = await analytics.setOrderStatus(record.orderId, "confirmed", null);
+  assert.ok(order.soldAt > soldAt, "confirmed again: a new sale time");
+});
+
 test("finance store: costs and expenses are saved, read back, edited and deleted; nothing personal", async () => {
   store.clear();
   const finance = await import("../lib/finance-store.ts");
