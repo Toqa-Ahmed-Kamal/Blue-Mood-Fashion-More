@@ -103,10 +103,12 @@ test("per order: margin, share of the month's expenses by pieces, and net profit
   assert.deepEqual([a2.margin, a2.expenseShare, a2.netProfit, a2.costState], [230, 63.75, 166.25, "estimated"]);
   assert.equal(money["BM-AAAAAAAAAAAAAAAAAAA3"], undefined, "cancelled: nothing");
   assert.equal(money["BM-AAAAAAAAAAAAAAAAAAA4"], undefined, "returned: nothing");
-  // Pending: counted as if confirmed (3 more pieces → 510 ÷ 11 per piece), marked expected.
+  // Pending: counted as if all of November's pending orders were confirmed together
+  // (A5 3 pieces + old B2 9 pieces → 510 ÷ (8 + 12) per piece), marked expected.
   const a5 = money["BM-AAAAAAAAAAAAAAAAAAA5"];
   assert.equal(a5.expected, true);
-  assert.equal(a5.expenseShare, Math.round((510 / 11) * 3 * 100) / 100);
+  assert.equal(a5.expenseShare, Math.round((510 / 20) * 3 * 100) / 100);
+  assert.equal(money["BM-BBBBBBBBBBBBBBBBBBB2"].expenseShare, Math.round((510 / 20) * 9 * 100) / 100);
   assert.equal(a5.netProfit, Math.round((1130 - 600 - a5.expenseShare) * 100) / 100);
 
   const report = buildFinanceReport({ live, old: oldOrders, costs, expenses, from: "2026-11-01", to: "2026-11-30" });
@@ -115,6 +117,15 @@ test("per order: margin, share of the month's expenses by pieces, and net profit
   assert.equal(sold.reduce((sum, row) => sum + row.expenseShare, 0), 510, "every pound of expenses is carried by an order");
   const row = report.orders.find((item) => item.orderId === "BM-AAAAAAAAAAAAAAAAAAA1");
   assert.deepEqual([row.margin, row.expenseShare, row.netProfit], [380, 127.5, 252.5]);
+});
+
+test("nothing confirmed yet: pending orders share the month's expenses, none carries them alone", () => {
+  const pending = live.map((order) => ({ ...order, status: "submitted" }));
+  const money = orderFinance({ live: pending, old: [], costs, expenses });
+  // Pending pieces in November (cancelled/returned → submitted here): 2 + 1 + 5 + 1 + 3 = 12 → 42.5 per piece.
+  const shares = Object.values(money).map((row) => row.expenseShare);
+  assert.equal(Math.round(shares.reduce((sum, value) => sum + value, 0) * 100) / 100, 510, "the month's expenses counted once in total");
+  assert.equal(money["BM-AAAAAAAAAAAAAAAAAAA2"].expenseShare, 42.5, "a one-piece order carries one piece's share, not all 510");
 });
 
 test("per order: a stock purchase is not shared over orders; a month without expenses leaves the margin as profit", () => {

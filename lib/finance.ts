@@ -204,17 +204,20 @@ function productsCostOf(order: Normalized, costs: Record<string, ProductCost | u
   return { cost: round(cost), costState, missingLines };
 }
 
-type MonthTotals = Map<string, { expenses: number; pieces: number }>;
+type MonthTotals = Map<string, { expenses: number; pieces: number; pendingPieces: number }>;
 
-/** Per month: deducted expenses and pieces sold (confirmed + delivered). */
+/** Per month: deducted expenses, pieces sold (confirmed + delivered) and pieces still waiting for confirmation. */
 function monthlyExpenses(orders: Normalized[], expenses: Expense[]): MonthTotals {
   const months: MonthTotals = new Map();
   const month = (key: string) => {
-    if (!months.has(key)) months.set(key, { expenses: 0, pieces: 0 });
+    if (!months.has(key)) months.set(key, { expenses: 0, pieces: 0, pendingPieces: 0 });
     return months.get(key)!;
   };
   for (const expense of expenses) if (!NOT_DEDUCTED_CATEGORIES.includes(expense.category)) month(monthOf(expense.date)).expenses += expense.amount;
-  for (const order of orders) if (isSaleStatus(order.status)) month(monthOf(order.day)).pieces += piecesOf(order);
+  for (const order of orders) {
+    if (isSaleStatus(order.status)) month(monthOf(order.day)).pieces += piecesOf(order);
+    else if (order.status === "submitted") month(monthOf(order.day)).pendingPieces += piecesOf(order);
+  }
   return months;
 }
 
@@ -240,10 +243,11 @@ export type OrderMoney = {
 function moneyOf(order: Normalized, costs: Record<string, ProductCost | undefined>, months: MonthTotals): OrderMoney {
   const pieces = piecesOf(order);
   const month = monthOf(order.day);
-  const totals = months.get(month) ?? { expenses: 0, pieces: 0 };
+  const totals = months.get(month) ?? { expenses: 0, pieces: 0, pendingPieces: 0 };
   const expected = !isSaleStatus(order.status);
-  // A pending order is counted as if it were confirmed (its pieces join the month's sold pieces).
-  const base = totals.pieces + (expected ? pieces : 0);
+  // A pending order is counted as if all the month's pending orders were confirmed together:
+  // the expenses spread over the sold pieces and every waiting piece, not over this order alone.
+  const base = totals.pieces + (expected ? totals.pendingPieces : 0);
   const perPiece = base > 0 ? totals.expenses / base : 0;
   const { cost, costState, missingLines } = productsCostOf(order, costs);
   const margin = round(order.value - cost);
