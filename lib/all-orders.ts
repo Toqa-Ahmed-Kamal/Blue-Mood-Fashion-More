@@ -49,6 +49,7 @@ export type UnifiedOrder = {
 export const ORDER_FILTERS = [
   { id: "all", label: "الكل" },
   { id: "submitted", label: "مستني تأكيد" },
+  { id: "to-call", label: "مستني تأكيد العميل" },
   { id: "confirmed", label: "مؤكد" },
   { id: "deposit", label: "دفع ديبوزيت" },
   { id: "to-ship", label: "مؤكد ولسه مراحش للشحن" },
@@ -62,6 +63,8 @@ export type OrderFilter = (typeof ORDER_FILTERS)[number]["id"];
 export function matchesFilter(order: UnifiedOrder, filter: OrderFilter) {
   if (filter === "all") return true;
   if (filter === "deposit") return order.deposit !== null;
+  // Customers to call: not received, not cancelled or returned, no deposit, the shipping company not told yet.
+  if (filter === "to-call") return (order.status === "submitted" || order.status === "confirmed") && order.deposit === null && !order.courier?.notifiedAt;
   if (filter === "to-ship") return order.status === "confirmed" && !order.courier?.handedAt;
   if (filter === "with-courier") return order.status === "confirmed" && Boolean(order.courier?.handedAt);
   return order.status === filter;

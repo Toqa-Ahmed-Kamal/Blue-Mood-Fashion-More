@@ -41,7 +41,7 @@ test("one list: every site order and every old order once; site status wins; Tel
 
 test("filters: pending, confirmed, deposit paid, delivered, returned, cancelled — with counts", () => {
   const rows = mergeAllOrders(live, oldOrders);
-  assert.deepEqual(filterCounts(rows), { all: 5, submitted: 1, confirmed: 1, deposit: 2, "to-ship": 1, "with-courier": 0, delivered: 1, returned: 1, cancelled: 1 });
+  assert.deepEqual(filterCounts(rows), { all: 5, submitted: 1, "to-call": 1, confirmed: 1, deposit: 2, "to-ship": 1, "with-courier": 0, delivered: 1, returned: 1, cancelled: 1 });
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "deposit")).map((row) => row.orderId).sort(), ["BM-AAAAAAAAAAAAAAAAAAA2", "BM-BBBBBBBBBBBBBBBBBBB2"]);
 });
 
@@ -124,4 +124,18 @@ test("shipping company: the customer's own note is copied; the site's shipping n
   assert.equal(customerNote("الدور التالت\nجنب الصيدلية"), "الدور التالت — جنب الصيدلية");
   const [plain] = mergeAllOrders([{ order: site("BM-FFFFFFFFFFFFFFFFFFF2", "confirmed"), details: details("BM-FFFFFFFFFFFFFFFFFFF2") }], []);
   assert.doesNotMatch(courierText(plain), /ملاحظات/, "no note → no line");
+});
+
+test("filter 'مستني تأكيد العميل': not received, not cancelled/returned, no deposit, shipping company not told", () => {
+  const told = { notifiedAt: "2026-11-14T10:00:00.000Z" };
+  const rows = mergeAllOrders([
+    { order: site("BM-GGGGGGGGGGGGGGGGGGG1", "submitted"), details: null },
+    { order: site("BM-GGGGGGGGGGGGGGGGGGG2", "confirmed"), details: null },
+    { order: site("BM-GGGGGGGGGGGGGGGGGGG3", "confirmed", { deposit: { amount: 100, at: "2026-11-14T10:00:00Z" } }), details: null },
+    { order: site("BM-GGGGGGGGGGGGGGGGGGG4", "confirmed", { courier: told }), details: null },
+    { order: site("BM-GGGGGGGGGGGGGGGGGGG5", "delivered"), details: null },
+    { order: site("BM-GGGGGGGGGGGGGGGGGGG6", "cancelled"), details: null },
+    { order: site("BM-GGGGGGGGGGGGGGGGGGG7", "returned"), details: null },
+  ], [old("BM-EEEEEEEEEEEEEEEEEEE9", "submitted")]);
+  assert.deepEqual(rows.filter((row) => matchesFilter(row, "to-call")).map((row) => row.orderId).sort(), ["BM-EEEEEEEEEEEEEEEEEEE9", "BM-GGGGGGGGGGGGGGGGGGG1", "BM-GGGGGGGGGGGGGGGGGGG2"]);
 });
