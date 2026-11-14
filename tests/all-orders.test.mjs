@@ -113,3 +113,15 @@ test("shipping company steps: handed means told too; untelling clears both; filt
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "with-courier")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD2"]);
   assert.deepEqual(rows.find((row) => row.orderId === "BM-DDDDDDDDDDDDDDDDDDD3").courier, handed);
 });
+
+test("shipping company: the customer's own note is copied; the site's shipping notes are not", async () => {
+  const { customerNote } = await import("../lib/all-orders.ts");
+  const [row] = mergeAllOrders([{ order: site("BM-FFFFFFFFFFFFFFFFFFF1", "confirmed"), details: { ...details("BM-FFFFFFFFFFFFFFFFFFF1"), notes: "اتصلوا بعد الساعة ٥\nسعر الشحن مبدئي وقابل للتعديل. الإجمالي تقديري." } }], []);
+  assert.match(courierText(row), /\nملاحظات العميل: اتصلوا بعد الساعة ٥$/);
+  assert.doesNotMatch(courierText(row), /مبدئي/);
+  assert.equal(customerNote("تكلفة الشحن غير مؤكدة؛ يجب تأكيدها قبل التنفيذ."), "", "only the site's note → nothing");
+  assert.equal(customerNote("منطقة غير مخدومة بالشحن العادي (سيوة): سعر الشحن غير محدد، يتأكد من خدمة العملاء قبل التنفيذ."), "");
+  assert.equal(customerNote("الدور التالت\nجنب الصيدلية"), "الدور التالت — جنب الصيدلية");
+  const [plain] = mergeAllOrders([{ order: site("BM-FFFFFFFFFFFFFFFFFFF2", "confirmed"), details: details("BM-FFFFFFFFFFFFFFFFFFF2") }], []);
+  assert.doesNotMatch(courierText(plain), /ملاحظات/, "no note → no line");
+});

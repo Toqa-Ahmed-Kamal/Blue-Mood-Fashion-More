@@ -4,7 +4,7 @@
 // when its customer details were never stored, the matching Telegram message fills them in.
 import type { AnalyticsOrder, Courier, Deposit, OrderStatus } from "./analytics-report.ts";
 import type { OrderMoney } from "./finance.ts";
-import type { OldOrder } from "./old-orders.ts";
+import { SHIPPING_SYSTEM_NOTES, type OldOrder } from "./old-orders.ts";
 import { editRecordProducts, editTotals, type OrderEdit } from "./order-edit.ts";
 import type { OrderDetails } from "./order-vault.ts";
 import { governorateShippingFee } from "./shipping-rates.ts";
@@ -83,11 +83,21 @@ export function courierCollection(order: Pick<UnifiedOrder, "total" | "value" | 
 
 const egp = (value: number) => `${new Intl.NumberFormat("en-US").format(value)} ج.م`;
 
+/** What the customer wrote, without the shipping notes the site adds by itself. */
+export function customerNote(notes: string) {
+  return notes
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !SHIPPING_SYSTEM_NOTES.includes(line) && !line.startsWith("منطقة غير مخدومة بالشحن العادي"))
+    .join(" — ");
+}
+
 /** The text the shipping company asks for, ready to paste. Inspection is always allowed. */
 export function courierText(order: UnifiedOrder) {
   const pieces = order.products.reduce((sum, product) => sum + product.quantity, 0);
   const collection = courierCollection(order);
   const phones = [order.phone, order.alternatePhone].filter(Boolean).join(" / ");
+  const note = customerNote(order.notes);
   // Only "clothes" and how many pieces: no product names, no order number.
   return [
     `الاسم: ${order.customerName || "—"}`,
@@ -98,6 +108,7 @@ export function courierText(order: UnifiedOrder) {
     `التحصيل (شامل الشحن): ${collection.amount === null ? "—" : egp(collection.amount)}`,
     `المحتوى: ملابس — ${pieces === 1 ? "قطعة واحدة" : pieces === 2 ? "قطعتين" : `${pieces} ${pieces <= 10 ? "قطع" : "قطعة"}`}`,
     "متاح المعاينة: نعم",
+    ...(note ? [`ملاحظات العميل: ${note}`] : []),
   ].join("\n");
 }
 

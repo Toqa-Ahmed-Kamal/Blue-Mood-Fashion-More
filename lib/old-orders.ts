@@ -104,7 +104,8 @@ export function extractTelegramMessages(html: string): { date: string | null; te
   return messages;
 }
 
-const SHIPPING_SYSTEM_NOTES = [
+/** Notes the site adds by itself under the customer's note (not written by the customer). */
+export const SHIPPING_SYSTEM_NOTES = [
   "تكلفة الشحن غير مؤكدة؛ يجب تأكيدها قبل التنفيذ.",
   "سعر الشحن مبدئي وقابل للتعديل. الإجمالي تقديري.",
 ];
