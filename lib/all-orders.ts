@@ -88,7 +88,7 @@ export function courierText(order: UnifiedOrder) {
   const pieces = order.products.reduce((sum, product) => sum + product.quantity, 0);
   const collection = courierCollection(order);
   const phones = [order.phone, order.alternatePhone].filter(Boolean).join(" / ");
-  const items = order.products.map((product) => `- ${product.name}${product.quantity > 1 ? ` × ${product.quantity}` : ""}`);
+  // Only "clothes" and how many pieces: no product names, no order number.
   return [
     `الاسم: ${order.customerName || "—"}`,
     `رقم التليفون: ${phones || "—"}`,
@@ -96,10 +96,8 @@ export function courierText(order: UnifiedOrder) {
     `المنطقة: ${order.area || "—"}`,
     `العنوان: ${order.address.replace(/\s*\n\s*/g, " ") || "—"}`,
     `التحصيل (شامل الشحن): ${collection.amount === null ? "—" : egp(collection.amount)}`,
-    `المحتوى: ${pieces} ${pieces === 1 ? "قطعة" : pieces === 2 ? "قطعتين" : pieces <= 10 ? "قطع" : "قطعة"}`,
-    ...items,
+    `المحتوى: ملابس — ${pieces === 1 ? "قطعة واحدة" : pieces === 2 ? "قطعتين" : `${pieces} ${pieces <= 10 ? "قطع" : "قطعة"}`}`,
     "متاح المعاينة: نعم",
-    `رقم الأوردر: ${order.orderId}`,
   ].join("\n");
 }
 

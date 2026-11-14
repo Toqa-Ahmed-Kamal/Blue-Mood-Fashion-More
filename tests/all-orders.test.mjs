@@ -80,12 +80,9 @@ test("shipping company: copied details with collection (shipping included, less 
     "المنطقة: مدينة نصر",
     "العنوان: شارع ٩ الدور ٣",
     "التحصيل (شامل الشحن): 500 ج.م",
-    "المحتوى: 3 قطع",
-    "- روب فرو بطبعة نمر × 2",
-    "- عباية",
+    "المحتوى: ملابس — 3 قطع",
     "متاح المعاينة: نعم",
-    "رقم الأوردر: BM-CCCCCCCCCCCCCCCCCCC1",
-  ].join("\n"));
+  ].join("\n"), "only clothes and the number of pieces; no product names, no order number");
 });
 
 test("shipping company: collection when the shipping is not set yet uses the governorate rate; unknown stays empty", () => {
