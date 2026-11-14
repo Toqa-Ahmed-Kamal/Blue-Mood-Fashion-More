@@ -2,11 +2,12 @@
 //
 // Each order appears once. A site order is taken from the site (its status, deposit and totals);
 // when its customer details were never stored, the matching Telegram message fills them in.
-import type { AnalyticsOrder, Deposit, OrderStatus } from "./analytics-report.ts";
+import type { AnalyticsOrder, Courier, Deposit, OrderStatus } from "./analytics-report.ts";
 import type { OrderMoney } from "./finance.ts";
 import type { OldOrder } from "./old-orders.ts";
 import { editRecordProducts, editTotals, type OrderEdit } from "./order-edit.ts";
 import type { OrderDetails } from "./order-vault.ts";
+import { governorateShippingFee } from "./shipping-rates.ts";
 import { findProduct } from "./site-data.ts";
 
 export type UnifiedProduct = { modelId: string; name: string; quantity: number; size: string; unitPrice: number | null };
@@ -17,6 +18,8 @@ export type UnifiedOrder = {
   createdAt: string;
   status: OrderStatus;
   deposit: Deposit | null;
+  /** Shipping company steps (told / handed over). */
+  courier: Courier | null;
   archived: boolean;
   /** false when neither the site nor a Telegram message has the customer's details. */
   hasCustomer: boolean;
@@ -48,6 +51,8 @@ export const ORDER_FILTERS = [
   { id: "submitted", label: "مستني تأكيد" },
   { id: "confirmed", label: "مؤكد" },
   { id: "deposit", label: "دفع ديبوزيت" },
+  { id: "to-ship", label: "مؤكد ولسه مراحش للشحن" },
+  { id: "with-courier", label: "مع شركة الشحن" },
   { id: "delivered", label: "تم الاستلام" },
   { id: "returned", label: "مرتجع" },
   { id: "cancelled", label: "اتلغى" },
@@ -57,7 +62,45 @@ export type OrderFilter = (typeof ORDER_FILTERS)[number]["id"];
 export function matchesFilter(order: UnifiedOrder, filter: OrderFilter) {
   if (filter === "all") return true;
   if (filter === "deposit") return order.deposit !== null;
+  if (filter === "to-ship") return order.status === "confirmed" && !order.courier?.handedAt;
+  if (filter === "with-courier") return order.status === "confirmed" && Boolean(order.courier?.handedAt);
   return order.status === filter;
+}
+
+/**
+ * What the courier collects from the customer, shipping included: the total, less any deposit.
+ * When the shipping is not set yet, the governorate's rate is used (`shippingGuessed`); unknown → `amount` null.
+ */
+export function courierCollection(order: Pick<UnifiedOrder, "total" | "value" | "shippingCost" | "governorate" | "deposit">) {
+  const fee = order.shippingCost === null ? governorateShippingFee(order.governorate) : null;
+  const total = order.total ?? (fee !== null ? order.value + fee : null);
+  return {
+    amount: total === null ? null : Math.max(0, Math.round((total - (order.deposit?.amount ?? 0)) * 100) / 100),
+    shippingGuessed: order.shippingCost === null && fee !== null,
+    shippingFee: order.shippingCost ?? fee,
+  };
+}
+
+const egp = (value: number) => `${new Intl.NumberFormat("en-US").format(value)} ج.م`;
+
+/** The text the shipping company asks for, ready to paste. Inspection is always allowed. */
+export function courierText(order: UnifiedOrder) {
+  const pieces = order.products.reduce((sum, product) => sum + product.quantity, 0);
+  const collection = courierCollection(order);
+  const phones = [order.phone, order.alternatePhone].filter(Boolean).join(" / ");
+  const items = order.products.map((product) => `- ${product.name}${product.quantity > 1 ? ` × ${product.quantity}` : ""}`);
+  return [
+    `الاسم: ${order.customerName || "—"}`,
+    `رقم التليفون: ${phones || "—"}`,
+    `المحافظة: ${order.governorate || "—"}`,
+    `المنطقة: ${order.area || "—"}`,
+    `العنوان: ${order.address.replace(/\s*\n\s*/g, " ") || "—"}`,
+    `التحصيل (شامل الشحن): ${collection.amount === null ? "—" : egp(collection.amount)}`,
+    `المحتوى: ${pieces} ${pieces === 1 ? "قطعة" : pieces === 2 ? "قطعتين" : pieces <= 10 ? "قطع" : "قطعة"}`,
+    ...items,
+    "متاح المعاينة: نعم",
+    `رقم الأوردر: ${order.orderId}`,
+  ].join("\n");
 }
 
 export function filterCounts(orders: UnifiedOrder[]) {
@@ -87,6 +130,7 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       createdAt: order.createdAt,
       status: order.status,
       deposit: order.deposit ?? null,
+      courier: order.courier ?? null,
       archived: false,
       hasCustomer: customer !== null,
       customerName: customer?.customerName ?? "",
@@ -116,6 +160,7 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       createdAt: order.createdAt,
       status: order.status,
       deposit: order.deposit ?? null,
+      courier: order.courier ?? null,
       archived: order.archived,
       hasCustomer: Boolean(order.customerName || order.phone),
       customerName: order.customerName,

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { filterCounts, matchesFilter, matchesSearch, mergeAllOrders } from "../lib/all-orders.ts";
-import { isSaleStatus } from "../lib/analytics-report.ts";
+import { courierCollection, courierText, filterCounts, matchesFilter, matchesSearch, mergeAllOrders } from "../lib/all-orders.ts";
+import { applyCourierStep, isSaleStatus, parseCourierChange } from "../lib/analytics-report.ts";
 import { buildFinanceReport } from "../lib/finance.ts";
 import { sanitizeOldOrder } from "../lib/old-orders.ts";
 
@@ -41,7 +41,7 @@ test("one list: every site order and every old order once; site status wins; Tel
 
 test("filters: pending, confirmed, deposit paid, delivered, returned, cancelled — with counts", () => {
   const rows = mergeAllOrders(live, oldOrders);
-  assert.deepEqual(filterCounts(rows), { all: 5, submitted: 1, confirmed: 1, deposit: 2, delivered: 1, returned: 1, cancelled: 1 });
+  assert.deepEqual(filterCounts(rows), { all: 5, submitted: 1, confirmed: 1, deposit: 2, "to-ship": 1, "with-courier": 0, delivered: 1, returned: 1, cancelled: 1 });
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "deposit")).map((row) => row.orderId).sort(), ["BM-AAAAAAAAAAAAAAAAAAA2", "BM-BBBBBBBBBBBBBBBBBBB2"]);
 });
 
@@ -66,4 +66,53 @@ test("delivered is a sale: counted in sales and products cost like confirmed", (
   assert.equal(report.totals.sales, 330);
   assert.equal(report.totals.productsCost, 120);
   assert.equal(report.counts.confirmedOrders, 1);
+});
+
+test("shipping company: copied details with collection (shipping included, less the deposit) and inspection allowed", () => {
+  const rows = mergeAllOrders([
+    { order: site("BM-CCCCCCCCCCCCCCCCCCC1", "confirmed", { products: [{ modelId: "bm-robe-003", category: "robes", quantity: 2 }], subtotal: 500, total: 580 }), details: { ...details("BM-CCCCCCCCCCCCCCCCCCC1"), alternatePhone: "01111111111", address: "شارع ٩\nالدور ٣", products: [{ modelId: "bm-robe-003", name: "روب فرو بطبعة نمر", category: "robes", fit: "روب", quantity: 2, unitPrice: 250, link: null }, { modelId: "bm-abaya-001", name: "عباية", category: "abayas", fit: "", quantity: 1, unitPrice: 0, link: null }] } },
+  ], []);
+  const order = { ...rows[0], deposit: { amount: 80, at: "2026-11-10T11:00:00Z" } };
+  assert.equal(courierText(order), [
+    "الاسم: منى",
+    "رقم التليفون: 01012345678 / 01111111111",
+    "المحافظة: القاهرة",
+    "المنطقة: مدينة نصر",
+    "العنوان: شارع ٩ الدور ٣",
+    "التحصيل (شامل الشحن): 500 ج.م",
+    "المحتوى: 3 قطع",
+    "- روب فرو بطبعة نمر × 2",
+    "- عباية",
+    "متاح المعاينة: نعم",
+    "رقم الأوردر: BM-CCCCCCCCCCCCCCCCCCC1",
+  ].join("\n"));
+});
+
+test("shipping company: collection when the shipping is not set yet uses the governorate rate; unknown stays empty", () => {
+  const base = { total: null, value: 1100, shippingCost: null, deposit: null };
+  assert.deepEqual(courierCollection({ ...base, governorate: "الجيزة" }), { amount: 1180, shippingGuessed: true, shippingFee: 80 });
+  assert.deepEqual(courierCollection({ ...base, governorate: "مكان مش معروف" }), { amount: null, shippingGuessed: false, shippingFee: null });
+  assert.deepEqual(courierCollection({ ...base, total: 430, shippingCost: 80, governorate: "الجيزة", deposit: { amount: 500, at: "" } }), { amount: 0, shippingGuessed: false, shippingFee: 80 }, "never below zero");
+});
+
+test("shipping company steps: handed means told too; untelling clears both; filters", () => {
+  const now = new Date("2026-11-14T10:00:00Z");
+  const told = applyCourierStep(undefined, "notified", true, now);
+  assert.deepEqual(told, { notifiedAt: now.toISOString() });
+  const handed = applyCourierStep(undefined, "handed", true, now);
+  assert.deepEqual(handed, { notifiedAt: now.toISOString(), handedAt: now.toISOString() });
+  assert.deepEqual(applyCourierStep(handed, "handed", false, now), { notifiedAt: now.toISOString() });
+  assert.equal(applyCourierStep(handed, "notified", false, now), undefined);
+  assert.deepEqual(applyCourierStep(told, "notified", true, new Date("2026-11-15T00:00:00Z")), told, "marking again keeps the first time");
+  assert.equal(parseCourierChange({ step: "handed", done: "yes" }), null);
+  assert.deepEqual(parseCourierChange({ step: "handed", done: true }), { step: "handed", done: true });
+
+  const rows = mergeAllOrders([
+    { order: site("BM-DDDDDDDDDDDDDDDDDDD1", "confirmed"), details: null },
+    { order: site("BM-DDDDDDDDDDDDDDDDDDD2", "confirmed", { courier: handed }), details: null },
+    { order: site("BM-DDDDDDDDDDDDDDDDDDD3", "delivered", { courier: handed }), details: null },
+  ], []);
+  assert.deepEqual(rows.filter((row) => matchesFilter(row, "to-ship")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD1"]);
+  assert.deepEqual(rows.filter((row) => matchesFilter(row, "with-courier")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD2"]);
+  assert.deepEqual(rows.find((row) => row.orderId === "BM-DDDDDDDDDDDDDDDDDDD3").courier, handed);
 });

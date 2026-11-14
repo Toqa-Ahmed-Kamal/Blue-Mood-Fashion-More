@@ -1,5 +1,5 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
-import { isSaleStatus, parseDepositAmount } from "@/lib/analytics-report";
+import { applyCourierStep, isSaleStatus, parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
 import { isOrderStatus } from "@/lib/analytics-store";
 import { OLD_ORDER_ID_PATTERN, sanitizeOldOrder } from "@/lib/old-orders";
 import { VaultNotConfiguredError, deleteOldOrder, loadOldOrder, updateOldOrder } from "@/lib/old-orders-store";
@@ -77,6 +77,13 @@ export async function PATCH(request: Request, context: Context) {
       if (amount === undefined) return json(400, { success: false, error: { code: "INVALID_DEPOSIT", message: "مبلغ الديبوزيت لازم يبقى رقم أكبر من صفر." } });
       deposit = amount === null ? undefined : { amount, at: now.toISOString() };
     }
+    // Shipping company steps: kept through edits; changed only by { courier: { step, done } }.
+    let courier = current.courier;
+    if (body.courier !== undefined) {
+      const change = parseCourierChange(body.courier);
+      if (!change) return json(400, { success: false, error: { code: "INVALID_COURIER" } });
+      courier = applyCourierStep(current.courier, change.step, change.done, now);
+    }
     if (body.archived !== undefined) {
       if (typeof body.archived !== "boolean") return json(400, { success: false, error: { code: "INVALID_ARCHIVED" } });
       next = { ...next, archived: body.archived };
@@ -91,11 +98,12 @@ export async function PATCH(request: Request, context: Context) {
     }
     // Time it became a sale (inventory): kept while it stays a sale, cleared otherwise. Never from the browser.
     const soldAt = isSaleStatus(next.status) ? (isSaleStatus(current.status) ? current.soldAt : now.toISOString()) : undefined;
-    const { costSnapshot: _ignored, deposit: _ignoredDeposit, soldAt: _ignoredSoldAt, ...withoutSnapshot } = next;
+    const { costSnapshot: _ignored, deposit: _ignoredDeposit, soldAt: _ignoredSoldAt, courier: _ignoredCourier, ...withoutSnapshot } = next;
     void _ignored;
     void _ignoredDeposit;
     void _ignoredSoldAt;
-    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(soldAt ? { soldAt } : {}), ...(deposit ? { deposit } : {}), updatedAt: now.toISOString() });
+    void _ignoredCourier;
+    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(soldAt ? { soldAt } : {}), ...(deposit ? { deposit } : {}), ...(courier ? { courier } : {}), updatedAt: now.toISOString() });
     return saved ? json(200, { success: true, order: saved }) : json(404, NOT_FOUND);
   } catch (error) {
     return storageError(error, "update");

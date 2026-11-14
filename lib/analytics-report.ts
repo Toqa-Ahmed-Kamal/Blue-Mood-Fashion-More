@@ -17,6 +17,37 @@ export function isSaleStatus(status: string) {
 /** Booking confirmed by a deposit the customer paid in advance (part of the order total, not extra). */
 export type Deposit = { amount: number; at: string };
 
+/** Shipping company steps (set from the admin): told about the order, then the parcel was handed to them. */
+export type Courier = { notifiedAt?: string; handedAt?: string };
+export type CourierStep = "notified" | "handed";
+
+/**
+ * Marks or unmarks a shipping step. Handing the parcel over means the company was told too;
+ * unmarking "told" also unmarks "handed". Returns undefined when nothing is left.
+ */
+export function applyCourierStep(current: Courier | undefined, step: CourierStep, done: boolean, now = new Date()): Courier | undefined {
+  const at = now.toISOString();
+  const next: Courier = { ...current };
+  if (step === "notified") {
+    if (done) next.notifiedAt ??= at;
+    else {
+      delete next.notifiedAt;
+      delete next.handedAt;
+    }
+  } else if (done) {
+    next.handedAt ??= at;
+    next.notifiedAt ??= at;
+  } else delete next.handedAt;
+  return next.notifiedAt || next.handedAt ? next : undefined;
+}
+
+/** { step, done } from the admin; null when invalid. */
+export function parseCourierChange(value: unknown): { step: CourierStep; done: boolean } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { step, done } = value as Record<string, unknown>;
+  return (step === "notified" || step === "handed") && typeof done === "boolean" ? { step, done } : null;
+}
+
 /** Deposit amount from the admin: a number > 0 (EGP), or null to remove it. undefined = invalid. */
 export function parseDepositAmount(value: unknown): number | null | undefined {
   if (value === null || value === "" || value === 0) return null;
@@ -75,6 +106,8 @@ export type AnalyticsOrder = {
   /** When the order became a sale (confirmed, or delivered straight away); kept while it stays one. Inventory uses it. */
   soldAt?: string;
   deposit?: Deposit;
+  /** Shipping company steps (told / handed over). */
+  courier?: Courier;
   /** Last time the admin edited the order (pieces, customer, shipping). */
   editedAt?: string;
 };

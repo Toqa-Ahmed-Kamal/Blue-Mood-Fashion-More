@@ -26,10 +26,12 @@ import type { OrderAttribution, Touch } from "./attribution.ts";
 import {
   FUNNEL_STEPS,
   ORDER_STATUSES,
+  applyCourierStep,
   buildReport,
   isSaleStatus,
   orderValue,
   type AnalyticsOrder,
+  type CourierStep,
   type DayVisits,
   type FunnelCounts,
   type OrderStatus,
@@ -392,6 +394,19 @@ export async function setOrderStatus(orderId: string, status: OrderStatus, confi
     confirmedValue: status === "confirmed" ? confirmedValue : status === "delivered" ? confirmedValue ?? order.confirmedValue : null,
     ...(costSnapshot ? { costSnapshot } : {}),
   };
+  const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
+  return result === "OK" ? updated : null;
+}
+
+/** Marks or unmarks a shipping company step (told / handed over). Keeps everything else as is. */
+export async function setOrderCourier(orderId: string, step: CourierStep, done: boolean) {
+  const [raw] = await redisPipeline([["GET", key(`order:${orderId}`)]], "write");
+  if (typeof raw !== "string") return null;
+  const order = JSON.parse(raw) as AnalyticsOrder;
+  const { courier: _previous, ...rest } = order;
+  void _previous;
+  const courier = applyCourierStep(order.courier, step, done);
+  const updated: AnalyticsOrder = courier ? { ...rest, courier } : rest;
   const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
   return result === "OK" ? updated : null;
 }

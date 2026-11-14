@@ -5,7 +5,7 @@
 // `parseTelegramExport`, shows a preview, and sends the chosen orders to the server, which checks
 // them again with `sanitizeOldOrder` and stores them encrypted. Nothing is guessed: a field the
 // message does not contain stays empty.
-import { ORDER_STATUSES, type CostSnapshot, type Deposit, type OrderStatus } from "./analytics-report.ts";
+import { ORDER_STATUSES, type CostSnapshot, type Courier, type Deposit, type OrderStatus } from "./analytics-report.ts";
 import { categoryDetailLabel, fitNoteFor } from "./order-flow.ts";
 import type { OrderDetails } from "./order-vault.ts";
 import { findProduct, type CatalogCategory } from "./site-data.ts";
@@ -56,6 +56,8 @@ export type OldOrder = {
   costSnapshot?: CostSnapshot;
   /** When the order became a sale; kept while it stays one (set by the server only; inventory uses it). */
   soldAt?: string;
+  /** Shipping company steps (set from the admin only). */
+  courier?: Courier;
   /** Booking confirmed with a deposit (set from the admin only). */
   deposit?: Deposit;
 };

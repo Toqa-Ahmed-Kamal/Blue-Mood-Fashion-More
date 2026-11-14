@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BadgeCheck, CheckCircle2, PackageCheck, Pencil, RefreshCw, RotateCcw, Undo2, XCircle } from "lucide-react";
+import { BadgeCheck, Check, CheckCircle2, Copy, PackageCheck, Pencil, RefreshCw, RotateCcw, Send, Truck, Undo2, XCircle } from "lucide-react";
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
-import { ORDER_FILTERS, filterCounts, matchesFilter, matchesSearch, withEdit, type OrderFilter, type UnifiedOrder } from "@/lib/all-orders";
-import type { OrderStatus } from "@/lib/analytics-report";
+import { ORDER_FILTERS, courierCollection, courierText, filterCounts, matchesFilter, matchesSearch, withEdit, type OrderFilter, type UnifiedOrder } from "@/lib/all-orders";
+import type { CourierStep, OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import { productImage } from "@/lib/quantity-summary";
@@ -65,7 +65,7 @@ export function AllOrdersTab() {
   const editing = editingId ? orders?.find((order) => order.orderId === editingId) ?? null : null;
 
   /** Sends a status or deposit change to the right API (site order or imported Telegram order), then updates the row. */
-  async function change(order: UnifiedOrder, body: { status?: OrderStatus; deposit?: number | null }) {
+  async function change(order: UnifiedOrder, body: { status?: OrderStatus; deposit?: number | null; courier?: { step: CourierStep; done: boolean } }) {
     setBusyId(order.orderId);
     setError("");
     try {
@@ -81,11 +81,16 @@ export function AllOrdersTab() {
         setError(result?.error?.message ?? "مقدرناش نحفظ.");
         return;
       }
-      const saved = result.order as { status?: OrderStatus; deposit?: UnifiedOrder["deposit"] };
+      const saved = result.order as { status?: OrderStatus; deposit?: UnifiedOrder["deposit"]; courier?: UnifiedOrder["courier"] };
       // A new status changes the order's profit and its month's expense share: fetch the numbers again.
       if (body.status) void load();
       setOrders((current) => current?.map((item) => item.orderId === order.orderId
-        ? { ...item, ...(saved.status ? { status: saved.status } : body.status ? { status: body.status } : {}), ...("deposit" in body ? { deposit: saved.deposit ?? null } : {}) }
+        ? {
+          ...item,
+          ...(saved.status ? { status: saved.status } : body.status ? { status: body.status } : {}),
+          ...("deposit" in body ? { deposit: saved.deposit ?? null } : {}),
+          ...("courier" in body ? { courier: saved.courier ?? null } : {}),
+        }
         : item) ?? null);
     } catch {
       setError("مفيش اتصال. جربي تاني.");
@@ -130,7 +135,7 @@ export function AllOrdersTab() {
       {orders && rows.length === 0 && <p className="admin-muted empty">مفيش أوردرات بالاختيار ده.</p>}
 
       <div className="admin-orders">
-        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onEdit={() => setEditingId(order.orderId)} />)}
+        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onEdit={() => setEditingId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} />)}
       </div>
       {rows.length > shown.length && (
         <button type="button" className="admin-more" onClick={() => setLimit((current) => current + PAGE_SIZE)}>اعرضي {Math.min(PAGE_SIZE, rows.length - shown.length)} أوردر كمان ({rows.length - shown.length} باقيين)</button>
@@ -152,10 +157,50 @@ export function AllOrdersTab() {
   );
 }
 
-function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onEdit: () => void }) {
+/** Copies text; falls back to a hidden textarea where the clipboard API is not allowed. */
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const done = document.execCommand("copy");
+    area.remove();
+    return done;
+  }
+}
+
+function CourierCopyButton({ order }: { order: UnifiedOrder }) {
+  const [state, setState] = useState<"" | "done" | "failed">("");
+  const collection = courierCollection(order);
+  async function copy() {
+    setState((await copyText(courierText(order))) ? "done" : "failed");
+    window.setTimeout(() => setState(""), 2500);
+  }
+  const note = collection.amount === null
+    ? "الشحن لسه متحددش ومحافظتها مالهاش سعر شحن — التحصيل هيتنسخ فاضي، اكتبيه بإيدك."
+    : collection.shippingGuessed ? `الشحن لسه متحددش؛ التحصيل محسوب بشحن ${order.governorate} (${formatEGP(collection.shippingFee ?? 0)}).` : "";
+  return (
+    <button type="button" className={`courier-copy${state === "done" ? " good" : ""}`} onClick={() => void copy()} disabled={!order.hasCustomer} title={note || "ينسخ الاسم والتليفون والعنوان والتحصيل والمحتوى ومتاح المعاينة"}>
+      {state === "done" ? <><Check size={15} /> اتنسخت</> : state === "failed" ? "مقدرناش ننسخ" : <><Copy size={15} /> بيانات لشركة الشحن</>}
+      {note && state === "" && <span className="courier-copy-warn" aria-hidden="true">!</span>}
+    </button>
+  );
+}
+
+function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onEdit: () => void; onCourier: (step: CourierStep, done: boolean) => void }) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const chat = (text: string) => (order.phone ? whatsappChatUrl(order.phone, text) : null);
   const remaining = order.deposit && order.total !== null ? Math.max(0, order.total - order.deposit.amount) : null;
+  const notified = Boolean(order.courier?.notifiedAt);
+  const handed = Boolean(order.courier?.handedAt);
+  const shippingOpen = order.status === "submitted" || order.status === "confirmed";
   return (
     <article className={`admin-order status-${order.status}`}>
       <header className="admin-order-head">
@@ -164,6 +209,8 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit }: { order:
           <span className="admin-muted" dir="ltr">{cairoTime(order.createdAt)}</span>
           <span className={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
           {order.deposit && <span className="admin-deposit"><BadgeCheck size={14} aria-hidden="true" /> ديبوزيت {formatEGP(order.deposit.amount)}</span>}
+          {handed ? <span className="admin-courier handed" title={cairoTime(order.courier?.handedAt ?? "")}><Truck size={14} aria-hidden="true" /> راح لشركة الشحن</span>
+            : notified ? <span className="admin-courier" title={cairoTime(order.courier?.notifiedAt ?? "")}><Send size={14} aria-hidden="true" /> اتبلغت شركة الشحن</span> : null}
           {order.archived && <small className="admin-muted">مؤرشف</small>}
         </div>
         <div className="admin-order-source">
@@ -249,6 +296,18 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit }: { order:
         {(order.status === "confirmed" || order.status === "delivered") && <button type="button" disabled={busy} className="danger" onClick={() => onStatus("returned")} title="الأوردر رجع"><Undo2 size={16} /> مرتجع</button>}
         {order.status !== "cancelled" && order.status !== "returned" && order.status !== "delivered" && <button type="button" disabled={busy} className="danger" onClick={() => onStatus("cancelled")} title="إلغاء"><XCircle size={16} /> إلغاء</button>}
         {order.status !== "submitted" && <button type="button" disabled={busy} onClick={() => onStatus("submitted")} title="رجوع لمستني تأكيد" aria-label="رجوع لمستني تأكيد"><RotateCcw size={15} /></button>}
+        <span className="admin-order-actions-break" aria-hidden="true" />
+        <CourierCopyButton order={order} />
+        {shippingOpen && (
+          <>
+            <button type="button" disabled={busy} className={notified ? "courier-on" : undefined} aria-pressed={notified} onClick={() => onCourier("notified", !notified)} title={notified ? `اتبلغت ${cairoTime(order.courier?.notifiedAt ?? "")} — دوسي علشان تلغي` : "بعتي البيانات لشركة الشحن"}>
+              <Send size={15} /> {notified ? "اتبلغت شركة الشحن ✓" : "بلّغت شركة الشحن"}
+            </button>
+            <button type="button" disabled={busy} className={handed ? "courier-on" : undefined} aria-pressed={handed} onClick={() => onCourier("handed", !handed)} title={handed ? `راح ${cairoTime(order.courier?.handedAt ?? "")} — دوسي علشان تلغي` : "المندوب استلم الأوردر"}>
+              <Truck size={15} /> {handed ? "راح لشركة الشحن ✓" : "راح لشركة الشحن"}
+            </button>
+          </>
+        )}
       </footer>
     </article>
   );

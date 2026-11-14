@@ -1,6 +1,6 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
-import { parseDepositAmount } from "@/lib/analytics-report";
-import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
+import { parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
+import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderCourier, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { sanitizeOrderEdit } from "@/lib/order-edit";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
@@ -54,6 +54,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
       return json(200, { success: true, order: { orderId: order.orderId, status: order.status, total: order.total, editedAt: order.editedAt } });
     } catch (error) {
       console.error("[admin] order edit failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+      return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
+    }
+  }
+  // Shipping company step only: { courier: { step: "notified" | "handed", done } }.
+  if (body.courier !== undefined) {
+    const change = parseCourierChange(body.courier);
+    if (!change) return json(400, { success: false, error: { code: "INVALID_COURIER" } });
+    try {
+      const order = await setOrderCourier(orderId, change.step, change.done);
+      if (!order) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
+      return json(200, { success: true, order: { orderId: order.orderId, courier: order.courier ?? null } });
+    } catch (error) {
+      console.error("[admin] order courier update failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
       return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
     }
   }
