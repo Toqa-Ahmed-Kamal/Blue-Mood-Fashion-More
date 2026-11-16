@@ -30,7 +30,6 @@ const greatVibes = Great_Vibes({
 export const metadata: Metadata = {
   title: "Blue Mood | عبايات، أرواب، بيجامات وبلانكيت",
   description: "Blue Mood — عبايات قطيفة، أرواب فرو، بيجامات شتوي وبلانكيت. عرض الشتاء ٤ قطع بـ ١١٠٠ جنيه والطلب بيتأكد على واتساب.",
-  icons: { icon: "/images/blue-mood-logo-badge.png" },
 };
 
 export const viewport: Viewport = {
