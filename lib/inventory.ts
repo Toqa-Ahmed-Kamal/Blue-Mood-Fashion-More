@@ -147,3 +147,7 @@ export function buildStock(input: { productIds: string[]; moves: StockMove[]; li
     };
   });
 }
+
+/** Product IDs the store shows as "نفدت الكمية" by themselves: tracked (counted or received) and stock at 0 or below. */
+export const outOfStockIds = (rows: { productId: string; tracked: boolean; stock: number }[]) =>
+  rows.filter((row) => row.tracked && row.stock <= 0).map((row) => row.productId).toSorted();

@@ -9,6 +9,7 @@ import { applyEditToOldOrder, sanitizeOrderEdit } from "@/lib/order-edit";
 import { productCostsFor } from "@/lib/finance-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
+import { syncStoreStock } from "@/lib/stock-sync";
 
 export const runtime = "nodejs";
 
@@ -104,6 +105,7 @@ export async function PATCH(request: Request, context: Context) {
     void _ignoredSoldAt;
     void _ignoredCourier;
     const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(soldAt ? { soldAt } : {}), ...(deposit ? { deposit } : {}), ...(courier ? { courier } : {}), updatedAt: now.toISOString() });
+    if (saved && (body.order !== undefined || body.status !== undefined)) await syncStoreStock();
     return saved ? json(200, { success: true, order: saved }) : json(404, NOT_FOUND);
   } catch (error) {
     return storageError(error, "update");
@@ -114,7 +116,9 @@ export async function DELETE(request: Request, context: Context) {
   const checked = await guard(request, context);
   if ("response" in checked) return checked.response;
   try {
-    return (await deleteOldOrder(checked.orderId)) ? json(200, { success: true }) : json(404, NOT_FOUND);
+    const removed = await deleteOldOrder(checked.orderId);
+    if (removed) await syncStoreStock();
+    return removed ? json(200, { success: true }) : json(404, NOT_FOUND);
   } catch (error) {
     return storageError(error, "delete");
   }

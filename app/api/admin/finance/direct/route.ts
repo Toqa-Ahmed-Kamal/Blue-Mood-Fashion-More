@@ -5,6 +5,7 @@ import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { sanitizeDirectSale } from "@/lib/direct-sales";
 import { loadProductCosts, saveDirectSale } from "@/lib/finance-store";
 import { RedisUnavailableError } from "@/lib/redis";
+import { syncStoreStock } from "@/lib/stock-sync";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
     const checked = sanitizeDirectSale(body, randomUUID(), await loadProductCosts());
     if ("error" in checked) return json(400, { success: false, error: { code: "INVALID_SALE", message: checked.error } });
     const saved = await saveDirectSale(checked.sale);
+    if (saved) await syncStoreStock();
     if (!saved) return json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });
     return json(200, { success: true, sale: saved });
   } catch (error) {

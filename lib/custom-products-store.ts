@@ -6,6 +6,7 @@
 //   catalog:soldout        SET   product IDs marked "نفدت الكمية" (built-in or added)
 //   catalog:prices         HASH  productId → selling price changed from the admin (built-in products)
 //   catalog:wasprices      HASH  productId → price before the discount ("بدل كذا"), any product
+//   catalog:soldout:auto   SET   product IDs whose inventory reached 0 (written by lib/stock-sync.ts)
 import { parseCustomProduct } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import { findProduct, setCustomProducts, setPriceOverrides, setSoldOut, setWasPrices, type CatalogProduct } from "./site-data.ts";
@@ -16,6 +17,7 @@ const IMAGE = (imageId: string) => `${keyPrefix()}productimg:${imageId}`;
 const SOLD_OUT = () => `${keyPrefix()}catalog:soldout`;
 const PRICES = () => `${keyPrefix()}catalog:prices`;
 const WAS_PRICES = () => `${keyPrefix()}catalog:wasprices`;
+export const AUTO_SOLD_OUT = () => `${keyPrefix()}catalog:soldout:auto`;
 
 /** HGETALL result → { productId: price } (bad entries skipped). */
 function parsePrices(flat: unknown): Record<string, number> {
@@ -94,6 +96,11 @@ export async function loadSoldOut(): Promise<string[]> {
   return Array.isArray(members) ? members.map(String).toSorted() : [];
 }
 
+export async function loadAutoSoldOut(): Promise<string[]> {
+  const [members] = await redisPipeline([["SMEMBERS", AUTO_SOLD_OUT()]], "read", 5000);
+  return Array.isArray(members) ? members.map(String).toSorted() : [];
+}
+
 /** Marks / unmarks a product as sold out, then reads the flag back. */
 export async function setProductSoldOut(productId: string, soldOut: boolean) {
   const [, member] = await redisPipeline([[soldOut ? "SADD" : "SREM", SOLD_OUT(), productId], ["SISMEMBER", SOLD_OUT(), productId]], "write");
@@ -110,10 +117,10 @@ let cached: { at: number; products: CatalogProduct[] } | null = null;
 export async function ensureCustomProducts(force = false) {
   if (!force && cached && Date.now() - cached.at < CACHE_MS) return cached.products;
   try {
-    const [products, soldOut, prices, wasPrices] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadPrices(), loadWasPrices()]);
+    const [products, soldOut, autoSoldOut, prices, wasPrices] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadAutoSoldOut(), loadPrices(), loadWasPrices()]);
     cached = { at: Date.now(), products };
     setCustomProducts(products);
-    setSoldOut(soldOut);
+    setSoldOut(soldOut, autoSoldOut);
     setPriceOverrides(prices);
     setWasPrices(wasPrices);
     return products;
@@ -143,13 +150,16 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
       return null;
     }
   };
-  const [products, soldOut, prices, wasPrices] = await Promise.all([
+  const [products, soldOut, autoSoldOut, prices, wasPrices] = await Promise.all([
     read(`hgetall/${encodeURIComponent(PRODUCTS())}`),
     read(`smembers/${encodeURIComponent(SOLD_OUT())}`),
+    read(`smembers/${encodeURIComponent(AUTO_SOLD_OUT())}`),
     read(`hgetall/${encodeURIComponent(PRICES())}`),
     read(`hgetall/${encodeURIComponent(WAS_PRICES())}`),
   ]);
-  return { products: parseList(products), soldOut: Array.isArray(soldOut) ? soldOut.map(String) : [], prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices) };
+  // The store does not need to know why a product is out: the admin's switch and the inventory both count.
+  const out = [...new Set([...(Array.isArray(soldOut) ? soldOut : []), ...(Array.isArray(autoSoldOut) ? autoSoldOut : [])].map(String))];
+  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices) };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */

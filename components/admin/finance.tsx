@@ -25,6 +25,8 @@ type ProductRow = {
   custom: boolean;
   /** Shown to customers as "نفدت الكمية" and cannot be ordered. */
   soldOut: boolean;
+  /** Out because the inventory reached 0 (comes back by itself). */
+  autoSoldOut?: boolean;
   imageAlt: string;
   /** The product's own price (null = the category price / offer only). */
   price: number | null;
@@ -87,7 +89,7 @@ export function FinanceTab() {
   const report = data?.report;
   return (
     <>
-      <section className="admin-panel">
+      <section className="admin-panel" id="fin-summary">
         <div className="admin-panel-head">
           <h2>الإدارة المالية · Financial Management</h2>
           <button type="button" className="admin-icon-btn" onClick={() => void load()} disabled={loading} aria-label="تحديث"><RefreshCw size={16} className={loading ? "spin" : undefined} /></button>
@@ -283,7 +285,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
   }
 
   return (
-    <section className="admin-panel">
+    <section className="admin-panel" id="fin-products">
       <div className="admin-panel-head">
         <h2>المنتجات والأسعار · Products &amp; Pricing ({priced} من {products.length} ليهم سعر مصنع)</h2>
         <button type="button" className="admin-primary" onClick={() => setDialog({ mode: "add" })}><Plus size={15} /> إضافة منتج</button>
@@ -367,6 +369,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
                     <button type="button" className={`admin-stock${product.soldOut ? " out" : ""}`} disabled={busy === product.productId} onClick={() => void toggleSoldOut(product)} aria-pressed={product.soldOut} title={product.soldOut ? "دوسي علشان يرجع متاح" : "دوسي لو الكمية خلصت"}>
                       {product.soldOut ? <><CircleSlash size={13} aria-hidden="true" /> نفدت الكمية</> : <><PackageCheck size={13} aria-hidden="true" /> متاح</>}
                     </button>
+                    {product.autoSoldOut && !product.soldOut && <span className="admin-flag warn" title="المخزون خلص؛ هيرجع متاح لوحده لما تسجلي بضاعة وصلت">نفدت (المخزون)</span>}
                   </td>
                   <td className="actions">
                     {locked && <button type="button" onClick={() => setUnlocked((current) => new Set(current).add(product.productId))}><Pencil size={14} /> تعديل السعر</button>}
@@ -450,7 +453,7 @@ function Expenses({ expenses, range, onChanged }: { expenses: Expense[]; range: 
   }
 
   return (
-    <section className="admin-panel">
+    <section className="admin-panel" id="fin-expenses">
       <div className="admin-panel-head">
         <h2>المصروفات · Expenses</h2>
       </div>
@@ -602,7 +605,7 @@ function DirectSales({ sales, products, range, onChanged }: { sales: DirectSale[
   }
 
   return (
-    <section className="admin-panel">
+    <section className="admin-panel" id="fin-direct">
       <div className="admin-panel-head">
         <h2>بيع مباشر · صحابي وقرايبي</h2>
       </div>
@@ -768,7 +771,7 @@ function PersonalTakes({ takes, products, range, onChanged }: { takes: DirectSal
   }
 
   return (
-    <section className="admin-panel" id="personal-takes">
+    <section className="admin-panel" id="fin-personal">
       <div className="admin-panel-head">
         <h2>حاجات خدتها لنفسي</h2>
       </div>
@@ -850,7 +853,7 @@ function PersonalTakes({ takes, products, range, onChanged }: { takes: DirectSal
 
 function OrdersProfit({ report }: { report: FinanceReport }) {
   return (
-    <section className="admin-panel">
+    <section className="admin-panel" id="fin-orders">
       <div className="admin-panel-head">
         <h2>الأوردرات المحسوبة ({report.orders.length})</h2>
       </div>
@@ -1067,7 +1070,7 @@ function PricingCalculator({ products, report }: { products: ProductRow[]; repor
   const share = input.pieces > 0 ? input.expenses / input.pieces : 0;
 
   return (
-    <section className="admin-panel">
+    <section className="admin-panel" id="fin-calculator">
       <div className="admin-panel-head">
         <h2><Calculator size={18} aria-hidden="true" /> حاسبة التسعير والهامش</h2>
       </div>

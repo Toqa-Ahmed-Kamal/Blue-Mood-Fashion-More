@@ -1,6 +1,7 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
 import { deleteStockMove } from "@/lib/inventory-store";
 import { RedisUnavailableError } from "@/lib/redis";
+import { syncStoreStock } from "@/lib/stock-sync";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,9 @@ export async function DELETE(request: Request, context: Context) {
   const { moveId } = await context.params;
   if (!ID_PATTERN.test(moveId)) return json(400, { success: false, error: { code: "INVALID_ID" } });
   try {
-    return (await deleteStockMove(moveId)) ? json(200, { success: true }) : json(404, { success: false, error: { code: "NOT_FOUND", message: "الحركة دي مش موجودة." } });
+    const removed = await deleteStockMove(moveId);
+    if (removed) await syncStoreStock();
+    return removed ? json(200, { success: true }) : json(404, { success: false, error: { code: "NOT_FOUND", message: "الحركة دي مش موجودة." } });
   } catch (error) {
     console.error("[admin] stock move delete failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
     return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مقدرناش نحذف دلوقتي. جربي تاني." } });

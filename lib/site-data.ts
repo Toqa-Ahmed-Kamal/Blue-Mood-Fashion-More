@@ -113,17 +113,31 @@ export function isBuiltInProduct(id: string) {
   return builtInIds.has(id);
 }
 
-// ── Sold out (set from the admin, stored in Redis) ──
+// ── Sold out (stored in Redis) ──
 // A sold-out product stays on the store with a "نفدت الكمية" label but cannot be added or ordered.
+// Two sources: the admin's "نفذ" switch, and the inventory (a tracked product whose stock reached 0).
 const soldOutIds = new Set<string>();
+const autoSoldOutIds = new Set<string>();
 
-export function setSoldOut(ids: readonly string[]) {
+export function setSoldOut(ids: readonly string[], autoIds: readonly string[] = []) {
   soldOutIds.clear();
   for (const id of ids) soldOutIds.add(id);
+  autoSoldOutIds.clear();
+  for (const id of autoIds) autoSoldOutIds.add(id);
 }
 
 export function isSoldOut(id: string) {
+  return soldOutIds.has(id) || autoSoldOutIds.has(id);
+}
+
+/** Marked "نفذ" by the admin's switch. */
+export function isManualSoldOut(id: string) {
   return soldOutIds.has(id);
+}
+
+/** Out because the inventory reached 0 (comes back by itself when stock is added). */
+export function isAutoSoldOut(id: string) {
+  return autoSoldOutIds.has(id);
 }
 
 /** Replaces the admin-added products (idempotent; called by the server and on each store page). */

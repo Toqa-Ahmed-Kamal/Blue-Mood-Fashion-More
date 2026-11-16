@@ -1505,6 +1505,19 @@ h1, h2, h3 { font-family: var(--font-display); }
 .admin-sidebar[hidden] { display: none; }
 .admin-sidebar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-inline: 4px; font-size: .9rem; }
 .admin-sidebar nav { display: grid; gap: 4px; }
+/* Full height on wide screens: the groups scroll inside, "خروج" stays at the bottom. */
+.admin-sidebar:not([hidden]) { display: flex; flex-direction: column; height: calc(100dvh - 24px); }
+.admin-sidebar nav { flex: 1; min-height: 0; overflow-y: auto; align-content: start; gap: 14px; padding-block: 4px; scrollbar-width: thin; }
+.admin-nav-group { display: grid; gap: 2px; }
+.admin-nav-title { margin: 0 0 2px; padding-inline: 12px; font-size: .72rem; font-weight: 800; letter-spacing: .02em; color: var(--muted); opacity: .8; }
+.admin-sidebar nav button { padding-block: 8px; }
+.admin-sidebar nav button.sub { font-weight: 600; font-size: .86rem; }
+.admin-sidebar-logout { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; font: inherit; font-size: .88rem; font-weight: 700; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; cursor: pointer; }
+.admin-sidebar-logout:hover { color: var(--navy); background: var(--bg); }
+/* Section parts scrolled to from the sidebar stop below the top edge. */
+.admin-panel[id^="fin-"] { scroll-margin-top: 14px; }
+/* The store header is not on the admin pages, so no room is kept for it. */
+html:has(.admin-shell) { scroll-padding-top: 0; }
 .admin-sidebar nav button { display: flex; align-items: center; gap: 10px; width: 100%; font: inherit; font-size: .9rem; font-weight: 700; color: var(--muted); background: transparent; border: 0; border-radius: 10px; padding: 10px 12px; cursor: pointer; text-align: start; }
 .admin-sidebar nav button span:not(.admin-badge) { flex: 1; }
 .admin-sidebar nav button:hover { background: var(--bg); color: var(--navy); }
@@ -1516,6 +1529,7 @@ h1, h2, h3 { font-family: var(--font-display); }
 @media (max-width: 900px) {
   .admin-shell.sidebar-open { grid-template-columns: minmax(0, 1fr); }
   .admin-sidebar { position: fixed; inset-block: 0; inset-inline-start: 0; z-index: 40; width: min(280px, 84vw); max-height: none; border-radius: 0; top: 0; }
+  .admin-sidebar:not([hidden]) { height: 100dvh; }
   .admin-sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 30; border: 0; background: rgba(31, 53, 80, .35); }
 }
 .admin-fin-stock { margin: 0 0 10px; font-size: .86rem; color: var(--brand-dark); background: var(--brand-soft); border-radius: var(--radius); padding: 8px 12px; line-height: 1.7; }

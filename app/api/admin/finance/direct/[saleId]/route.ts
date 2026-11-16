@@ -3,6 +3,7 @@ import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { sanitizeDirectSale } from "@/lib/direct-sales";
 import { deleteDirectSale, loadDirectSale, loadProductCosts, saveDirectSale } from "@/lib/finance-store";
 import { RedisUnavailableError } from "@/lib/redis";
+import { syncStoreStock } from "@/lib/stock-sync";
 
 export const runtime = "nodejs";
 
@@ -43,6 +44,7 @@ export async function PATCH(request: Request, context: Context) {
     const result = sanitizeDirectSale(typeof body === "object" && body !== null ? { ...body, kind: current.kind ?? "sale" } : body, current.id, await loadProductCosts(), new Date(), current.createdAt);
     if ("error" in result) return json(400, { success: false, error: { code: "INVALID_SALE", message: result.error } });
     const saved = await saveDirectSale(result.sale);
+    if (saved) await syncStoreStock();
     return saved ? json(200, { success: true, sale: saved }) : json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });
   } catch (error) {
     return storageError(error, "update");
@@ -53,7 +55,9 @@ export async function DELETE(request: Request, context: Context) {
   const checked = await guard(request, context);
   if ("response" in checked) return checked.response;
   try {
-    return (await deleteDirectSale(checked.saleId)) ? json(200, { success: true }) : json(404, NOT_FOUND);
+    const removed = await deleteDirectSale(checked.saleId);
+    if (removed) await syncStoreStock();
+    return removed ? json(200, { success: true }) : json(404, NOT_FOUND);
   } catch (error) {
     return storageError(error, "delete");
   }

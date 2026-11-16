@@ -7,7 +7,7 @@ import { CircleSlash, ClipboardCheck, PackageCheck, PackagePlus, RefreshCw, Slid
 import { LOW_STOCK, STOCK_MOVE_KINDS, type StockMove, type StockMoveKind, type StockRow } from "@/lib/inventory";
 import { categoryInfo, categoryOrder, type CatalogCategory } from "@/lib/site-data";
 
-type ProductStock = StockRow & { name: string; category: CatalogCategory; image: string; hidden: boolean; soldOut: boolean };
+type ProductStock = StockRow & { name: string; category: CatalogCategory; image: string; hidden: boolean; soldOut: boolean; autoSoldOut: boolean };
 type Data = { products: ProductStock[]; moves: StockMove[]; vaultConfigured: boolean };
 type Action = { product: ProductStock; kind: StockMoveKind } | null;
 
@@ -123,8 +123,7 @@ export function InventoryTab() {
                 {out.map((product) => (
                   <div key={product.productId}>
                     <span className="admin-flag warn">خلص</span> {product.name}{product.reserved > 0 && ` — وفيه ${product.reserved} قطعة في أوردرات مستنية`}
-                    {!product.soldOut && <button type="button" className="admin-link small" disabled={busy} onClick={() => void toggleSoldOut(product)}>اعمليه &quot;نفذ&quot; على الموقع</button>}
-                    {product.soldOut && <span className="admin-muted"> · ظاهر &quot;نفدت الكمية&quot;</span>}
+                    {(product.soldOut || product.autoSoldOut) && <span className="admin-muted"> · ظاهر للعميلات &quot;نفدت الكمية&quot;{product.autoSoldOut && !product.soldOut ? " لوحده، وهيرجع متاح أول ما تسجلي بضاعة وصلت" : ""}</span>}
                   </div>
                 ))}
                 {low.map((product) => <div key={product.productId}><span className="admin-flag info">قرب يخلص</span> {product.name} — متاح {product.available}</div>)}
@@ -151,7 +150,7 @@ export function InventoryTab() {
                           <span className="admin-product">
                             {/* eslint-disable-next-line @next/next/no-img-element -- small admin thumbnail */}
                             <img src={product.image} alt="" width={40} height={40} loading="lazy" />
-                            <span>{product.name}<small className="admin-muted">{categoryInfo[product.category].label}{product.hidden ? " · مخفي" : ""}{product.soldOut ? " · نفدت على الموقع" : ""}</small></span>
+                            <span>{product.name}<small className="admin-muted">{categoryInfo[product.category].label}{product.hidden ? " · مخفي" : ""}{product.soldOut ? " · نفدت على الموقع (بإيدك)" : product.autoSoldOut ? " · نفدت على الموقع (المخزون خلص)" : ""}</small></span>
                           </span>
                         </td>
                         <td>{product.tracked ? <strong className={product.stock <= 0 ? "admin-negative" : ""}>{product.stock}</strong> : <span className="admin-muted">لسه متسجلش</span>}</td>
@@ -175,8 +174,9 @@ export function InventoryTab() {
             )}
             <p className="admin-muted small">
               ابدئي بـ &quot;جرد&quot; لكل منتج: اكتبي العدد اللي عندك فعلاً. بعد كده المخزون بيقل لوحده لما تأكدي أوردر (موقع أو تيليجرام) أو تسجلي بيع مباشر أو حاجة خدتيها لنفسك، ولو الأوردر اتلغى أو رجع القطع بترجع لوحدها.
+              <strong> مربوط بالموقع:</strong> أول ما مخزون منتج يوصل صفر، بيظهر للعميلات &quot;نفدت الكمية&quot; ومحدش يقدر يطلبه، ولما تسجلي &quot;وصلت بضاعة&quot; بيرجع متاح لوحده. المنتجات اللي لسه متعملهاش جرد مش بتتأثر. زرار &quot;متاح / نفذ&quot; لسه موجود لو حبيتي تقفلي منتج بإيدك.
               &quot;وصلت بضاعة&quot; بتزود العدد. &quot;محجوز&quot; = قطع في أوردرات لسه مستنية تأكيد، و&quot;متاح&quot; = المخزون − المحجوز.
-              تنبيه &quot;قرب يخلص&quot; لما المتاح يبقى {LOW_STOCK} أو أقل. المخزون مش بيقفل المنتج على الموقع لوحده؛ انتي اللي بتقرري تعمليه &quot;نفذ&quot;.
+              تنبيه &quot;قرب يخلص&quot; لما المتاح يبقى {LOW_STOCK} أو أقل.
             </p>
           </>
         )}

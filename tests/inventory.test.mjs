@@ -91,3 +91,21 @@ test("pieces taken for herself come off the stock, shown apart from sales", () =
   const row = stockOf({ moves, direct: [take, before, direct(1, "2026-11-12T09:00:00.000Z")] });
   assert.deepEqual([row.soldDirect, row.taken, row.stock], [1, 2, 7]);
 });
+
+test("linked to the store: tracked products at 0 are out; untracked ones are never touched", async () => {
+  const { outOfStockIds } = await import("../lib/inventory.ts");
+  const { setSoldOut, isSoldOut, isAutoSoldOut, isManualSoldOut } = await import("../lib/site-data.ts");
+  const OTHER = "bm-robe-004";
+  const moves = [move("count", 2, "2026-11-10T10:00:00.000Z")];
+  const rows = buildStock({ productIds: [ROBE, OTHER], moves, live: [site("BM-AAAAAAAAAAAAAAAAAAA1", "confirmed", 2, { soldAt: "2026-11-11T10:00:00.000Z" })], old: [], direct: [] });
+  assert.deepEqual(outOfStockIds(rows), [ROBE], "sold its last 2; the uncounted product stays");
+  const back = buildStock({ productIds: [ROBE], moves: [...moves, move("arrival", 3, "2026-11-12T10:00:00.000Z")], live: [site("BM-AAAAAAAAAAAAAAAAAAA1", "confirmed", 2, { soldAt: "2026-11-11T10:00:00.000Z" })], old: [], direct: [] });
+  assert.deepEqual(outOfStockIds(back), [], "back when goods arrive");
+  setSoldOut([OTHER], [ROBE]);
+  assert.equal(isSoldOut(ROBE), true);
+  assert.equal(isAutoSoldOut(ROBE), true);
+  assert.equal(isManualSoldOut(ROBE), false);
+  assert.equal(isSoldOut(OTHER), true, "the admin's switch still works");
+  setSoldOut([]);
+  assert.equal(isSoldOut(ROBE), false);
+});

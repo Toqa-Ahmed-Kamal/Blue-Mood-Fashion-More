@@ -1,15 +1,12 @@
 import { randomUUID } from "node:crypto";
 
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
-import { loadAllOrdersForSummary } from "@/lib/analytics-store";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
-import { loadDirectSales } from "@/lib/finance-store";
-import { buildStock, sanitizeStockMove } from "@/lib/inventory";
-import { loadStockMoves, saveStockMove } from "@/lib/inventory-store";
-import { loadOldOrders } from "@/lib/old-orders-store";
-import { isOrderVaultConfigured } from "@/lib/order-vault";
+import { sanitizeStockMove } from "@/lib/inventory";
+import { saveStockMove } from "@/lib/inventory-store";
 import { RedisUnavailableError } from "@/lib/redis";
-import { catalog, isSoldOut } from "@/lib/site-data";
+import { catalog, isAutoSoldOut, isManualSoldOut } from "@/lib/site-data";
+import { computeStock, outOfStockIds, syncStoreStock, writeAutoSoldOut } from "@/lib/stock-sync";
 
 export const runtime = "nodejs";
 
@@ -19,15 +16,9 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 export async function GET(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
   try {
-    await ensureCustomProducts();
-    const vault = isOrderVaultConfigured();
-    const [live, old, direct, moves] = await Promise.all([
-      loadAllOrdersForSummary(),
-      vault ? loadOldOrders() : Promise.resolve({ orders: [], unreadable: 0 }),
-      loadDirectSales(),
-      loadStockMoves(),
-    ]);
-    const rows = buildStock({ productIds: catalog.map((product) => product.id), moves, live: live.map((item) => item.order), old: old.orders, direct });
+    const { rows, moves, vault } = await computeStock();
+    // Opening the inventory also brings the store's "نفدت الكمية" up to date.
+    await writeAutoSoldOut(outOfStockIds(rows)).catch(() => false);
     const byId = new Map(rows.map((row) => [row.productId, row]));
     const products = catalog.map((product) => ({
       ...byId.get(product.id)!,
@@ -35,7 +26,8 @@ export async function GET(request: Request) {
       category: product.category,
       image: product.image,
       hidden: Boolean(product.hidden),
-      soldOut: isSoldOut(product.id),
+      soldOut: isManualSoldOut(product.id),
+      autoSoldOut: isAutoSoldOut(product.id),
     }));
     return json(200, { success: true, products, moves: moves.slice(0, 200), vaultConfigured: vault });
   } catch (error) {
@@ -59,6 +51,7 @@ export async function POST(request: Request) {
     const checked = sanitizeStockMove(body, randomUUID());
     if ("error" in checked) return json(400, { success: false, error: { code: "INVALID_MOVE", message: checked.error } });
     const saved = await saveStockMove(checked.move);
+    if (saved) await syncStoreStock();
     return saved ? json(200, { success: true, move: saved }) : json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });
   } catch (error) {
     console.error("[admin] stock move save failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, Boxes, ChartColumn, ClipboardList, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, Boxes, Calculator, ChartColumn, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -66,12 +66,53 @@ const TABS = [
   { id: "all", label: "كل الأوردرات", icon: ClipboardList },
   { id: "traffic", label: "الزيارات", icon: ChartColumn },
   { id: "journey", label: "رحلة العميلة والمنتجات", icon: Route },
-  { id: "orders", label: "الأوردرات", icon: ShoppingBag },
+  { id: "orders", label: "أوردرات الموقع", icon: ShoppingBag },
   { id: "old", label: "الأوردرات القديمة", icon: Archive },
   { id: "quantities", label: "حصر كميات المصنع", icon: Package },
   { id: "inventory", label: "المخزون", icon: Boxes },
   { id: "finance", label: "الإدارة المالية", icon: Wallet },
 ] as const;
+
+type NavItem = { tab: TabId; label: string; icon: typeof Wallet; anchor?: string };
+/** The sidebar: sections in groups. Finance items open the finance section and go straight to that part. */
+const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
+  { title: "الأوردرات", items: [
+    { tab: "all", label: "كل الأوردرات", icon: ClipboardList },
+    { tab: "orders", label: "أوردرات الموقع", icon: ShoppingBag },
+    { tab: "old", label: "الأوردرات القديمة", icon: Archive },
+  ] },
+  { title: "البضاعة", items: [
+    { tab: "inventory", label: "المخزون", icon: Boxes },
+    { tab: "quantities", label: "حصر كميات المصنع", icon: Package },
+  ] },
+  { title: "الفلوس", items: [
+    { tab: "finance", label: "ملخص المكسب", icon: Wallet, anchor: "fin-summary" },
+    { tab: "finance", label: "المنتجات والأسعار", icon: Tags, anchor: "fin-products" },
+    { tab: "finance", label: "حاسبة التسعير", icon: Calculator, anchor: "fin-calculator" },
+    { tab: "finance", label: "المصروفات", icon: Receipt, anchor: "fin-expenses" },
+    { tab: "finance", label: "بيع مباشر", icon: HandCoins, anchor: "fin-direct" },
+    { tab: "finance", label: "خدتها لنفسي", icon: Gift, anchor: "fin-personal" },
+    { tab: "finance", label: "مكسب كل أوردر", icon: TrendingUp, anchor: "fin-orders" },
+  ] },
+  { title: "التسويق", items: [
+    { tab: "traffic", label: "الزيارات", icon: ChartColumn },
+    { tab: "journey", label: "رحلة العميلة والمنتجات", icon: Users },
+  ] },
+];
+
+/** Scrolls to a part of a section once it is on the page (sections load their data first). */
+function scrollToAnchor(anchor: string) {
+  const started = Date.now();
+  const tryScroll = () => {
+    const target = document.getElementById(anchor);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (Date.now() - started < 8000) window.setTimeout(tryScroll, 120);
+  };
+  tryScroll();
+}
 const SIDEBAR_KEY = "bm-admin-sidebar";
 const isNarrow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
 type TabId = (typeof TABS)[number]["id"];
@@ -130,10 +171,15 @@ export function AnalyticsDashboard() {
     });
   }
 
-  function chooseTab(id: TabId) {
+  // Which sidebar item is lit: the tab, and for finance the part last chosen.
+  const [anchor, setAnchor] = useState<string | null>(null);
+  function chooseTab(id: TabId, part?: string) {
     setTab(id);
+    setAnchor(part ?? null);
     if (id === "old") setOldOpened(true);
     if (isNarrow()) setSidebarOpen(false);
+    if (part) scrollToAnchor(part);
+    else window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const load = useCallback(async (from: string, to: string) => {
@@ -194,27 +240,34 @@ export function AnalyticsDashboard() {
           <strong>الأقسام</strong>
           <button type="button" className="admin-icon-btn small" onClick={toggleSidebar} aria-label="قفل القائمة"><PanelRightClose size={16} /></button>
         </div>
-        <nav role="tablist" aria-orientation="vertical" aria-label="أقسام الداشبورد">
-          {TABS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                id={`tab-${item.id}`}
-                aria-selected={tab === item.id}
-                aria-controls={`panel-${item.id}`}
-                className={tab === item.id ? "active" : ""}
-                onClick={() => chooseTab(item.id)}
-              >
-                <Icon size={17} aria-hidden="true" />
-                <span>{item.label}</span>
-                {item.id === "orders" && report && report.totals.pending > 0 && <span className="admin-badge">{report.totals.pending}</span>}
-              </button>
-            );
-          })}
+        <nav aria-label="أقسام الداشبورد">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.title} className="admin-nav-group" role="group" aria-label={group.title}>
+              <p className="admin-nav-title">{group.title}</p>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                // The first item of a section keeps the id used to open it (tab-finance, tab-inventory…).
+                const first = group.items.find((other) => other.tab === item.tab) === item;
+                const active = tab === item.tab && (item.anchor ? (anchor ?? "fin-summary") === item.anchor : true);
+                return (
+                  <button
+                    key={`${item.tab}-${item.anchor ?? ""}`}
+                    type="button"
+                    id={first ? `tab-${item.tab}` : undefined}
+                    aria-current={active ? "page" : undefined}
+                    className={`${active ? "active" : ""}${item.anchor && !first ? " sub" : ""}`}
+                    onClick={() => chooseTab(item.tab, item.anchor && first ? undefined : item.anchor)}
+                  >
+                    <Icon size={17} aria-hidden="true" />
+                    <span>{item.label}</span>
+                    {item.tab === "orders" && report && report.totals.pending > 0 && <span className="admin-badge">{report.totals.pending}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
+        <button type="button" className="admin-sidebar-logout" onClick={logout}><LogOut size={16} aria-hidden="true" /> خروج</button>
       </aside>
       {sidebarOpen && <button type="button" className="admin-sidebar-backdrop" aria-label="قفل القائمة" onClick={() => setSidebarOpen(false)} />}
 
@@ -260,7 +313,7 @@ export function AnalyticsDashboard() {
       {report && (
         <>
           <OverviewCards report={report} />
-          <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+          <div id={`panel-${tab}`} aria-label={TABS.find((item) => item.id === tab)?.label}>
             {tab === "all" && <AllOrdersTab />}
             {tab === "traffic" && <TrafficTab report={report} />}
             {tab === "journey" && <JourneyTab report={report} />}

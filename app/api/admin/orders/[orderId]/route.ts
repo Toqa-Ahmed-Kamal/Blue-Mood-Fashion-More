@@ -5,6 +5,7 @@ import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { sanitizeOrderEdit } from "@/lib/order-edit";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
+import { syncStoreStock } from "@/lib/stock-sync";
 
 export const runtime = "nodejs";
 
@@ -51,6 +52,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
       if (order === "no_key") return json(503, { success: false, error: { code: "ORDER_DATA_KEY_MISSING", message: "لازم ORDER_DATA_KEY يبقى متضاف علشان نحفظ بيانات العميلة." } });
       if (!order) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
       console.info("[admin] order edited", { orderId, lines: order.products.length });
+      await syncStoreStock();
       return json(200, { success: true, order: { orderId: order.orderId, status: order.status, total: order.total, editedAt: order.editedAt } });
     } catch (error) {
       console.error("[admin] order edit failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
@@ -95,6 +97,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
   try {
     const order = await setOrderStatus(orderId, body.status, confirmedValue);
     if (!order) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
+    await syncStoreStock();
     return json(200, { success: true, order: { orderId: order.orderId, status: order.status, statusAt: order.statusAt, confirmedValue: order.confirmedValue } });
   } catch (error) {
     console.error("[admin] order status update failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
