@@ -1,9 +1,9 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Flame, Timer } from "lucide-react";
+import { Flame, Package, Timer } from "lucide-react";
 
-import { landingPromotion, type CatalogProduct } from "@/lib/site-data";
+import { isSoldOut, landingPromotion, statOf, type CatalogProduct } from "@/lib/site-data";
 
 const OFFER_END = Date.parse(landingPromotion.endsAt);
 
@@ -71,9 +71,26 @@ export function useOfferIsRunning() {
  * Animated nudge on each product. Shows the real sold count when one is set in
  * site-data; otherwise a call to order before the real offer deadline (hidden after it).
  */
+/** Real numbers from the inventory: pieces sold so far and pieces left. */
+export function StockNumbers({ product }: { product: CatalogProduct }) {
+  const stat = statOf(product.id);
+  if (!stat || isSoldOut(product.id)) return null;
+  const left = stat.left !== null && stat.left > 0 ? stat.left : null;
+  if (!stat.sold && left === null) return null;
+  return (
+    <span className="stock-numbers">
+      {stat.sold > 0 && <span>اتباع منها {stat.sold.toLocaleString("ar-EG")} قطعة</span>}
+      {left !== null && <span className={left <= 3 ? "few" : undefined}><Package size={13} aria-hidden="true" /> {left <= 3 ? `باقي ${left.toLocaleString("ar-EG")} بس!` : `باقي منها ${left.toLocaleString("ar-EG")} قطعة`}</span>}
+    </span>
+  );
+}
+
 export function SocialProof({ product }: { product: CatalogProduct }) {
-  const sold = product.soldCount && product.soldCount > 0 ? product.soldCount : null;
+  // Real counts first: the inventory's sold pieces, else a count written on the product.
   const offerRunning = useOfferIsRunning();
+  const stat = statOf(product.id);
+  if (stat && !isSoldOut(product.id) && (stat.sold > 0 || (stat.left ?? 0) > 0)) return <StockNumbers product={product} />;
+  const sold = product.soldCount && product.soldCount > 0 ? product.soldCount : null;
   // Without a real count, the nudge only points at the deadline — so it goes away with it.
   if (!sold && !offerRunning) return null;
   return (

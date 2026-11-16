@@ -177,3 +177,19 @@ export function buildPiecesReport(input: {
     still: products.filter((item) => item.sold === 0 && (item.stock ?? 0) > 0).map((item) => ({ productId: item.productId, name: item.name, stock: item.stock ?? 0 })),
   };
 }
+
+/** What the store shows on each product: pieces sold so far, pieces left (null = not in the inventory), best seller. */
+export type ProductStat = { sold: number; left: number | null; best?: true };
+
+/** A product is a best seller when it is in the top 3 and sold at least this many pieces. */
+export const BEST_SELLER_MIN = 3;
+
+export function productStats(report: PiecesReport, stock: StockRow[]): Record<string, ProductStat> {
+  const stats: Record<string, ProductStat> = {};
+  for (const row of stock) if (row.tracked) stats[row.productId] = { sold: 0, left: Math.max(0, row.stock) };
+  const sellers = report.products.filter((row) => row.sold > 0);
+  sellers.forEach((row, index) => {
+    stats[row.productId] = { sold: row.sold, left: stats[row.productId]?.left ?? null, ...(index < 3 && row.sold >= BEST_SELLER_MIN ? { best: true as const } : {}) };
+  });
+  return stats;
+}

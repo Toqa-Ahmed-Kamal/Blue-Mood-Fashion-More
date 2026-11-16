@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, MessageCircle, ShoppingBag, Truck } from "lucide-react";
+import { ArrowLeft, Camera, Eye, HeartHandshake, MessageCircle, RotateCcw, ShoppingBag, Truck } from "lucide-react";
 
 import { ProductCard, QuickView } from "@/components/product-card";
 import { OfferCountdown } from "@/components/promo";
@@ -25,11 +25,24 @@ const heroImages = ["bm-robe-002", "bm-abaya-012", "bm-winter-pajama-005"]
   .map(findProduct)
   .filter((product): product is CatalogProduct => product !== undefined);
 
+/** Answers only what the store really does (inspection, return to the courier, real photos, WhatsApp follow-up). */
+const FAQ = [
+  { q: "أطلب إزاي؟", a: "اختاري القطع أو عرض الشتاء، اكتبي اسمك وموبايلك وعنوانك، وبعدين أكدي الطلب برسالة واتساب بضغطة واحدة." },
+  { q: "أدفع إزاي؟", a: "بتدفعي للمندوب وقت الاستلام، بعد ما تعايني القطع بنفسك." },
+  { q: "الشحن بكام وبيوصل لفين؟", a: "بنشحن لكل محافظات مصر. سعر الشحن بيتحسب حسب محافظتك وبيظهرلك في صفحة الطلب قبل ما تأكدي." },
+  { q: "الطلب بيوصل امتى؟", a: "بعد ما تأكدي على واتساب بنقولك ميعاد التوصيل، وبنتابع معاكي لحد ما الأوردر يوصلك." },
+  { q: "ينفع أعاين قبل ما أستلم؟", a: "أيوه، المعاينة متاحة: المندوب عندك، افتحي وشوفي القطع قبل ما تستلمي." },
+  { q: "لو قطعة طلعت مش مناسبة؟", a: "بترجعيها مع المندوب وقت الاستلام على طول." },
+  { q: "الصور حقيقية؟", a: "بنصورلك القطع على الطبيعة قبل ما نبعتها، علشان تبقي شايفة بالظبط اللي جايلك." },
+  { q: "المقاسات إزاي؟", a: "البيجامات One Size، ومكتوب على كل بيجاما لحد كام كيلو بتلبس. لو محتارة ابعتيلنا على واتساب ونساعدك." },
+  { q: `عرض الشتاء إيه؟`, a: `٤ قطع بـ ${landingPromotion.price} جنيه: ${landingPromotion.options.map((option) => option.label).join("، أو ")}. وانتي اللي بتختاري الموديلات.` },
+];
+
 const categoryCovers: Record<CatalogCategory, string> = {
   abayas: "bm-abaya-010",
   robes: "bm-robe-001",
   "winter-pajamas": "bm-winter-pajama-008",
-  "wearable-blankets": "bm-winter-blanket-001",
+  "wearable-blankets": "bm-winter-blanket-003",
 };
 
 export function BlueMoodHome() {
@@ -47,10 +60,10 @@ export function BlueMoodHome() {
               <Image src="/images/blue-mood-logo-badge.png" alt="شعار Blue Mood" width={168} height={168} className="hero-badge" preload />
               <span className="eyebrow">كولكشن شتا ٢٠٢٦</span>
               <h1>دفا الشتا<br /><span className="hl">بلمسة رقيقة</span></h1>
-              <p>عبايات قطيفة، أرواب فرو، بيجامات وبلانكيت. اختاري اللي يعجبك واطلبي في دقيقة، والتأكيد على واتساب.</p>
+              <p>بلانكيت، بيجامات، أرواب فرو وعبايات قطيفة. اختاري اللي يعجبك واطلبي في دقيقة، والتأكيد على واتساب.</p>
               <div className="hero-actions">
                 <Link href="/#offer" className="btn btn-pink btn-lg">عرض الشتاء بـ {landingPromotion.price} <ArrowLeft size={18} /></Link>
-                <Link href="/#abayas" className="btn btn-outline btn-lg">تسوقي الكولكشن</Link>
+                <Link href="/#blankets" className="btn btn-outline btn-lg">تسوقي الكولكشن</Link>
               </div>
               <ul className="hero-perks">
                 <li><Truck size={17} /> شحن لكل محافظات مصر</li>
@@ -82,6 +95,16 @@ export function BlueMoodHome() {
               </Link>
             );
           })}
+        </section>
+
+        <section className="container trust" aria-labelledby="trust-title">
+          <h2 id="trust-title">ليه تطلبي من <bdi>Blue Mood</bdi>؟</h2>
+          <ul>
+            <li><Eye size={24} aria-hidden="true" /><strong>متاح المعاينة</strong><span>المندوب عندك: افتحي وشوفي القطع بنفسك قبل ما تستلمي.</span></li>
+            <li><RotateCcw size={24} aria-hidden="true" /><strong>مش مناسبة؟ رجّعيها</strong><span>لو فيه قطعة مش مناسبة، بترجعيها مع المندوب على طول.</span></li>
+            <li><Camera size={24} aria-hidden="true" /><strong>صور على الطبيعة</strong><span>بنصورلك القطع الحقيقية قبل ما نبعتها، علشان تبقي مطمنة.</span></li>
+            <li><HeartHandshake size={24} aria-hidden="true" /><strong>بنتابع معاكي</strong><span>على واتساب من التأكيد لحد ما الأوردر يوصلك.</span></li>
+          </ul>
         </section>
 
         <section className="offer-section" id="offer" aria-labelledby="offer-title">
@@ -148,6 +171,18 @@ export function BlueMoodHome() {
               <li><Truck size={24} /><strong>اكتبي عنوانك</strong><span>الاسم والموبايل والعنوان، وسعر الشحن بيظهر لك على طول.</span></li>
               <li><MessageCircle size={24} /><strong>أكدي على واتساب</strong><span>الطلب بيتسجل عندنا، وبعدها بتبعتي رسالة التأكيد بضغطة.</span></li>
             </ol>
+          </div>
+        </section>
+
+        <section className="container faq" id="faq" aria-labelledby="faq-title">
+          <h2 id="faq-title">أسئلة شائعة</h2>
+          <div className="faq-list">
+            {FAQ.map((item) => (
+              <details key={item.q}>
+                <summary>{item.q}</summary>
+                <p>{item.a}</p>
+              </details>
+            ))}
           </div>
         </section>
       </main>

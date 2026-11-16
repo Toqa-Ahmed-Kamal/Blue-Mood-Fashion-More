@@ -6,7 +6,7 @@ import { sanitizeStockMove, sanitizeStockTarget, targetProgress } from "@/lib/in
 import { loadStockTarget, saveStockMove, saveStockTarget } from "@/lib/inventory-store";
 import { RedisUnavailableError } from "@/lib/redis";
 import { catalog, isAutoSoldOut, isManualSoldOut } from "@/lib/site-data";
-import { computeStock, outOfStockIds, syncStoreStock, writeAutoSoldOut } from "@/lib/stock-sync";
+import { computeStock, syncStoreStock, writeStoreStock } from "@/lib/stock-sync";
 
 export const runtime = "nodejs";
 
@@ -16,9 +16,10 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 export async function GET(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
   try {
-    const [{ rows, moves, vault, input }, target] = await Promise.all([computeStock(), loadStockTarget()]);
-    // Opening the inventory also brings the store's "نفدت الكمية" up to date.
-    await writeAutoSoldOut(outOfStockIds(rows)).catch(() => false);
+    const [stock, target] = await Promise.all([computeStock(), loadStockTarget()]);
+    const { rows, moves, vault, input } = stock;
+    // Opening the inventory also brings the store up to date ("نفدت الكمية", sold / left counts).
+    await writeStoreStock(stock).catch(() => undefined);
     const byId = new Map(rows.map((row) => [row.productId, row]));
     const products = catalog.map((product) => ({
       ...byId.get(product.id)!,

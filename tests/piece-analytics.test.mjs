@@ -38,3 +38,20 @@ test("pieces: out / in / left, best seller first, months and categories", () => 
   const december = buildPiecesReport({ live, old: [], direct, moves, stock, from: "2026-12-01", to: "2026-12-31" });
   assert.deepEqual(december.still, [{ productId: A, name: "روب فرو بطبعة نمر", stock: 20 }], "in stock, nothing sold");
 });
+
+test("store numbers: sold so far, left (tracked only), best seller = top 3 with 3+ pieces", async () => {
+  const { productStats } = await import("../lib/piece-analytics.ts");
+  const C = "bm-robe-005";
+  const live = [
+    site("BM-BBBBBBBBBBBBBBBBBBB1", "2026-11-02", "confirmed", [[A, 4]]),
+    site("BM-BBBBBBBBBBBBBBBBBBB2", "2026-11-02", "delivered", [[B, 2]]),
+  ];
+  const moves = [move("m1", A, "count", 10, "2026-11-01T09:00:00.000Z"), move("m2", C, "count", 2, "2026-11-01T09:00:00.000Z")];
+  const stock = buildStock({ productIds: [A, B, C], moves, live, old: [], direct: [] });
+  const report = buildPiecesReport({ live, old: [], direct: [], moves, stock });
+  assert.deepEqual(productStats(report, stock), {
+    [A]: { sold: 4, left: 6, best: true },
+    [B]: { sold: 2, left: null },
+    [C]: { sold: 0, left: 2 },
+  });
+});

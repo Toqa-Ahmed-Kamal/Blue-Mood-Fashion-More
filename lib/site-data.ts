@@ -43,7 +43,8 @@ export const categoryInfo: Record<CatalogCategory, { label: string; singular: st
   "wearable-blankets": { label: "بلانكيت", singular: "بلانكيت", anchor: "blankets", tagline: "بلانكيت يُلبس · لوحده أو ضمن عرض الشتاء" },
 };
 
-export const categoryOrder: CatalogCategory[] = ["abayas", "robes", "winter-pajamas", "wearable-blankets"];
+/** Order of the sections on the store (and in the menu): blankets, pajamas, robes, abayas. */
+export const categoryOrder: CatalogCategory[] = ["wearable-blankets", "winter-pajamas", "robes", "abayas"];
 
 export const catalog: CatalogProduct[] = [
   // ── عبايات ──
@@ -90,6 +91,21 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-pajama-016", name: "طقم فرو بكابشون", category: "winter-pajamas", image: "/images/bejama/1000508037.jpg", imageAlt: "عبوة طقم فرو بكابشون وبنطلون من نفس الخامة", hidden: true },
   { id: "bm-winter-pajama-017", name: "بيجاما بيضاء بطبعة قطط وقلوب", category: "winter-pajamas", image: "/images/bejama/1000508040.jpg", imageAlt: "عبوة بيجاما بيضاء برقبة دانتيل مطبوع عليها قطط وقلوب", hidden: true },
   { id: "bm-winter-pajama-018", name: "بيجاما بنفسجي ببنطلون مطبوع ورق شجر", category: "winter-pajamas", image: "/images/abayas/1000507713.jpg", imageAlt: "عبوة بيجاما بنفسجي ببنطلون مطبوع ورق شجر", hidden: true },
+  { id: "bm-winter-pajama-019", name: "طقم قطيفة مضلع بسوستة · سيمون", category: "winter-pajamas", image: "/images/bejama/ribbed-zip-set-salmon.jpg", imageAlt: "طقم قطيفة مضلع بلون السيمون، بلوزة واسعة برقبة عالية وسوستة وبنطلون واسع" },
+  { id: "bm-winter-pajama-020", name: "طقم قطيفة مضلع بسوستة · أسود", category: "winter-pajamas", image: "/images/bejama/ribbed-zip-set-black.jpg", imageAlt: "طقم قطيفة مضلع أسود، بلوزة واسعة برقبة عالية وسوستة وبنطلون واسع" },
+  { id: "bm-winter-pajama-021", name: "طقم قطيفة مضلع بسوستة · زيتي", category: "winter-pajamas", image: "/images/bejama/ribbed-zip-set-green.jpg", imageAlt: "طقم قطيفة مضلع أخضر زيتي غامق، بلوزة واسعة برقبة عالية وسوستة وبنطلون واسع" },
+  { id: "bm-winter-pajama-022", name: "بيجاما وردي بطبعة باندا", category: "winter-pajamas", image: "/images/bejama/panda-pajama-pink.jpg", imageAlt: "بيجاما وردية، التيشيرت عليه وش باندا والبنطلون مطبوع عليه باندا وقلوب" },
+  { id: "bm-winter-pajama-023", name: "بيجاما رمادي بطبعة باندا", category: "winter-pajamas", image: "/images/bejama/panda-pajama-gray.jpg", imageAlt: "بيجاما رمادية، التيشيرت عليه وش باندا والبنطلون مطبوع عليه باندا وقلوب وردي" },
+  { id: "bm-winter-pajama-024", name: "بيجاما بيج بقلب وفراشات", category: "winter-pajamas", image: "/images/bejama/heart-butterfly-pajama.jpg", imageAlt: "تيشيرت بيج عليه قلب وفراشات سوداء وبنطلون أسود واسع مطبوع عليه فراشات بيج" },
+  { id: "bm-winter-pajama-025", name: "بيجاما موف Dream ببنطلون ألوان", category: "winter-pajamas", image: "/images/bejama/dream-pajama-purple.jpg", imageAlt: "تيشيرت موف مكتوب عليه Dream وبنطلون واسع مطبوع بدرجات الفوشيا والرمادي", hidden: true },
+  { id: "bm-winter-pajama-026", name: "بيجاما حمراء بجيب وبنطلون كاروهات", category: "winter-pajamas", image: "/images/bejama/red-plaid-pocket-pajama.jpg", imageAlt: "تيشيرت أحمر بجيب كاروهات وبنطلون أبيض بكاروهات حمراء" },
+  { id: "bm-winter-pajama-027", name: "بيجاما قميص مقلمة بطبعة دباديب وفيونكات", category: "winter-pajamas", image: "/images/bejama/striped-teddy-bow-pajama.jpg", imageAlt: "بيجاما قميص بزراير مقلمة بيج مطبوع عليها دباديب وفيونكات بني" },
+  { id: "bm-winter-pajama-028", name: "بيجاما فرو لبني بطبعة قطة وبنطلون كاروهات", category: "winter-pajamas", image: "/images/bejama/blue-kitty-fleece-pajama.jpg", imageAlt: "بلوفر فرو لبني عليه رسمة قطة بفيونكة وبنطلون كاروهات أزرق وأبيض", hidden: true },
+  { id: "bm-winter-pajama-029", name: "بيجاما نمر بحواف سوداء وزراير", category: "winter-pajamas", image: "/images/bejama/leopard-button-pajama.jpg", imageAlt: "بيجاما بطبعة نمر، بلوزة برقبة V بزراير وحواف سوداء وبنطلون نمر" },
+  { id: "bm-winter-pajama-030", name: "بيجاما فرو بيج ببنطلون نمر رمادي", category: "winter-pajamas", image: "/images/bejama/beige-fleece-gray-leopard.jpg", imageAlt: "بلوفر فرو بيج بجيب نمر رمادي وبنطلون فليس بطبعة نمر رمادي وأسود" },
+  { id: "bm-winter-pajama-031", name: "بيجاما فرو بني بقلب نمر", category: "winter-pajamas", image: "/images/bejama/brown-fleece-leopard-heart.jpg", imageAlt: "بلوفر فرو بني عليه قلب بطبعة نمر وبنطلون بطبعة نمر" },
+  { id: "bm-winter-pajama-032", name: "بيجاما فرو أسود ببنطلون نمر", category: "winter-pajamas", image: "/images/bejama/black-fleece-leopard.jpg", imageAlt: "بلوفر فرو أسود بجيب نمر وبنطلون فليس بطبعة نمر بني" },
+  { id: "bm-winter-pajama-033", name: "بيجاما وردي بطبعة أرنب ونقط", category: "winter-pajamas", image: "/images/bejama/pink-bunny-dots-pajama.jpg", imageAlt: "بيجاما وردية، التيشيرت عليه رسمة أرنب والبنطلون مطبوع عليه نقط كحلي وأرانب" },
 
   // ── بلانكيت ──
   { id: "bm-winter-blanket-001", name: "بلانكيت أسود بغطاء للرأس", category: "wearable-blankets", image: "/images/bejama/black-hooded-blanket-cropped.jpg", imageAlt: "بلانكيت فرو أسود واسع بغطاء للرأس يُلبس فوق الملابس", price: 350 },
@@ -99,6 +115,8 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-blanket-005", name: "بلانكيت بطبعة زيبرا بيج ورمادي", category: "wearable-blankets", image: "/images/blanket/image_3_without_price.jpg", imageAlt: "بلانكيت هودي فرو واسع بخطوط زيبرا بيج ورمادي بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
   { id: "bm-winter-blanket-006", name: "بلانكيت رمادي بطبعة فيونكات", category: "wearable-blankets", image: "/images/blanket/image_4_without_price.jpg", imageAlt: "بلانكيت هودي فرو رمادي مبرقش مطبوع عليه فيونكات سوداء بجيب أمامي", price: 250, wasPrice: 350 },
   { id: "bm-winter-blanket-007", name: "بلانكيت بيج ببقع بني", category: "wearable-blankets", image: "/images/blanket/image_5_without_price.jpg", imageAlt: "بلانكيت هودي فرو بيج واسع مطبوع عليه بقع بني كبيرة بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
+  { id: "bm-winter-blanket-008", name: "بلانكيت قطيفة بكابشون · بني شوكولاتة", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-brown.jpg", imageAlt: "بلانكيت قطيفة واسع بلون بني شوكولاتة بكابشون يُلبس فوق الملابس", price: 250, wasPrice: 350 },
+  { id: "bm-winter-blanket-009", name: "بلانكيت قطيفة بكابشون · رمادي", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-gray.jpg", imageAlt: "بلانكيت قطيفة واسع رمادي غامق بكابشون يُلبس فوق الملابس", price: 250, wasPrice: 350 },
 ];
 
 export const visibleCatalog: CatalogProduct[] = catalog.filter((product) => !product.hidden);
@@ -138,6 +156,19 @@ export function isManualSoldOut(id: string) {
 /** Out because the inventory reached 0 (comes back by itself when stock is added). */
 export function isAutoSoldOut(id: string) {
   return autoSoldOutIds.has(id);
+}
+
+// ── Store numbers from the inventory: sold so far, left, best seller (stored in Redis, see lib/stock-sync.ts) ──
+export type StoreStat = { sold: number; left: number | null; best?: boolean };
+const productStatsById = new Map<string, StoreStat>();
+
+export function setProductStats(stats: Record<string, StoreStat>) {
+  productStatsById.clear();
+  for (const [id, stat] of Object.entries(stats)) productStatsById.set(id, stat);
+}
+
+export function statOf(id: string): StoreStat | undefined {
+  return productStatsById.get(id);
 }
 
 /** Replaces the admin-added products (idempotent; called by the server and on each store page). */

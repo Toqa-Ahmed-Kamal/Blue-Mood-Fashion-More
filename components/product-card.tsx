@@ -12,7 +12,7 @@ import { formatEGP } from "@/lib/format";
 import { trackCartRemove, trackProductView } from "@/lib/journey-tracker";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
-import { categoryInfo, discountPercentOf, isSoldOut, landingPromotion, offerCategories, priceOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
+import { categoryInfo, discountPercentOf, isSoldOut, landingPromotion, offerCategories, priceOf, statOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
 
 function offerLinkFor(product: CatalogProduct) {
   return product.category === "wearable-blankets"
@@ -103,6 +103,7 @@ export function ProductCard({ product, onQuickView }: { product: CatalogProduct;
         <Image src={product.image} alt={product.imageAlt} fill sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 25vw" />
         {isSoldOut(product.id) && <span className="sold-out-badge">نفدت الكمية</span>}
         {!isSoldOut(product.id) && discountPercentOf(product) !== null && <span className="sale-badge">خصم {discountPercentOf(product)}٪</span>}
+        {!isSoldOut(product.id) && statOf(product.id)?.best && <span className="best-badge">الأكثر مبيعًا</span>}
         <span className="media-zoom" aria-hidden="true"><Expand size={16} /></span>
       </button>
       <div className="product-body">

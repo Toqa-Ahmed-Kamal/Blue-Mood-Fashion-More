@@ -601,6 +601,28 @@ h1, h2, h3 { font-family: var(--font-display); }
   text-align: center;
 }
 
+/* ───────────── Why order from us (trust) ───────────── */
+.trust { margin-top: 40px; }
+.trust h2 { font-size: clamp(24px, 5vw, 34px); font-weight: 700; margin-bottom: 18px; text-align: center; }
+.trust ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.trust li { display: grid; justify-items: center; gap: 6px; padding: 18px 12px; border-radius: var(--radius-lg); background: var(--paper); box-shadow: var(--shadow-sm); text-align: center; }
+.trust li svg { color: var(--pink); }
+.trust li strong { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--navy); }
+.trust li span { color: var(--muted); font-size: 14px; line-height: 1.7; }
+@media (min-width: 900px) { .trust ul { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; } .trust li { padding: 22px 16px; } }
+
+/* ───────────── FAQ ───────────── */
+.faq { margin-top: 64px; max-width: 860px; }
+.faq h2 { font-size: clamp(26px, 5vw, 38px); font-weight: 700; margin-bottom: 18px; text-align: center; }
+.faq-list { display: grid; gap: 10px; }
+.faq details { border-radius: var(--radius-lg); background: var(--paper); box-shadow: var(--shadow-sm); padding: 0 18px; }
+.faq summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; font-weight: 800; color: var(--navy); }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; background: var(--brand-soft); color: var(--brand-dark); font-size: 18px; transition: transform .2s ease; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 8px; }
+.faq details p { margin: 0 0 16px; color: var(--muted); line-height: 1.9; }
+
 /* ───────────── How it works + footer ───────────── */
 .how-it-works {
   margin-top: 88px;
@@ -1725,6 +1747,12 @@ select.admin-inline-input { width: 160px; }
 .price-tag.on-sale { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .price-was { font-size: 13px; font-weight: 600; color: var(--muted); text-decoration-thickness: 1.5px; }
 .price-off { font-size: 11.5px; font-weight: 800; color: #fff; background: var(--pink-dark); border-radius: 999px; padding: 1px 8px; }
+.best-badge { position: absolute; bottom: 10px; inset-inline-start: 10px; z-index: 2; display: inline-flex; align-items: center; gap: 4px; background: #f4c542; color: #3a2a00; font-size: .76rem; font-weight: 800; border-radius: 999px; padding: 4px 11px; box-shadow: var(--shadow-sm); }
+.best-badge::before { content: "★"; }
+.stock-numbers { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.stock-numbers > span { display: inline-flex; align-items: center; gap: 4px; }
+.stock-numbers > span:first-child:not(.few) { color: var(--pink-dark); }
+.stock-numbers .few { color: #c0392b; }
 .sale-badge { position: absolute; top: 10px; inset-inline-start: 10px; z-index: 2; background: var(--pink-dark); color: #fff; font-size: .78rem; font-weight: 800; border-radius: 999px; padding: 4px 12px; box-shadow: var(--shadow-sm); }
 .admin-price-edit label { display: inline-flex; flex-direction: column; gap: 2px; font-size: .7rem; color: var(--muted); }
 .admin-price-strike { margin-inline-start: 6px; color: var(--muted); font-size: .78rem; }

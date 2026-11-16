@@ -9,6 +9,7 @@
 //   catalog:soldout:auto   SET   product IDs whose inventory reached 0 (written by lib/stock-sync.ts)
 import { parseCustomProduct } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
+import type { ProductStat } from "./piece-analytics.ts";
 import { findProduct, setCustomProducts, setPriceOverrides, setSoldOut, setWasPrices, type CatalogProduct } from "./site-data.ts";
 
 export const CUSTOM_PRODUCTS_TAG = "custom-products";
@@ -18,6 +19,8 @@ const SOLD_OUT = () => `${keyPrefix()}catalog:soldout`;
 const PRICES = () => `${keyPrefix()}catalog:prices`;
 const WAS_PRICES = () => `${keyPrefix()}catalog:wasprices`;
 export const AUTO_SOLD_OUT = () => `${keyPrefix()}catalog:soldout:auto`;
+/** STR JSON { productId: { sold, left, best? } } shown on the store (written by lib/stock-sync.ts). */
+export const PRODUCT_STATS = () => `${keyPrefix()}catalog:stats`;
 
 /** HGETALL result → { productId: price } (bad entries skipped). */
 function parsePrices(flat: unknown): Record<string, number> {
@@ -133,10 +136,20 @@ export async function ensureCustomProducts(force = false) {
  * For store pages: read through Next's data cache (tag "custom-products", refreshed every minute and
  * immediately when the admin changes a product), so a page view costs no Redis command.
  */
-export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number> }> {
+function parseStats(raw: unknown): Record<string, ProductStat> {
+  if (typeof raw !== "string") return {};
+  try {
+    const value = JSON.parse(raw) as unknown;
+    return typeof value === "object" && value !== null ? (value as Record<string, ProductStat>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat> }> {
   const url = process.env.KV_REST_API_URL?.trim().replace(/\/+$/, "");
   const token = (process.env.KV_REST_API_READ_ONLY_TOKEN ?? process.env.KV_REST_API_TOKEN)?.trim();
-  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {} };
+  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {} };
   const read = async (command: string) => {
     try {
       const response = await fetch(`${url}/${command}`, {
@@ -150,16 +163,17 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
       return null;
     }
   };
-  const [products, soldOut, autoSoldOut, prices, wasPrices] = await Promise.all([
+  const [products, soldOut, autoSoldOut, prices, wasPrices, stats] = await Promise.all([
     read(`hgetall/${encodeURIComponent(PRODUCTS())}`),
     read(`smembers/${encodeURIComponent(SOLD_OUT())}`),
     read(`smembers/${encodeURIComponent(AUTO_SOLD_OUT())}`),
     read(`hgetall/${encodeURIComponent(PRICES())}`),
     read(`hgetall/${encodeURIComponent(WAS_PRICES())}`),
+    read(`get/${encodeURIComponent(PRODUCT_STATS())}`),
   ]);
   // The store does not need to know why a product is out: the admin's switch and the inventory both count.
   const out = [...new Set([...(Array.isArray(soldOut) ? soldOut : []), ...(Array.isArray(autoSoldOut) ? autoSoldOut : [])].map(String))];
-  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices) };
+  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats) };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */

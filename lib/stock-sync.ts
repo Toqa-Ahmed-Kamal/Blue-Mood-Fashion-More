@@ -7,9 +7,10 @@
 import { revalidateTag } from "next/cache";
 
 import { loadAllOrdersForSummary } from "./analytics-store.ts";
-import { AUTO_SOLD_OUT, CUSTOM_PRODUCTS_TAG, ensureCustomProducts } from "./custom-products-store.ts";
+import { AUTO_SOLD_OUT, CUSTOM_PRODUCTS_TAG, PRODUCT_STATS, ensureCustomProducts } from "./custom-products-store.ts";
 import { loadDirectSales } from "./finance-store.ts";
-import { buildStock, outOfStockIds } from "./inventory.ts";
+import { buildStock, outOfStockIds, type StockRow } from "./inventory.ts";
+import { buildPiecesReport, productStats } from "./piece-analytics.ts";
 import { loadStockMoves } from "./inventory-store.ts";
 import { loadOldOrders } from "./old-orders-store.ts";
 import { isOrderVaultConfigured } from "./order-vault.ts";
@@ -44,14 +45,32 @@ export async function writeAutoSoldOut(ids: string[]) {
   return true;
 }
 
+type Stock = Awaited<ReturnType<typeof computeStock>>;
+
+/** Store numbers: sold / left / best seller per product. Rewritten only when they changed; true = changed. */
+async function writeProductStats(rows: StockRow[], input: Stock["input"]) {
+  const report = buildPiecesReport({ live: input.live, old: input.old, direct: input.direct, moves: input.moves, stock: rows });
+  const next = JSON.stringify(productStats(report, rows));
+  const [current] = await redisPipeline([["GET", PRODUCT_STATS()]], "write");
+  if (current === next) return false;
+  await redisPipeline([["SET", PRODUCT_STATS(), next]], "write");
+  revalidateTag(CUSTOM_PRODUCTS_TAG, { expire: 0 });
+  return true;
+}
+
+/** Brings everything the store shows from the inventory up to date (sold out, sold / left counts). */
+export async function writeStoreStock(stock: Stock) {
+  await writeAutoSoldOut(outOfStockIds(stock.rows));
+  await writeProductStats(stock.rows, stock.input);
+}
+
 /**
  * Call after anything that changes stock (order status or pieces, stock moves, direct sales). Never throws:
  * the action the admin did already succeeded; the store catches up on the next sync.
  */
 export async function syncStoreStock() {
   try {
-    const { rows } = await computeStock();
-    await writeAutoSoldOut(outOfStockIds(rows));
+    await writeStoreStock(await computeStock());
   } catch (error) {
     console.error("[stock] store sync failed", { reason: error instanceof Error ? error.message : "UNEXPECTED" });
   }

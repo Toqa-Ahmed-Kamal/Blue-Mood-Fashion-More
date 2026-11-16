@@ -1,7 +1,7 @@
 import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
 import { buildPiecesReport } from "@/lib/piece-analytics";
 import { RedisUnavailableError } from "@/lib/redis";
-import { computeStock } from "@/lib/stock-sync";
+import { computeStock, writeStoreStock } from "@/lib/stock-sync";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,9 @@ export async function GET(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
   const params = new URL(request.url).searchParams;
   try {
-    const { rows, moves, vault, input } = await computeStock();
+    const stock = await computeStock();
+    const { rows, moves, vault, input } = stock;
+    await writeStoreStock(stock).catch(() => undefined);
     const report = buildPiecesReport({ live: input.live, old: input.old, direct: input.direct, moves, stock: rows, from: params.get("from"), to: params.get("to") });
     return json(200, { success: true, report, vaultConfigured: vault });
   } catch (error) {

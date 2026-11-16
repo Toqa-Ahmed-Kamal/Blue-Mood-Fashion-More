@@ -61,6 +61,7 @@ export function SiteHeader() {
 
         <nav className="main-nav" aria-label="الأقسام">
           {navLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
+          <Link href="/#faq">أسئلة شائعة</Link>
         </nav>
 
         <Link href="/checkout" className="cart-btn" aria-label={`السلة، ${count} قطعة`}>
@@ -111,10 +112,11 @@ export function SiteFooter() {
             <Image src="/images/blue-mood-logo-badge.png" alt="شعار Blue Mood" width={96} height={96} />
             <BrandWordmark className="wordmark-light" />
           </div>
-          <p>عبايات، أرواب، بيجامات وبلانكيت — شحن لكل المحافظات والطلب بيتأكد على واتساب.</p>
+          <p>بلانكيت، بيجامات، أرواب وعبايات — شحن لكل المحافظات، المعاينة متاحة، والطلب بيتأكد على واتساب.</p>
         </div>
         <nav aria-label="روابط الأقسام">
           {navLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
+          <Link href="/#faq">أسئلة شائعة</Link>
         </nav>
       </div>
       <div className="container footer-bottom">© {new Date().getFullYear()} Blue Mood · Fashion & More</div>
