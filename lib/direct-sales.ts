@@ -7,6 +7,8 @@
 //   does not change it.
 // - Extra cost = what the owner paid for this sale (delivery, packaging…). Profit = sale − products cost − extra cost.
 // - The month's expenses (ads, courier…) are carried by online orders only; a direct sale carries none.
+// - kind "personal" (خدتها لنفسي): pieces the owner took for herself. No price, no buyer, no extra cost; they
+//   come off the stock and their factory cost comes off the net profit (the goods' money went to her).
 import { findProduct } from "./site-data.ts";
 
 export type DirectSaleLine = {
@@ -20,8 +22,12 @@ export type DirectSaleLine = {
   unitCost: number | null;
 };
 
+export type DirectSaleKind = "sale" | "personal";
+
 export type DirectSale = {
   id: string;
+  /** Missing on sales saved before personal takes existed = "sale". */
+  kind?: DirectSaleKind;
   /** YYYY-MM-DD (Cairo). */
   date: string;
   /** Who it was for (optional, short: "صاحبتي", "خالتي"…). */
@@ -61,6 +67,7 @@ export function sanitizeDirectSale(
 ): { sale: DirectSale } | { error: string } {
   if (typeof raw !== "object" || raw === null) return { error: "البيانات مش مفهومة." };
   const value = raw as Record<string, unknown>;
+  const personal = value.kind === "personal";
   if (!isDay(value.date)) return { error: "اختاري التاريخ." };
   const rawLines = Array.isArray(value.lines) ? value.lines : [];
   if (rawLines.length === 0) return { error: "ضيفي قطعة واحدة على الأقل." };
@@ -76,20 +83,21 @@ export function sanitizeDirectSale(
     if (name.length < 2) return { error: `${label}: اختاري المنتج أو اكتبي اسم الحاجة.` };
     const quantity = Number(line.quantity);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) return { error: `${label}: العدد لازم يبقى رقم صحيح من ١ لـ ٥٠٠.` };
-    const unitPrice = amount(line.unitPrice);
+    const unitPrice = personal ? 0 : amount(line.unitPrice);
     if (unitPrice === null || unitPrice === undefined) return { error: `${label}: اكتبي سعر القطعة اللي بعتي بيه.` };
     const typedCost = amount(line.unitCost);
     if (typedCost === undefined) return { error: `${label}: سعر المصنع لازم يبقى رقم موجب أو فاضي.` };
     const unitCost = typedCost ?? (product ? costs[product.id]?.cost ?? null : null);
     lines.push({ productId: product ? product.id : "", name, quantity, unitPrice, unitCost });
   }
-  const extraCost = amount(value.extraCost);
+  const extraCost = personal ? 0 : amount(value.extraCost);
   if (extraCost === undefined) return { error: "المصاريف لازم تبقى رقم موجب أو فاضية." };
   return {
     sale: {
       id,
+      kind: personal ? "personal" : "sale",
       date: value.date,
-      buyer: text(value.buyer, 80),
+      buyer: personal ? "" : text(value.buyer, 80),
       lines,
       extraCost: extraCost ?? 0,
       notes: typeof value.notes === "string" ? value.notes.replace(/\r\n?/g, "\n").trim().slice(0, 500) : "",
@@ -98,6 +106,8 @@ export function sanitizeDirectSale(
     },
   };
 }
+
+export const isPersonalTake = (sale: DirectSale) => sale.kind === "personal";
 
 /** What one direct sale brought: sale, factory cost, extra cost and the profit. */
 export function directSaleMoney(sale: DirectSale): DirectSaleMoney {

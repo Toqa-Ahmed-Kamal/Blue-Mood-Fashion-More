@@ -83,3 +83,11 @@ test("moves from the admin: clear messages", () => {
   const ok = sanitizeStockMove({ productId: ROBE, kind: "adjust", quantity: -2, note: "  تالفة  " }, "id", new Date("2026-11-13T10:00:00Z"));
   assert.deepEqual(ok.move, { id: "id", productId: ROBE, kind: "adjust", quantity: -2, at: "2026-11-13T10:00:00.000Z", note: "تالفة" });
 });
+
+test("pieces taken for herself come off the stock, shown apart from sales", () => {
+  const moves = [move("count", 10, "2026-11-10T10:00:00.000Z")];
+  const take = { ...direct(2, "2026-11-11T09:00:00.000Z"), kind: "personal" };
+  const before = { ...direct(4, "2026-11-09T09:00:00.000Z"), kind: "personal" };
+  const row = stockOf({ moves, direct: [take, before, direct(1, "2026-11-12T09:00:00.000Z")] });
+  assert.deepEqual([row.soldDirect, row.taken, row.stock], [1, 2, 7]);
+});

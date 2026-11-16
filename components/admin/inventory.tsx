@@ -157,7 +157,7 @@ export function InventoryTab() {
                         <td>{product.tracked ? <strong className={product.stock <= 0 ? "admin-negative" : ""}>{product.stock}</strong> : <span className="admin-muted">لسه متسجلش</span>}</td>
                         <td>{product.reserved || "—"}</td>
                         <td>{product.tracked ? <span className={product.available < 0 ? "admin-negative" : ""}>{product.available}</span> : "—"}</td>
-                        <td>{product.tracked ? `${product.soldOrders + product.soldDirect}${product.soldDirect ? ` (${product.soldDirect} بيع مباشر)` : ""}` : "—"}</td>
+                        <td>{product.tracked ? `${product.soldOrders + product.soldDirect}${product.soldDirect ? ` (${product.soldDirect} بيع مباشر)` : ""}${product.taken ? ` · ${product.taken} خدتيها لنفسك` : ""}` : "—"}</td>
                         <td dir="ltr">{product.tracked ? (product.counted && product.startAt ? `${product.start} · ${cairoTime(product.startAt)}` : "—") : "—"}</td>
                         <td className="actions">
                           <button type="button" disabled={busy} onClick={() => setAction({ product, kind: "arrival" })}><PackagePlus size={14} /> وصلت بضاعة</button>
@@ -174,7 +174,7 @@ export function InventoryTab() {
               </div>
             )}
             <p className="admin-muted small">
-              ابدئي بـ &quot;جرد&quot; لكل منتج: اكتبي العدد اللي عندك فعلاً. بعد كده المخزون بيقل لوحده لما تأكدي أوردر (موقع أو تيليجرام) أو تسجلي بيع مباشر، ولو الأوردر اتلغى أو رجع القطع بترجع لوحدها.
+              ابدئي بـ &quot;جرد&quot; لكل منتج: اكتبي العدد اللي عندك فعلاً. بعد كده المخزون بيقل لوحده لما تأكدي أوردر (موقع أو تيليجرام) أو تسجلي بيع مباشر أو حاجة خدتيها لنفسك، ولو الأوردر اتلغى أو رجع القطع بترجع لوحدها.
               &quot;وصلت بضاعة&quot; بتزود العدد. &quot;محجوز&quot; = قطع في أوردرات لسه مستنية تأكيد، و&quot;متاح&quot; = المخزون − المحجوز.
               تنبيه &quot;قرب يخلص&quot; لما المتاح يبقى {LOW_STOCK} أو أقل. المخزون مش بيقفل المنتج على الموقع لوحده؛ انتي اللي بتقرري تعمليه &quot;نفذ&quot;.
             </p>

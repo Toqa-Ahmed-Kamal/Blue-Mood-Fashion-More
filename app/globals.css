@@ -1771,6 +1771,7 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
 .direct-preview { max-width: 360px; margin: 8px 0 12px; }
 .direct-item { display: block; }
 .admin-fin-stage.direct { border-inline-start-color: #7a4cc2; }
+.admin-fin-stage.personal { border-inline-start-color: #c0567a; }
 
 /* Inventory (components/admin/inventory.tsx). */
 .inventory-table tr.stock-out td:first-child { box-shadow: inset -4px 0 0 var(--danger); }

@@ -39,7 +39,8 @@ export async function PATCH(request: Request, context: Context) {
     const current = await loadDirectSale(checked.saleId);
     if (!current) return json(404, NOT_FOUND);
     await ensureCustomProducts();
-    const result = sanitizeDirectSale(body, current.id, await loadProductCosts(), new Date(), current.createdAt);
+    // A sale stays a sale and a personal take stays one.
+    const result = sanitizeDirectSale(typeof body === "object" && body !== null ? { ...body, kind: current.kind ?? "sale" } : body, current.id, await loadProductCosts(), new Date(), current.createdAt);
     if ("error" in result) return json(400, { success: false, error: { code: "INVALID_SALE", message: result.error } });
     const saved = await saveDirectSale(result.sale);
     return saved ? json(200, { success: true, sale: saved }) : json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });

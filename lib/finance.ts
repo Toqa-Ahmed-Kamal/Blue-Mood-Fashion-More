@@ -12,8 +12,10 @@
 // - Net profit = sales − products cost − expenses, all in EGP, for the chosen dates.
 // - Direct sales to friends and family (lib/direct-sales.ts) are sales too: their sale and factory cost join
 //   the totals and their own extra cost comes off the net profit. The month's expenses stay on online orders.
+// - Pieces the owner took for herself (direct kind "personal") are not sales: their factory cost comes off the
+//   net profit on its own line (personal.cost), not inside products cost.
 import { confirmedValueOf, isSaleStatus, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
-import { directSaleMoney, type DirectSale } from "./direct-sales.ts";
+import { directSaleMoney, isPersonalTake, type DirectSale } from "./direct-sales.ts";
 import { oldOrderValue, type OldOrder } from "./old-orders.ts";
 import { catalog, landingPromotion } from "./site-data.ts";
 
@@ -151,6 +153,8 @@ export type FinanceReport = {
   stages: Record<"confirmed" | "delivered" | "pending", FinanceStage>;
   /** Direct sales to friends and family in the period (already inside totals.sales / productsCost / netProfit). */
   direct: { count: number; pieces: number; sales: number; productsCost: number; extraCost: number; profit: number; missingCostLines: number };
+  /** Pieces the owner took for herself in the period; cost (factory price) is already taken off totals.netProfit. */
+  personal: { count: number; pieces: number; cost: number; missingCostLines: number };
   orders: FinanceOrderRow[];
 };
 
@@ -339,9 +343,17 @@ export function buildFinanceReport(input: {
   const stockPurchases = round(expenses.filter((expense) => NOT_DEDUCTED_CATEGORIES.includes(expense.category)).reduce((sum, expense) => sum + expense.amount, 0));
   const confirmed = rows.filter((row) => isSaleStatus(row.status));
   const direct = { count: 0, pieces: 0, sales: 0, productsCost: 0, extraCost: 0, profit: 0, missingCostLines: 0 };
+  const personal = { count: 0, pieces: 0, cost: 0, missingCostLines: 0 };
   for (const sale of input.direct ?? []) {
     if (!inRange(sale.date)) continue;
     const value = directSaleMoney(sale);
+    if (isPersonalTake(sale)) {
+      personal.count += 1;
+      personal.pieces += value.pieces;
+      personal.cost += value.productsCost;
+      personal.missingCostLines += value.missingCostLines;
+      continue;
+    }
     direct.count += 1;
     direct.pieces += value.pieces;
     direct.sales += value.sales;
@@ -354,8 +366,10 @@ export function buildFinanceReport(input: {
   const allProductsCost = productsCost + direct.productsCost;
   return {
     range: { from, to },
-    // Direct sales are sales too; their extra cost (delivery, packaging) comes off the net profit.
-    totals: { sales: round(allSales), productsCost: round(allProductsCost), expenses: expensesTotal, stockPurchases, netProfit: round(allSales - allProductsCost - expensesTotal - direct.extraCost) },
+    // Direct sales are sales too; their extra cost (delivery, packaging) comes off the net profit, and so does
+    // the factory cost of the pieces the owner took for herself.
+    totals: { sales: round(allSales), productsCost: round(allProductsCost), expenses: expensesTotal, stockPurchases, netProfit: round(allSales - allProductsCost - expensesTotal - direct.extraCost - personal.cost) },
+    personal: { ...personal, cost: round(personal.cost) },
     direct: { ...direct, sales: round(direct.sales), productsCost: round(direct.productsCost), extraCost: round(direct.extraCost), profit: round(direct.profit) },
     counts: {
       confirmedOrders: confirmed.length,

@@ -3,12 +3,12 @@
 // Stock is worked out, never decremented in place:
 //   stock = last count (جرد) + arrivals and adjustments after it − pieces sold after it
 // "Sold" = pieces in site / Telegram orders that are confirmed or delivered now and became a sale after the
-// count, plus direct sales (friends and family) recorded after it. So an order that is cancelled or returned
+// count, plus direct sales (friends and family) and pieces the owner took for herself recorded after it. So an order that is cancelled or returned
 // later gives its pieces back by itself, and an edited order counts with its current pieces.
 // Waiting orders do not take stock; their pieces are shown as "reserved".
 import type { AnalyticsOrder } from "./analytics-report.ts";
 import { isSaleStatus } from "./analytics-report.ts";
-import type { DirectSale } from "./direct-sales.ts";
+import { isPersonalTake, type DirectSale } from "./direct-sales.ts";
 import type { OldOrder } from "./old-orders.ts";
 import { findProduct } from "./site-data.ts";
 
@@ -45,6 +45,8 @@ export type StockRow = {
   adjusted: number;
   soldOrders: number;
   soldDirect: number;
+  /** Pieces the owner took for herself after the count. */
+  taken: number;
   stock: number;
   /** Pieces in orders still waiting for confirmation. */
   reserved: number;
@@ -102,7 +104,9 @@ function orderLines(live: AnalyticsOrder[], old: OldOrder[]) {
 
 export function buildStock(input: { productIds: string[]; moves: StockMove[]; live: AnalyticsOrder[]; old: OldOrder[]; direct: DirectSale[] }): StockRow[] {
   const { sold, waiting } = orderLines(input.live, input.old);
-  const direct: SoldLine[] = input.direct.flatMap((sale) => sale.lines.filter((line) => line.productId).map((line) => ({ productId: line.productId, quantity: line.quantity, at: sale.createdAt })));
+  const linesOf = (sales: DirectSale[]): SoldLine[] => sales.flatMap((sale) => sale.lines.filter((line) => line.productId).map((line) => ({ productId: line.productId, quantity: line.quantity, at: sale.createdAt })));
+  const direct = linesOf(input.direct.filter((sale) => !isPersonalTake(sale)));
+  const personal = linesOf(input.direct.filter(isPersonalTake));
   const movesOf = new Map<string, StockMove[]>();
   for (const move of input.moves) movesOf.set(move.productId, [...(movesOf.get(move.productId) ?? []), move]);
 
@@ -110,7 +114,7 @@ export function buildStock(input: { productIds: string[]; moves: StockMove[]; li
     const moves = (movesOf.get(productId) ?? []).toSorted((a, b) => a.at.localeCompare(b.at));
     const reserved = waiting.filter((line) => line.productId === productId).reduce((sum, line) => sum + line.quantity, 0);
     if (moves.length === 0) {
-      return { productId, tracked: false, start: 0, startAt: null, counted: false, arrived: 0, adjusted: 0, soldOrders: 0, soldDirect: 0, stock: 0, reserved, available: 0, state: "untracked" };
+      return { productId, tracked: false, start: 0, startAt: null, counted: false, arrived: 0, adjusted: 0, soldOrders: 0, soldDirect: 0, taken: 0, stock: 0, reserved, available: 0, state: "untracked" };
     }
     const lastCount = moves.findLast((move) => move.kind === "count");
     const start = lastCount?.quantity ?? 0;
@@ -122,7 +126,8 @@ export function buildStock(input: { productIds: string[]; moves: StockMove[]; li
     const adjusted = later.filter((move) => move.kind === "adjust").reduce((sum, move) => sum + move.quantity, 0);
     const soldOrders = sold.filter((line) => line.productId === productId && line.at > startAt).reduce((sum, line) => sum + line.quantity, 0);
     const soldDirect = direct.filter((line) => line.productId === productId && line.at > startAt).reduce((sum, line) => sum + line.quantity, 0);
-    const stock = start + arrived + adjusted - soldOrders - soldDirect;
+    const taken = personal.filter((line) => line.productId === productId && line.at > startAt).reduce((sum, line) => sum + line.quantity, 0);
+    const stock = start + arrived + adjusted - soldOrders - soldDirect - taken;
     const available = stock - reserved;
     return {
       productId,
@@ -134,6 +139,7 @@ export function buildStock(input: { productIds: string[]; moves: StockMove[]; li
       adjusted,
       soldOrders,
       soldDirect,
+      taken,
       stock,
       reserved,
       available,

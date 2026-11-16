@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Calculator, CircleSlash, ImageOff, ImagePlus, PackageCheck, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 
-import { directSaleMoney, type DirectSale } from "@/lib/direct-sales";
+import { directSaleMoney, isPersonalTake, type DirectSale } from "@/lib/direct-sales";
 import { EXPENSE_CATEGORIES, OFFER_PIECE_PRICE, pricingRows, type Expense, type ExpenseCategory, type FinanceReport } from "@/lib/finance";
 import { formatEGP } from "@/lib/format";
 import { categoryInfo, categoryOrder, categoryPrices, type CatalogCategory } from "@/lib/site-data";
@@ -110,7 +110,7 @@ export function FinanceTab() {
               <div className="admin-card"><span>Total Sales · المبيعات</span><strong>{money(report.totals.sales)}</strong><small>{report.counts.confirmedOrders} أوردر مؤكد (شامل شحن العميلة){report.direct.count > 0 && ` + ${report.direct.count} بيع مباشر`}</small></div>
               <div className="admin-card"><span>Total Products Cost · تكلفة المنتجات</span><strong>{money(report.totals.productsCost)}</strong><small>بسعر المصنع وقت التأكيد</small></div>
               <div className="admin-card"><span>Total Expenses · المصروفات</span><strong>{money(report.totals.expenses)}</strong><small>{report.counts.expenses} مصروف</small></div>
-              <div className={`admin-card${report.totals.netProfit >= 0 ? " good" : " bad"}`}><span>Net Profit · صافي المكسب</span><strong>{money(report.totals.netProfit)}</strong><small>المبيعات − التكلفة − المصروفات</small></div>
+              <div className={`admin-card${report.totals.netProfit >= 0 ? " good" : " bad"}`}><span>Net Profit · صافي المكسب</span><strong>{money(report.totals.netProfit)}</strong><small>المبيعات − التكلفة − المصروفات{report.personal.cost > 0 && " − اللي خدتيه لنفسك"}</small></div>
             </section>
             <section className="admin-fin-stages" aria-label="المكسب حسب حالة الأوردر">
               {([
@@ -134,6 +134,13 @@ export function FinanceTab() {
                   <span className="admin-fin-stage-row"><span>المبيعات</span><strong>{money(report.direct.sales)}</strong></span>
                   <span className="admin-fin-stage-row"><span>المكسب</span><strong className={report.direct.profit < 0 ? "admin-negative" : "admin-positive"}>{money(report.direct.profit)}</strong></span>
                   <small className="admin-muted">صحابك وقرايبك — داخل في صافي المكسب</small>
+                </div>
+              )}
+              {report.personal.count > 0 && (
+                <div className="admin-fin-stage personal">
+                  <span className="admin-fin-stage-head">خدتيه لنفسك <small>· {report.personal.pieces} قطعة</small></span>
+                  <span className="admin-fin-stage-row"><span>بسعر المصنع</span><strong className="admin-negative">− {money(report.personal.cost)}</strong></span>
+                  <small className="admin-muted">متشال من المخزون ومن صافي المكسب{report.personal.missingCostLines > 0 && " · فيه قطعة من غير سعر مصنع"}</small>
                 </div>
               )}
             </section>
@@ -161,7 +168,8 @@ export function FinanceTab() {
           <ProductsPricing products={data.products} factories={data.factories} onSaved={load} />
           {report && <PricingCalculator key={`${report.range.from}|${report.range.to}|${report.totals.expenses}`} products={data.products} report={report} />}
           <Expenses expenses={data.expenses} range={range} onChanged={load} />
-          <DirectSales sales={data.directSales ?? []} products={data.products} range={range} onChanged={load} />
+          <DirectSales sales={(data.directSales ?? []).filter((sale) => !isPersonalTake(sale))} products={data.products} range={range} onChanged={load} />
+          <PersonalTakes takes={(data.directSales ?? []).filter(isPersonalTake)} products={data.products} range={range} onChanged={load} />
           {report && <OrdersProfit report={report} />}
         </>
       )}
@@ -680,6 +688,160 @@ function DirectSales({ sales, products, range, onChanged }: { sales: DirectSale[
         </div>
       )}
       <p className="admin-muted small">المكسب = البيع − سعر المصنع − المصاريف اللي دفعتيها. البيع المباشر داخل في المبيعات وصافي المكسب فوق، لكن مصروفات الإعلانات والشحن بتتقسم على أوردرات الأونلاين بس. سعر المصنع بيتحفظ مع البيعة، فلو اتغير بعدين مكسبها مش بيتغير.</p>
+    </section>
+  );
+}
+
+// ── Pieces the owner took for herself ─────────────────────────────────────
+
+type TakeLineForm = { key: number; productId: string; name: string; quantity: string; cost: string };
+type TakeForm = { date: string; notes: string; lines: TakeLineForm[] };
+const newTakeLine = (): TakeLineForm => ({ key: directLineKey++, productId: "", name: "", quantity: "1", cost: "" });
+const emptyTakeForm = (): TakeForm => ({ date: today(), notes: "", lines: [newTakeLine()] });
+
+function PersonalTakes({ takes, products, range, onChanged }: { takes: DirectSale[]; products: ProductRow[]; range: { from: string; to: string }; onChanged: () => Promise<void> }) {
+  const api = useFinanceApi();
+  const [form, setForm] = useState<TakeForm>(emptyTakeForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const shown = takes.filter((take) => (!range.from || take.date >= range.from) && (!range.to || take.date <= range.to));
+  const totals = shown.reduce((sum, take) => {
+    const value = directSaleMoney(take);
+    return { cost: sum.cost + value.productsCost, pieces: sum.pieces + value.pieces };
+  }, { cost: 0, pieces: 0 });
+  const byId = new Map(products.map((product) => [product.productId, product]));
+  const setLine = (key: number, change: Partial<TakeLineForm>) => setForm((current) => ({ ...current, lines: current.lines.map((line) => (line.key === key ? { ...line, ...change } : line)) }));
+  const previewCost = form.lines.reduce((sum, line) => {
+    const cost = numberOrNull(line.cost);
+    return sum + (cost !== null && Number.isFinite(cost) ? cost * (Number(line.quantity) || 0) : 0);
+  }, 0);
+
+  async function submit() {
+    setBusy(true);
+    setError("");
+    try {
+      const body = JSON.stringify({
+        kind: "personal",
+        date: form.date,
+        notes: form.notes,
+        lines: form.lines.map((line) => ({ productId: line.productId, name: line.name, quantity: Number(line.quantity), unitCost: numberOrNull(line.cost) })),
+      });
+      if (editingId) await api(`/api/admin/finance/direct/${editingId}`, { method: "PATCH", body });
+      else await api("/api/admin/finance/direct", { method: "POST", body });
+      setForm(emptyTakeForm());
+      setEditingId(null);
+      await onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function edit(take: DirectSale) {
+    setEditingId(take.id);
+    setError("");
+    setForm({
+      date: take.date,
+      notes: take.notes,
+      lines: take.lines.map((line) => ({ key: directLineKey++, productId: line.productId, name: line.productId ? "" : line.name, quantity: String(line.quantity), cost: line.unitCost === null ? "" : String(line.unitCost) })),
+    });
+  }
+
+  async function remove(take: DirectSale) {
+    if (!window.confirm(`حذف "${take.lines.map((line) => line.name).join("، ")}" (${take.date})؟ القطع هترجع للمخزون.`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/api/admin/finance/direct/${take.id}`, { method: "DELETE" });
+      if (editingId === take.id) {
+        setEditingId(null);
+        setForm(emptyTakeForm());
+      }
+      await onChanged();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نحذف.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="admin-panel" id="personal-takes">
+      <div className="admin-panel-head">
+        <h2>حاجات خدتها لنفسي</h2>
+      </div>
+      <p className="admin-muted small">القطع اللي خدتيها من البضاعة ليكي. بتتشال من المخزون، وتمنها بسعر المصنع بيتخصم من صافي المكسب (مش بيع، فمش داخلة في المبيعات).</p>
+      <div className="admin-fin-form">
+        <label className="admin-field"><span>التاريخ</span><input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
+      </div>
+      <div className="direct-lines">
+        {form.lines.map((line, index) => (
+          <div className="direct-line" key={line.key}>
+            <label className="admin-field product">
+              <span>قطعة {index + 1}</span>
+              <select value={line.productId} onChange={(event) => {
+                const product = byId.get(event.target.value);
+                setLine(line.key, { productId: event.target.value, name: product ? "" : line.name, cost: product ? (product.cost === null ? "" : String(product.cost)) : line.cost });
+              }}>
+                <option value="">— حاجة مش من الموقع —</option>
+                {categoryOrder.map((category) => (
+                  <optgroup key={category} label={categoryInfo[category].label}>
+                    {products.filter((product) => product.category === category).map((product) => <option key={product.productId} value={product.productId}>{product.name}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            {!line.productId && <label className="admin-field"><span>اسمها</span><input value={line.name} maxLength={120} onChange={(event) => setLine(line.key, { name: event.target.value })} /></label>}
+            <label className="admin-field qty"><span>العدد</span><input type="number" min={1} inputMode="numeric" value={line.quantity} onChange={(event) => setLine(line.key, { quantity: event.target.value })} /></label>
+            <label className="admin-field price"><span>سعر المصنع (للقطعة)</span><input type="number" min={0} inputMode="decimal" value={line.cost} placeholder="مش معروف" onChange={(event) => setLine(line.key, { cost: event.target.value })} /></label>
+            <button type="button" className="admin-icon-btn danger" disabled={form.lines.length === 1} onClick={() => setForm((current) => ({ ...current, lines: current.lines.filter((item) => item.key !== line.key) }))} aria-label={`شيلي قطعة ${index + 1}`}><Trash2 size={15} /></button>
+          </div>
+        ))}
+        <button type="button" className="admin-chip" onClick={() => setForm((current) => ({ ...current, lines: [...current.lines, newTakeLine()] }))}><Plus size={14} /> قطعة كمان</button>
+      </div>
+      <div className="admin-fin-form">
+        <label className="admin-field wide"><span>ملاحظات</span><input value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
+      </div>
+      <dl className="admin-totals direct-preview">
+        <div className="grand"><dt>هيتخصم من المكسب</dt><dd className="admin-negative">− {money(previewCost)}</dd></div>
+      </dl>
+      <div className="admin-fin-form-actions">
+        <button type="button" className="admin-primary" disabled={busy} onClick={() => void submit()}>{editingId ? <><Save size={15} /> حفظ التعديل</> : <><Plus size={15} /> تسجيل</>}</button>
+        {editingId && <button type="button" className="admin-chip" onClick={() => { setEditingId(null); setForm(emptyTakeForm()); setError(""); }}><X size={14} /> إلغاء التعديل</button>}
+      </div>
+      {error && <p className="admin-error" role="alert">{error}</p>}
+      <div className="admin-filters">
+        <span className="admin-muted">{totals.pieces} قطعة في الفترة · بسعر المصنع <strong className="admin-negative">{money(totals.cost)}</strong></span>
+      </div>
+      {shown.length === 0 ? <p className="admin-muted empty">مفيش حاجات متسجلة في الفترة دي.</p> : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead><tr><th>التاريخ</th><th>خدتي إيه</th><th>القطع</th><th>بسعر المصنع</th><th>إجراء</th></tr></thead>
+            <tbody>
+              {shown.map((take) => {
+                const value = directSaleMoney(take);
+                return (
+                  <tr key={take.id}>
+                    <td dir="ltr">{take.date}</td>
+                    <td className="wrap">
+                      {take.lines.map((line, index) => <span key={index} className="direct-item">{line.name}{line.quantity > 1 ? ` × ${line.quantity}` : ""}</span>)}
+                      {take.notes && <small className="admin-muted">{take.notes}</small>}
+                    </td>
+                    <td>{value.pieces}</td>
+                    <td>{money(value.productsCost)}{value.missingCostLines > 0 && <span className="admin-flag warn">ناقص سعر مصنع</span>}</td>
+                    <td className="actions">
+                      <button type="button" disabled={busy} onClick={() => edit(take)}><Pencil size={14} /> تعديل</button>
+                      <button type="button" disabled={busy} className="danger" onClick={() => void remove(take)} aria-label="حذف"><Trash2 size={14} /></button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

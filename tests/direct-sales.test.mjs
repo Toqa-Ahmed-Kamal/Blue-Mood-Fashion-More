@@ -56,3 +56,21 @@ test("direct sales join the finance totals; the month's expenses stay on online 
   assert.equal(report.orders[0].expenseShare, 100, "ads carried by the online order only");
   assert.equal(report.stages.confirmed.netProfit + report.stages.delivered.netProfit + report.direct.profit, report.totals.netProfit);
 });
+
+test("personal take (خدتها لنفسي): no price needed; its factory cost comes off the net profit, not the sales", () => {
+  const take = sanitizeDirectSale({ kind: "personal", date: "2026-11-12", buyer: "x", extraCost: 50, lines: [{ productId: "bm-robe-003", quantity: 2 }] }, "p1", costs, NOW).sale;
+  assert.equal(take.kind, "personal");
+  assert.equal(take.buyer, "", "no buyer");
+  assert.equal(take.extraCost, 0, "no extra cost");
+  assert.equal(take.lines[0].unitPrice, 0);
+  assert.equal(take.lines[0].unitCost, 120, "factory cost filled in");
+  const sale = sanitizeDirectSale({ date: "2026-11-12", lines: [{ productId: "bm-robe-003", quantity: 1, unitPrice: 230 }] }, "s1", costs, NOW).sale;
+  assert.equal(sale.kind, "sale");
+  const report = buildFinanceReport({ live: [], old: [], costs: {}, expenses: [], direct: [sale, take], from: "2026-11-01", to: "2026-11-30" });
+  assert.equal(report.direct.count, 1, "the take is not a sale");
+  assert.deepEqual(report.personal, { count: 1, pieces: 2, cost: 240, missingCostLines: 0 });
+  // Sale 230 − 120 = 110; minus the take 240 → −130.
+  assert.deepEqual(report.totals, { sales: 230, productsCost: 120, expenses: 0, stockPurchases: 0, netProfit: -130 });
+  const outside = buildFinanceReport({ live: [], old: [], costs: {}, expenses: [], direct: [take], from: "2026-12-01", to: "2026-12-31" });
+  assert.deepEqual(outside.personal, { count: 0, pieces: 0, cost: 0, missingCostLines: 0 });
+});
