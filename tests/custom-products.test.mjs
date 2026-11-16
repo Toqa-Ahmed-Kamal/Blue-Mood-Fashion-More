@@ -134,3 +134,21 @@ test("discount: 'بدل كذا' shows only while it is higher than today's price
     setWasPrices({});
   }
 });
+
+test("a discount written in the code shows by itself; the admin can change it or remove it (saved 0)", async () => {
+  const { discountPercentOf, findProduct, priceOf, setWasPrices, wasPriceOf, productsIn } = await import("../lib/site-data.ts");
+  const blanket = findProduct("bm-winter-blanket-003");
+  try {
+    setWasPrices({});
+    assert.equal(priceOf(blanket), 250);
+    assert.equal(wasPriceOf(blanket), 350);
+    assert.equal(discountPercentOf(blanket), 29, "(350 − 250) ÷ 350 = 28.6%");
+    assert.ok(productsIn("wearable-blankets").length >= 7, "the new blankets are on the store");
+    setWasPrices({ "bm-winter-blanket-003": 400 });
+    assert.equal(wasPriceOf(blanket), 400, "the admin's price wins");
+    setWasPrices({ "bm-winter-blanket-003": 0 });
+    assert.equal(wasPriceOf(blanket), null, "removed from the admin");
+  } finally {
+    setWasPrices({});
+  }
+});

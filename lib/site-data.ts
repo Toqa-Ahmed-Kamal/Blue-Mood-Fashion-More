@@ -9,6 +9,8 @@ export type CatalogProduct = {
   imageAlt: string;
   /** Overrides the category price for this one product. */
   price?: number;
+  /** Price before the discount ("بدل كذا") shown struck through; the admin can change or remove it. */
+  wasPrice?: number;
   /** Hidden products stay orderable by ID for old orders but are not shown in the store. */
   hidden?: boolean;
   /** Pajamas only: overrides the default One Size weight note (85–90 kg). */
@@ -83,7 +85,7 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-pajama-011", name: "طقم بيتي مضلع كاميل بسوستة", category: "winter-pajamas", image: "/images/bejama/1000507695.jpg", imageAlt: "طقم قطيفة مضلع بلون الكاميل، بلوزة برقبة عالية وسوستة وبنطلون واسع" },
   { id: "bm-winter-pajama-012", name: "بيجاما فليس زرقاء بطبعة ورود", category: "winter-pajamas", image: "/images/bejama/1000508651.jpg", imageAlt: "بيجاما فليس زرقاء، التيشيرت بجيب والبنطلون مطبوع عليه ورود صغيرة" },
   { id: "bm-winter-pajama-013", name: "بيجاما فليس موف بطبعة ورود", category: "winter-pajamas", image: "/images/bejama/1000508653.jpg", imageAlt: "بيجاما فليس موف، التيشيرت بجيب والبنطلون الواسع مطبوع عليه ورود" },
-  { id: "bm-winter-pajama-014", name: "بيجاما قطيفة حمراء بحواف بيضاء", category: "winter-pajamas", image: "/images/abayas/1000507835.jpg", imageAlt: "بيجاما قطيفة حمراء بقميص بزراير وحواف بيضاء", hidden: true },
+  { id: "bm-winter-pajama-014", name: "بيجاما قطيفة حمراء بحواف بيضاء", category: "winter-pajamas", image: "/images/bejama/1000507835.jpg", imageAlt: "بيجاما قطيفة حمراء بقميص بزراير وحواف بيضاء", hidden: true },
   { id: "bm-winter-pajama-015", name: "بيجاما فرو كريمي بفيونكة وردي", category: "winter-pajamas", image: "/images/bejama/1000507690.jpg", imageAlt: "عبوة بيجاما عليها بلوفر فرو كريمي بفيونكة وردية وبنطلون فرو وردي", hidden: true },
   { id: "bm-winter-pajama-016", name: "طقم فرو بكابشون", category: "winter-pajamas", image: "/images/bejama/1000508037.jpg", imageAlt: "عبوة طقم فرو بكابشون وبنطلون من نفس الخامة", hidden: true },
   { id: "bm-winter-pajama-017", name: "بيجاما بيضاء بطبعة قطط وقلوب", category: "winter-pajamas", image: "/images/bejama/1000508040.jpg", imageAlt: "عبوة بيجاما بيضاء برقبة دانتيل مطبوع عليها قطط وقلوب", hidden: true },
@@ -92,6 +94,11 @@ export const catalog: CatalogProduct[] = [
   // ── بلانكيت ──
   { id: "bm-winter-blanket-001", name: "بلانكيت أسود بغطاء للرأس", category: "wearable-blankets", image: "/images/bejama/black-hooded-blanket-cropped.jpg", imageAlt: "بلانكيت فرو أسود واسع بغطاء للرأس يُلبس فوق الملابس", price: 350 },
   { id: "bm-winter-blanket-002", name: "بلانكيت هودي بقلوب وودان أرنب", category: "wearable-blankets", image: "/images/bejama/1000507693.jpg", imageAlt: "هودي بطانية واسع من الفرو مطبوع عليه قلوب بيضاء وبكابشون بودان أرنب" },
+  { id: "bm-winter-blanket-003", name: "بلانكيت أزرق بنقط موف", category: "wearable-blankets", image: "/images/blanket/image_1_without_price.jpg", imageAlt: "بلانكيت هودي فرو أزرق واسع مطبوع عليه دوائر موف كبيرة بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
+  { id: "bm-winter-blanket-004", name: "بلانكيت لبني بطبعة ستيتش وقلوب", category: "wearable-blankets", image: "/images/blanket/image_2_without_price.jpg", imageAlt: "بلانكيت هودي فرو لبني واسع مطبوع عليه رسومات ستيتش وقلوب بيضاء بجيب أمامي", price: 250, wasPrice: 350 },
+  { id: "bm-winter-blanket-005", name: "بلانكيت بطبعة زيبرا بيج ورمادي", category: "wearable-blankets", image: "/images/blanket/image_3_without_price.jpg", imageAlt: "بلانكيت هودي فرو واسع بخطوط زيبرا بيج ورمادي بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
+  { id: "bm-winter-blanket-006", name: "بلانكيت رمادي بطبعة فيونكات", category: "wearable-blankets", image: "/images/blanket/image_4_without_price.jpg", imageAlt: "بلانكيت هودي فرو رمادي مبرقش مطبوع عليه فيونكات سوداء بجيب أمامي", price: 250, wasPrice: 350 },
+  { id: "bm-winter-blanket-007", name: "بلانكيت بيج ببقع بني", category: "wearable-blankets", image: "/images/blanket/image_5_without_price.jpg", imageAlt: "بلانكيت هودي فرو بيج واسع مطبوع عليه بقع بني كبيرة بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
 ];
 
 export const visibleCatalog: CatalogProduct[] = catalog.filter((product) => !product.hidden);
@@ -150,18 +157,19 @@ export function priceOf(product: CatalogProduct) {
   return base === null ? null : priceOverrides.get(product.id) ?? base;
 }
 
-// ── "بدل كذا": price before the discount (set from the admin, stored in Redis) ──
+// ── "بدل كذا": price before the discount (in the code, or set from the admin and stored in Redis) ──
+// A saved 0 means the admin removed the discount written in the code.
 const wasPrices = new Map<string, number>();
 
 export function setWasPrices(prices: Readonly<Record<string, number>>) {
   wasPrices.clear();
-  for (const [id, price] of Object.entries(prices)) if (Number.isFinite(price) && price > 0) wasPrices.set(id, price);
+  for (const [id, price] of Object.entries(prices)) if (Number.isFinite(price) && price >= 0) wasPrices.set(id, price);
 }
 
 /** The price before the discount, shown struck through — only while it is higher than today's price. */
 export function wasPriceOf(product: CatalogProduct) {
   const price = priceOf(product);
-  const was = wasPrices.get(product.id);
+  const was = wasPrices.get(product.id) ?? product.wasPrice;
   return price !== null && was !== undefined && was > price ? was : null;
 }
 

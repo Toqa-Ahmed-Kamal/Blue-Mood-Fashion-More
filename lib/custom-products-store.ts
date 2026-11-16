@@ -8,7 +8,7 @@
 //   catalog:wasprices      HASH  productId → price before the discount ("بدل كذا"), any product
 import { parseCustomProduct } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
-import { setCustomProducts, setPriceOverrides, setSoldOut, setWasPrices, type CatalogProduct } from "./site-data.ts";
+import { findProduct, setCustomProducts, setPriceOverrides, setSoldOut, setWasPrices, type CatalogProduct } from "./site-data.ts";
 
 export const CUSTOM_PRODUCTS_TAG = "custom-products";
 const PRODUCTS = () => `${keyPrefix()}catalog:custom`;
@@ -33,16 +33,32 @@ export async function loadPrices(): Promise<Record<string, number>> {
   return parsePrices(flat);
 }
 
-export async function loadWasPrices(): Promise<Record<string, number>> {
-  const [flat] = await redisPipeline([["HGETALL", WAS_PRICES()]], "read", 5000);
-  return parsePrices(flat);
+/** Like parsePrices, but keeps 0 ("discount removed" for a product whose code has one). */
+function parseWasPrices(flat: unknown): Record<string, number> {
+  const list = Array.isArray(flat) ? flat : [];
+  const prices: Record<string, number> = {};
+  for (let index = 0; index + 1 < list.length; index += 2) {
+    const price = Number(list[index + 1]);
+    if (Number.isFinite(price) && price >= 0) prices[String(list[index])] = price;
+  }
+  return prices;
 }
 
-/** Saves the price before the discount (null = no discount shown), then reads it back. */
+export async function loadWasPrices(): Promise<Record<string, number>> {
+  const [flat] = await redisPipeline([["HGETALL", WAS_PRICES()]], "read", 5000);
+  return parseWasPrices(flat);
+}
+
+/**
+ * Saves the price before the discount, then reads it back. null = no discount shown: the entry is removed,
+ * or saved as 0 when the product's code has a discount of its own (so removing it sticks).
+ */
 export async function setProductWasPrice(productId: string, price: number | null) {
-  const [, stored] = await redisPipeline([price === null ? ["HDEL", WAS_PRICES(), productId] : ["HSET", WAS_PRICES(), productId, String(price)], ["HGET", WAS_PRICES(), productId]], "write");
+  const codeWas = findProduct(productId)?.wasPrice;
+  const command = price !== null ? ["HSET", WAS_PRICES(), productId, String(price)] : codeWas ? ["HSET", WAS_PRICES(), productId, "0"] : ["HDEL", WAS_PRICES(), productId];
+  const [, stored] = await redisPipeline([command, ["HGET", WAS_PRICES(), productId]], "write");
   cached = null;
-  return stored === null || stored === undefined ? null : Number(stored);
+  return stored === null || stored === undefined || Number(stored) === 0 ? null : Number(stored);
 }
 
 /** Saves a built-in product's new selling price (null = back to the original price), then reads it back. */
@@ -133,7 +149,7 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
     read(`hgetall/${encodeURIComponent(PRICES())}`),
     read(`hgetall/${encodeURIComponent(WAS_PRICES())}`),
   ]);
-  return { products: parseList(products), soldOut: Array.isArray(soldOut) ? soldOut.map(String) : [], prices: parsePrices(prices), wasPrices: parsePrices(wasPrices) };
+  return { products: parseList(products), soldOut: Array.isArray(soldOut) ? soldOut.map(String) : [], prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices) };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */
