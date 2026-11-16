@@ -55,3 +55,30 @@ test("store numbers: sold so far, left (tracked only), best seller = top 3 with 
     [C]: { sold: 0, left: 2 },
   });
 });
+
+test("store numbers: pieces sold before the system are added for customers and the ranking", async () => {
+  const { productStats } = await import("../lib/piece-analytics.ts");
+  const live = [site("BM-CCCCCCCCCCCCCCCCCCC1", "2026-11-02", "confirmed", [[A, 4]])];
+  const stock = buildStock({ productIds: [A, B], moves: [], live, old: [], direct: [] });
+  const report = buildPiecesReport({ live, old: [], direct: [], moves: [], stock });
+  assert.deepEqual(productStats(report, stock, { [B]: 10, [A]: 1 }), {
+    [B]: { sold: 10, left: null, best: true },
+    [A]: { sold: 5, left: null, best: true },
+  });
+});
+
+test("goods total: stock + delivered + with courier + confirmed + direct + personal + sold before, each once", async () => {
+  const { goodsTotal } = await import("../lib/piece-analytics.ts");
+  const live = [
+    site("BM-DDDDDDDDDDDDDDDDDDD1", "2026-11-02", "delivered", [[A, 2]]),
+    { ...site("BM-DDDDDDDDDDDDDDDDDDD2", "2026-11-03", "confirmed", [[A, 3]]), courier: { notifiedAt: "2026-11-03T12:00:00Z", handedAt: "2026-11-04T12:00:00Z" } },
+    site("BM-DDDDDDDDDDDDDDDDDDD3", "2026-11-03", "confirmed", [[A, 1]]),
+    site("BM-DDDDDDDDDDDDDDDDDDD4", "2026-11-03", "submitted", [[A, 1]]),
+  ];
+  const direct = [sale("d1", "2026-11-05", [[A, 1]]), sale("p1", "2026-11-05", [[A, 2]], "personal")];
+  const moves = [move("m1", A, "count", 20, "2026-11-01T09:00:00.000Z")];
+  const stock = buildStock({ productIds: [A], moves, live, old: [], direct });
+  const report = buildPiecesReport({ live, old: [], direct, moves, stock });
+  // Stock: 20 − 2 − 3 − 1 − 1 − 2 = 11 (the waiting order is still in the stock).
+  assert.deepEqual(goodsTotal(report, { [A]: 5 }), { total: 25, inStock: 11, delivered: 2, withCourier: 3, confirmedNotShipped: 1, direct: 1, personal: 2, soldBefore: 5 });
+});

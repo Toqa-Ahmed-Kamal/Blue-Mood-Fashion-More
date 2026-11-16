@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleSlash, ClipboardCheck, PackageCheck, PackagePlus, RefreshCw, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { CircleSlash, ClipboardCheck, PackageCheck, PackagePlus, Pencil, RefreshCw, SlidersHorizontal, Trash2, X } from "lucide-react";
 
 import { LOW_STOCK, STOCK_MOVE_KINDS, type StockMove, type StockMoveKind, type StockRow, type TargetProgress } from "@/lib/inventory";
 import { categoryInfo, categoryOrder, type CatalogCategory } from "@/lib/site-data";
 
-type ProductStock = StockRow & { name: string; category: CatalogCategory; image: string; hidden: boolean; soldOut: boolean; autoSoldOut: boolean };
+type ProductStock = StockRow & { name: string; category: CatalogCategory; image: string; hidden: boolean; soldOut: boolean; autoSoldOut: boolean; soldBefore: number; shownSold: number | null };
 type Data = { products: ProductStock[]; moves: StockMove[]; target: TargetProgress | null; vaultConfigured: boolean };
 type Action = { product: ProductStock; kind: StockMoveKind } | null;
 
@@ -67,6 +67,28 @@ export function InventoryTab() {
     setBusy(true);
     try {
       await api(`/api/admin/products/${product.productId}/stock`, { method: "PUT", body: JSON.stringify({ soldOut: !product.soldOut }) });
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** "اتباع قبل السيستم": pieces sold before the store's system, added to what customers see. */
+  async function editSoldBefore(product: ProductStock) {
+    const answer = window.prompt(`${product.name}
+اتباع منها كام قطعة قبل السيستم (مش متسجلين على الموقع)؟
+الرقم ده بيتزود على اللي اتباع على السيستم وبيظهر للعميلات "اتباع منها". اكتبي 0 علشان تشيليه.`, String(product.soldBefore));
+    if (answer === null) return;
+    const count = Number(answer.trim() || 0);
+    if (!Number.isInteger(count) || count < 0) {
+      setError("اكتبي رقم صحيح (صفر أو أكتر).");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(`/api/admin/products/${product.productId}/sold-before`, { method: "PUT", body: JSON.stringify({ count }) });
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ.");
@@ -143,7 +165,7 @@ export function InventoryTab() {
             {shown.length === 0 ? <p className="admin-muted empty">مفيش منتجات هنا.</p> : (
               <div className="admin-table-wrap">
                 <table className="admin-table inventory-table">
-                  <thead><tr><th>المنتج</th><th>في المخزون</th><th>محجوز (مستني تأكيد)</th><th>متاح</th><th>اتباع من آخر جرد</th><th>آخر جرد</th><th>إجراء</th></tr></thead>
+                  <thead><tr><th>المنتج</th><th>في المخزون</th><th>محجوز (مستني تأكيد)</th><th>متاح</th><th>اتباع من آخر جرد</th><th>ظاهر للعميلات &quot;اتباع منها&quot;</th><th>آخر جرد</th><th>إجراء</th></tr></thead>
                   <tbody>
                     {shown.map((product) => (
                       <tr key={product.productId} className={product.state === "out" ? "stock-out" : product.state === "low" ? "stock-low" : ""}>
@@ -158,6 +180,12 @@ export function InventoryTab() {
                         <td>{product.reserved || "—"}</td>
                         <td>{product.tracked ? <span className={product.available < 0 ? "admin-negative" : ""}>{product.available}</span> : "—"}</td>
                         <td>{product.tracked ? `${product.soldOrders + product.soldDirect}${product.soldDirect ? ` (${product.soldDirect} بيع مباشر)` : ""}${product.taken ? ` · ${product.taken} خدتيها لنفسك` : ""}` : "—"}</td>
+                        <td>
+                          <button type="button" className="admin-link small" disabled={busy} onClick={() => void editSoldBefore(product)} title="اتباع قبل السيستم">
+                            {product.shownSold ?? "—"} <Pencil size={12} aria-hidden="true" />
+                          </button>
+                          {product.soldBefore > 0 && <small className="admin-muted"> ({product.soldBefore} قبل السيستم)</small>}
+                        </td>
                         <td dir="ltr">{product.tracked ? (product.counted && product.startAt ? `${product.start} · ${cairoTime(product.startAt)}` : "—") : "—"}</td>
                         <td className="actions">
                           <button type="button" disabled={busy} onClick={() => setAction({ product, kind: "arrival" })}><PackagePlus size={14} /> وصلت بضاعة</button>
@@ -177,6 +205,7 @@ export function InventoryTab() {
               ابدئي بـ &quot;جرد&quot; لكل منتج: اكتبي العدد اللي عندك فعلاً. بعد كده المخزون بيقل لوحده لما تأكدي أوردر (موقع أو تيليجرام) أو تسجلي بيع مباشر أو حاجة خدتيها لنفسك، ولو الأوردر اتلغى أو رجع القطع بترجع لوحدها.
               <strong> مربوط بالموقع:</strong> أول ما مخزون منتج يوصل صفر، بيظهر للعميلات &quot;نفدت الكمية&quot; ومحدش يقدر يطلبه، ولما تسجلي &quot;وصلت بضاعة&quot; بيرجع متاح لوحده. المنتجات اللي لسه متعملهاش جرد مش بتتأثر. زرار &quot;متاح / نفذ&quot; لسه موجود لو حبيتي تقفلي منتج بإيدك.
               &quot;وصلت بضاعة&quot; بتزود العدد. &quot;محجوز&quot; = قطع في أوردرات لسه مستنية تأكيد، و&quot;متاح&quot; = المخزون − المحجوز.
+              عمود &quot;ظاهر للعميلات&quot; = اللي بيظهر على الموقع &quot;اتباع منها&quot;: مبيعات السيستم + اللي كتبتيه بالقلم ✏️ للقطع اللي اتباعت قبل السيستم (رقم للعرض بس، مش بيأثر على المخزون ولا المالية).
               تنبيه &quot;قرب يخلص&quot; لما المتاح يبقى {LOW_STOCK} أو أقل.
             </p>
           </>

@@ -9,9 +9,9 @@ import { revalidateTag } from "next/cache";
 import { loadAllOrdersForSummary } from "./analytics-store.ts";
 import { AUTO_SOLD_OUT, CUSTOM_PRODUCTS_TAG, PRODUCT_STATS, ensureCustomProducts } from "./custom-products-store.ts";
 import { loadDirectSales } from "./finance-store.ts";
-import { buildStock, outOfStockIds, type StockRow } from "./inventory.ts";
+import { buildStock, outOfStockIds } from "./inventory.ts";
 import { buildPiecesReport, productStats } from "./piece-analytics.ts";
-import { loadStockMoves } from "./inventory-store.ts";
+import { loadSoldBefore, loadStockMoves } from "./inventory-store.ts";
 import { loadOldOrders } from "./old-orders-store.ts";
 import { isOrderVaultConfigured } from "./order-vault.ts";
 import { redisPipeline } from "./redis.ts";
@@ -23,15 +23,16 @@ export { outOfStockIds };
 export async function computeStock() {
   await ensureCustomProducts();
   const vault = isOrderVaultConfigured();
-  const [live, old, direct, moves] = await Promise.all([
+  const [live, old, direct, moves, soldBefore] = await Promise.all([
     loadAllOrdersForSummary(),
     vault ? loadOldOrders() : Promise.resolve({ orders: [], unreadable: 0 }),
     loadDirectSales(),
     loadStockMoves(),
+    loadSoldBefore(),
   ]);
   const input = { productIds: catalog.map((product) => product.id), moves, live: live.map((item) => item.order), old: old.orders, direct };
   const rows = buildStock(input);
-  return { rows, moves, vault, input };
+  return { rows, moves, vault, input, soldBefore };
 }
 
 /** Rewrites the auto sold-out set when it changed, and refreshes the store pages. */
@@ -48,9 +49,14 @@ export async function writeAutoSoldOut(ids: string[]) {
 type Stock = Awaited<ReturnType<typeof computeStock>>;
 
 /** Store numbers: sold / left / best seller per product. Rewritten only when they changed; true = changed. */
-async function writeProductStats(rows: StockRow[], input: Stock["input"]) {
+function storeStats(stock: Stock) {
+  const { rows, input } = stock;
   const report = buildPiecesReport({ live: input.live, old: input.old, direct: input.direct, moves: input.moves, stock: rows });
-  const next = JSON.stringify(productStats(report, rows));
+  return productStats(report, rows, stock.soldBefore);
+}
+
+async function writeProductStats(stats: ReturnType<typeof storeStats>) {
+  const next = JSON.stringify(stats);
   const [current] = await redisPipeline([["GET", PRODUCT_STATS()]], "write");
   if (current === next) return false;
   await redisPipeline([["SET", PRODUCT_STATS(), next]], "write");
@@ -60,8 +66,10 @@ async function writeProductStats(rows: StockRow[], input: Stock["input"]) {
 
 /** Brings everything the store shows from the inventory up to date (sold out, sold / left counts). */
 export async function writeStoreStock(stock: Stock) {
+  const stats = storeStats(stock);
   await writeAutoSoldOut(outOfStockIds(stock.rows));
-  await writeProductStats(stock.rows, stock.input);
+  await writeProductStats(stats);
+  return stats;
 }
 
 /**

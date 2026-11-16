@@ -40,6 +40,8 @@ export type PiecesReport = {
     soldOnline: number;
     soldDirect: number;
     delivered: number;
+    /** Confirmed, handed to the shipping company, not delivered yet. */
+    withCourier: number;
     personal: number;
     returned: number;
     waiting: number;
@@ -57,18 +59,18 @@ export type PiecesReport = {
 };
 
 type Line = { productId: string; quantity: number };
-type Order = { orderId: string; day: string; status: OrderStatus; lines: Line[] };
+type Order = { orderId: string; day: string; status: OrderStatus; handed: boolean; lines: Line[] };
 
 const isDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 const cairoDay = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(iso));
 
 function ordersOnce(live: AnalyticsOrder[], old: OldOrder[]): Order[] {
-  const orders: Order[] = live.map((order) => ({ orderId: order.orderId, day: order.day, status: order.status, lines: order.products.map((line) => ({ productId: line.modelId, quantity: line.quantity })) }));
+  const orders: Order[] = live.map((order) => ({ orderId: order.orderId, day: order.day, status: order.status, handed: Boolean(order.courier?.handedAt), lines: order.products.map((line) => ({ productId: line.modelId, quantity: line.quantity })) }));
   const seen = new Set(orders.map((order) => order.orderId));
   for (const order of old) {
     if (seen.has(order.orderId)) continue;
     seen.add(order.orderId);
-    orders.push({ orderId: order.orderId, day: cairoDay(order.createdAt), status: order.status, lines: order.products.map((line) => ({ productId: line.modelId, quantity: line.quantity })) });
+    orders.push({ orderId: order.orderId, day: cairoDay(order.createdAt), status: order.status, handed: Boolean(order.courier?.handedAt), lines: order.products.map((line) => ({ productId: line.modelId, quantity: line.quantity })) });
   }
   return orders;
 }
@@ -98,6 +100,7 @@ export function buildPiecesReport(input: {
   };
   const months = new Map<string, number>();
   let delivered = 0;
+  let withCourier = 0;
 
   for (const order of ordersOnce(input.live, input.old)) {
     if (!inRange(order.day)) continue;
@@ -111,6 +114,7 @@ export function buildPiecesReport(input: {
         if (!counted.has(line.productId)) target.orders += 1;
         counted.add(line.productId);
         if (order.status === "delivered") delivered += line.quantity;
+        else if (order.handed) withCourier += line.quantity;
         months.set(order.day.slice(0, 7), (months.get(order.day.slice(0, 7)) ?? 0) + line.quantity);
       } else if (order.status === "returned") target.returned += line.quantity;
       else if (order.status === "submitted") target.waiting += line.quantity;
@@ -164,6 +168,7 @@ export function buildPiecesReport(input: {
       soldOnline: sum((item) => item.soldOnline),
       soldDirect: sum((item) => item.soldDirect),
       delivered,
+      withCourier,
       personal: sum((item) => item.personal),
       returned: sum((item) => item.returned),
       waiting: sum((item) => item.waiting),
@@ -184,12 +189,51 @@ export type ProductStat = { sold: number; left: number | null; best?: true };
 /** A product is a best seller when it is in the top 3 and sold at least this many pieces. */
 export const BEST_SELLER_MIN = 3;
 
-export function productStats(report: PiecesReport, stock: StockRow[]): Record<string, ProductStat> {
+/**
+ * `soldBefore` = pieces the owner sold before the store's system (typed in from the admin); they are added to
+ * the system's own sales for what customers see and for the best-seller ranking — nowhere else.
+ */
+export function productStats(report: PiecesReport, stock: StockRow[], soldBefore: Record<string, number> = {}): Record<string, ProductStat> {
   const stats: Record<string, ProductStat> = {};
   for (const row of stock) if (row.tracked) stats[row.productId] = { sold: 0, left: Math.max(0, row.stock) };
-  const sellers = report.products.filter((row) => row.sold > 0);
-  sellers.forEach((row, index) => {
-    stats[row.productId] = { sold: row.sold, left: stats[row.productId]?.left ?? null, ...(index < 3 && row.sold >= BEST_SELLER_MIN ? { best: true as const } : {}) };
-  });
+  const sold = new Map<string, number>();
+  for (const row of report.products) if (row.sold > 0) sold.set(row.productId, row.sold);
+  for (const [productId, count] of Object.entries(soldBefore)) if (count > 0) sold.set(productId, (sold.get(productId) ?? 0) + count);
+  [...sold.entries()]
+    .toSorted(([a, x], [b, y]) => y - x || a.localeCompare(b))
+    .forEach(([productId, total], index) => {
+      stats[productId] = { sold: total, left: stats[productId]?.left ?? null, ...(index < 3 && total >= BEST_SELLER_MIN ? { best: true as const } : {}) };
+    });
   return stats;
+}
+
+/**
+ * "اشتريت كام قطعة": every piece of goods she has had, wherever it is now (all dates, not the chosen ones):
+ * in the stock now + delivered + with the shipping company + confirmed not shipped yet + direct sales +
+ * taken for herself + sold before the system. Each piece is in one place only, so nothing is counted twice.
+ */
+export type GoodsTotal = {
+  total: number;
+  inStock: number;
+  delivered: number;
+  withCourier: number;
+  confirmedNotShipped: number;
+  direct: number;
+  personal: number;
+  soldBefore: number;
+};
+
+export function goodsTotal(allTime: PiecesReport, soldBefore: Record<string, number> = {}): GoodsTotal {
+  const t = allTime.totals;
+  const before = Object.values(soldBefore).reduce((sum, count) => sum + (count > 0 ? count : 0), 0);
+  const parts = {
+    inStock: t.left,
+    delivered: t.delivered,
+    withCourier: t.withCourier,
+    confirmedNotShipped: t.soldOnline - t.delivered - t.withCourier,
+    direct: t.soldDirect,
+    personal: t.personal,
+    soldBefore: before,
+  };
+  return { total: Object.values(parts).reduce((sum, value) => sum + value, 0), ...parts };
 }

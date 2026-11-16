@@ -8,6 +8,25 @@ import { keyPrefix, redisPipeline } from "./redis.ts";
 
 const MOVES = () => `${keyPrefix()}inventory:moves`;
 const TARGET = () => `${keyPrefix()}inventory:target`;
+/** HASH productId → pieces sold before the system (typed in by the owner; shown to customers only). */
+const SOLD_BEFORE = () => `${keyPrefix()}catalog:soldbefore`;
+
+export async function loadSoldBefore(): Promise<Record<string, number>> {
+  const [flat] = await redisPipeline([["HGETALL", SOLD_BEFORE()]], "read", 5000);
+  const list = Array.isArray(flat) ? flat : [];
+  const result: Record<string, number> = {};
+  for (let index = 0; index + 1 < list.length; index += 2) {
+    const count = Number(list[index + 1]);
+    if (Number.isInteger(count) && count > 0) result[String(list[index])] = count;
+  }
+  return result;
+}
+
+/** Saves the number (0 / null = remove it), then reads it back. */
+export async function saveSoldBefore(productId: string, count: number | null) {
+  const [, stored] = await redisPipeline([count ? ["HSET", SOLD_BEFORE(), productId, String(count)] : ["HDEL", SOLD_BEFORE(), productId], ["HGET", SOLD_BEFORE(), productId]], "write");
+  return stored === null || stored === undefined ? 0 : Number(stored);
+}
 
 export async function loadStockTarget(): Promise<StockTarget | null> {
   const [raw] = await redisPipeline([["GET", TARGET()]], "read", 5000);

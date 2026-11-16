@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
-import type { PiecesReport } from "@/lib/piece-analytics";
+import type { GoodsTotal, PiecesReport } from "@/lib/piece-analytics";
 
 const cairoDay = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(date);
 const today = () => cairoDay(new Date());
@@ -26,6 +26,7 @@ export function PiecesTab() {
   const [preset, setPreset] = useState<string>("all");
   const [range, setRange] = useState({ from: "", to: "" });
   const [report, setReport] = useState<PiecesReport | null>(null);
+  const [goods, setGoods] = useState<GoodsTotal | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -42,6 +43,7 @@ export function PiecesTab() {
       const result = await response.json().catch(() => null);
       if (!response.ok || !result?.success) throw new Error(result?.error?.message ?? "حصلت مشكلة. جربي تاني.");
       setReport(result.report);
+      setGoods(result.goods ?? null);
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "مقدرناش نحمل التحليل.");
@@ -80,6 +82,27 @@ export function PiecesTab() {
         </div>
         {error && <p className="admin-error" role="alert">{error}</p>}
         {!report && !error && <p className="admin-muted">جاري الحساب…</p>}
+        {goods && (
+          <div className="goods-total">
+            <div className="goods-total-head">
+              <span>إجمالي البضاعة اللي اشتريتيها</span>
+              <strong>{count.format(goods.total)} <small>قطعة</small></strong>
+              <small className="admin-muted">من الأول لحد دلوقتي · مش متأثر بالتواريخ</small>
+            </div>
+            <ul className="goods-total-parts">
+              {([
+                ["في المخزن دلوقتي", goods.inStock],
+                ["اتسلمت للعميلات", goods.delivered],
+                ["مع شركة الشحن", goods.withCourier],
+                ["مؤكدة لسه متشحنتش", goods.confirmedNotShipped],
+                ["بيع مباشر", goods.direct],
+                ["خدتيها لنفسك", goods.personal],
+                ["اتباعت قبل السيستم", goods.soldBefore],
+              ] as const).map(([label, value]) => <li key={label}><span>{label}</span><strong>{count.format(value)}</strong></li>)}
+            </ul>
+            <small className="admin-muted">&quot;في المخزن&quot; بيحسب المنتجات اللي عملتيلها جرد بس، فالإجمالي بيبقى صح لما كل البضاعة تكون متسجلة في المخزون. القطع اللي في أوردرات مستنية تأكيد لسه في المخزن.</small>
+          </div>
+        )}
         {totals && (
           <>
             <section className="admin-cards pieces">

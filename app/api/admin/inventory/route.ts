@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const [stock, target] = await Promise.all([computeStock(), loadStockTarget()]);
     const { rows, moves, vault, input } = stock;
     // Opening the inventory also brings the store up to date ("نفدت الكمية", sold / left counts).
-    await writeStoreStock(stock).catch(() => undefined);
+    const stats = await writeStoreStock(stock).catch(() => null);
     const byId = new Map(rows.map((row) => [row.productId, row]));
     const products = catalog.map((product) => ({
       ...byId.get(product.id)!,
@@ -29,6 +29,10 @@ export async function GET(request: Request) {
       hidden: Boolean(product.hidden),
       soldOut: isManualSoldOut(product.id),
       autoSoldOut: isAutoSoldOut(product.id),
+      /** Typed in by the owner: sold before the system. */
+      soldBefore: stock.soldBefore[product.id] ?? 0,
+      /** What customers see as "اتباع منها" (system + before); null when the store numbers could not be saved. */
+      shownSold: stats ? stats[product.id]?.sold ?? 0 : null,
     }));
     const progress = target ? targetProgress(target, input, rows) : null;
     return json(200, { success: true, products, moves: moves.slice(0, 200), target: progress, vaultConfigured: vault });
