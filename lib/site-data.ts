@@ -112,6 +112,12 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-pajama-036", name: "بيجاما فرو أبيض بفيونكة وبنطلون تركواز", category: "winter-pajamas", image: "/images/bejama/white-fleece-bow-teal.jpg", imageAlt: "بلوفر فرو أبيض بكابشون وفيونكة تركواز على الصدر وبنطلون قطيفة تركواز باستك عند الكاحل" },
   { id: "bm-winter-pajama-037", name: "بيجاما قطيفة أزرق ملكي بكابشون وطبعة كريز", category: "winter-pajamas", image: "/images/bejama/royal-blue-cherry-hoodie-set.jpg", imageAlt: "طقم قطيفة أزرق ملكي بكابشون، على الصدر فيونكة بطبعة نمر وحبتين كريز ومكتوب Cherry" },
 
+  { id: "bm-winter-pajama-038", name: "بيجاما زيتي بطبعة بطريق وجيوب مقلمة", category: "winter-pajamas", image: "/images/bejama/olive-penguin-pajama.jpg", imageAlt: "تيشيرت أخضر زيتي عليه بطريق بطاقية وجيبين مقلمين وبنطلون مقلم زجزاج زيتي وكحلي" },
+  { id: "bm-winter-pajama-039", name: "بيجاما موف بطبعة بجع وبط", category: "winter-pajamas", image: "/images/bejama/purple-swan-duck-pajama.jpg", imageAlt: "تيشيرت موف عليه بجعتين وورد، والأكمام والبنطلون مربعات موف وأبيض بطبعة بط" },
+  { id: "bm-winter-pajama-040", name: "بيجاما نبيتي بطبعة بجع وبط", category: "winter-pajamas", image: "/images/bejama/burgundy-swan-duck-pajama.jpg", imageAlt: "تيشيرت نبيتي عليه بجعتين وورد، والأكمام والبنطلون مربعات نبيتي وأبيض بطبعة بط" },
+  { id: "bm-winter-pajama-041", name: "طقم مضلع Smile · نبيتي", category: "winter-pajamas", image: "/images/bejama/ribbed-smile-set-burgundy.jpg", imageAlt: "طقم مضلع نبيتي، بلوزة عليها وش ضاحك أصفر مطرز وكلمة Smile وبنطلون واسع" },
+  { id: "bm-winter-pajama-042", name: "طقم قطيفة مضلع بسوستة · فوشيا", category: "winter-pajamas", image: "/images/bejama/ribbed-zip-set-fuchsia.jpg", imageAlt: "طقم قطيفة مضلع فوشيا، بلوزة واسعة برقبة عالية وسوستة وبنطلون واسع" },
+
   // ── بلانكيت ──
   { id: "bm-winter-blanket-001", name: "بلانكيت أسود بغطاء للرأس", category: "wearable-blankets", image: "/images/bejama/black-hooded-blanket-cropped.jpg", imageAlt: "بلانكيت فرو أسود واسع بغطاء للرأس يُلبس فوق الملابس", price: 350 },
   { id: "bm-winter-blanket-002", name: "بلانكيت هودي بقلوب وودان أرنب", category: "wearable-blankets", image: "/images/bejama/1000507693.jpg", imageAlt: "هودي بطانية واسع من الفرو مطبوع عليه قلوب بيضاء وبكابشون بودان أرنب" },
