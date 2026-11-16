@@ -1159,6 +1159,9 @@ h1, h2, h3 { font-family: var(--font-display); }
 .admin-card span { color: var(--muted); font-size: .8rem; }
 .admin-card strong { font-size: 1.6rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .admin-card small { color: var(--muted); font-size: .78rem; }
+/* Finance piece counts: one row on wide screens, two per row on phones. */
+.admin-cards.pieces { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.admin-cards.pieces strong small { font-size: .8rem; font-weight: 600; }
 .admin-card.good strong { color: var(--whatsapp); }
 .admin-note { background: var(--pink-soft); color: var(--pink-dark); border-radius: var(--radius); padding: 10px 14px; font-size: .88rem; margin: 0 0 16px; }
 .admin-panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 16px; box-shadow: var(--shadow-sm); min-width: 0; }

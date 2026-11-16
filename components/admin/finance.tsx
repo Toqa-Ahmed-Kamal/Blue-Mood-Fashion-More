@@ -114,6 +114,7 @@ export function FinanceTab() {
               <div className="admin-card"><span>Total Expenses · المصروفات</span><strong>{money(report.totals.expenses)}</strong><small>{report.counts.expenses} مصروف</small></div>
               <div className={`admin-card${report.totals.netProfit >= 0 ? " good" : " bad"}`}><span>Net Profit · صافي المكسب</span><strong>{money(report.totals.netProfit)}</strong><small>المبيعات − التكلفة − المصروفات{report.personal.cost > 0 && " − اللي خدتيه لنفسك"}</small></div>
             </section>
+            <PieceCards report={report} />
             <section className="admin-fin-stages" aria-label="المكسب حسب حالة الأوردر">
               {([
                 ["confirmed", "مؤكد ولسه متسلمش", "مكسب متوقع", "هيتحصّل لما يتسلم — لسه ممكن يرجع"],
@@ -503,6 +504,36 @@ function Expenses({ expenses, range, onChanged }: { expenses: Expense[]; range: 
         </div>
       )}
       <p className="admin-muted small">سجلي تكلفة شركة الشحن للأوردرات في &quot;شحن الأوردرات للعميلات&quot;، وشحن المرتجعات في &quot;شحن المرتجعات&quot;. الشحن اللي العميلة دفعته داخل في المبيعات، فمش بيتحسب مصروف لوحده.</p>
+    </section>
+  );
+}
+
+// ── Piece counts (same dates as the money cards) ──────────────────────────
+
+const pieceCount = new Intl.NumberFormat("en-US");
+
+function PieceCards({ report }: { report: FinanceReport }) {
+  const { confirmed, delivered, pending } = report.stages;
+  const online = confirmed.pieces + delivered.pieces;
+  const returned = report.orders.filter((row) => row.status === "returned");
+  const returnedPieces = returned.reduce((sum, row) => sum + row.pieces, 0);
+  const cards: { label: string; value: number; note: string; tone?: string }[] = [
+    { label: "القطع المباعة", value: online + report.direct.pieces, note: `${pieceCount.format(online)} أونلاين${report.direct.pieces ? ` + ${pieceCount.format(report.direct.pieces)} بيع مباشر` : ""}`, tone: "good" },
+    { label: "قطع اتسلمت", value: delivered.pieces, note: `${delivered.orders} أوردر` },
+    { label: "مؤكدة ولسه متسلمتش", value: confirmed.pieces, note: `${confirmed.orders} أوردر` },
+    { label: "مستنية تأكيد", value: pending.pieces, note: `${pending.orders} أوردر` },
+    { label: "قطع مرتجعة", value: returnedPieces, note: `${returned.length} أوردر` },
+    { label: "خدتيها لنفسك", value: report.personal.pieces, note: "متشالة من المخزون" },
+  ];
+  return (
+    <section className="admin-cards pieces" aria-label="عدد القطع">
+      {cards.map((card) => (
+        <div key={card.label} className={`admin-card${card.tone ? ` ${card.tone}` : ""}`}>
+          <span>{card.label}</span>
+          <strong>{pieceCount.format(card.value)} <small>قطعة</small></strong>
+          <small>{card.note}</small>
+        </div>
+      ))}
     </section>
   );
 }
