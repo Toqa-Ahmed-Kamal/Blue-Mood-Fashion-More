@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, Boxes, Calculator, ChartColumn, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -27,6 +27,7 @@ import { OldOrdersTab } from "@/components/admin/old-orders";
 import { WhatsAppLink, WhatsAppMenu, WhatsAppTargetPicker } from "@/components/admin/whatsapp-link";
 import { FinanceTab } from "@/components/admin/finance";
 import { InventoryTab } from "@/components/admin/inventory";
+import { PiecesTab } from "@/components/admin/pieces";
 import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
@@ -70,6 +71,7 @@ const TABS = [
   { id: "old", label: "الأوردرات القديمة", icon: Archive },
   { id: "quantities", label: "حصر كميات المصنع", icon: Package },
   { id: "inventory", label: "المخزون", icon: Boxes },
+  { id: "pieces", label: "تحليل القطع", icon: ChartPie },
   { id: "finance", label: "الإدارة المالية", icon: Wallet },
 ] as const;
 
@@ -83,6 +85,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   ] },
   { title: "البضاعة", items: [
     { tab: "inventory", label: "المخزون", icon: Boxes },
+    { tab: "pieces", label: "تحليل القطع", icon: ChartPie },
     { tab: "quantities", label: "حصر كميات المصنع", icon: Package },
   ] },
   { title: "الفلوس", items: [
@@ -321,6 +324,7 @@ export function AnalyticsDashboard() {
             {oldOpened && <div hidden={tab !== "old"}><OldOrdersTab active={tab === "old"} /></div>}
             {tab === "quantities" && <QuantitySummaryTab />}
             {tab === "inventory" && <InventoryTab />}
+            {tab === "pieces" && <PiecesTab />}
             {tab === "finance" && <FinanceTab />}
           </div>
         </>

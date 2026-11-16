@@ -2,10 +2,28 @@
 //
 // Keys (prefix bm:{prod|preview|dev}:v1:)
 //   inventory:moves   HASH  moveId → JSON StockMove (counts, arrivals, adjustments). No customer data.
-import type { StockMove } from "./inventory.ts";
+//   inventory:target  STR   JSON StockTarget ("عندي كذا قطعة" and when it was set)
+import type { StockMove, StockTarget } from "./inventory.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 
 const MOVES = () => `${keyPrefix()}inventory:moves`;
+const TARGET = () => `${keyPrefix()}inventory:target`;
+
+export async function loadStockTarget(): Promise<StockTarget | null> {
+  const [raw] = await redisPipeline([["GET", TARGET()]], "read", 5000);
+  if (typeof raw !== "string") return null;
+  try {
+    return JSON.parse(raw) as StockTarget;
+  } catch {
+    return null;
+  }
+}
+
+/** Saves the total (null = remove it), then reads it back. */
+export async function saveStockTarget(target: StockTarget | null) {
+  const [, stored] = await redisPipeline([target ? ["SET", TARGET(), JSON.stringify(target)] : ["DEL", TARGET()], ["GET", TARGET()]], "write");
+  return typeof stored === "string" ? (JSON.parse(stored) as StockTarget) : null;
+}
 
 export async function loadStockMoves(): Promise<StockMove[]> {
   const [flat] = await redisPipeline([["HGETALL", MOVES()]], "read", 5000);

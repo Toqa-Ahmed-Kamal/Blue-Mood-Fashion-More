@@ -1,0 +1,179 @@
+// Pieces analysis (تحليل القطع): how many pieces went out, came in, are left, and which products sell most.
+// Pure (no I/O) and tested. Same rules as the finance report and the inventory:
+// - An order counts once (a Telegram copy of a site order is the site order), on the day it was placed.
+// - "Sold" = confirmed or delivered orders; returned and cancelled orders are not sold.
+// - Direct sales (friends and family) are sold too; pieces taken for herself went out but were not sold.
+// - "Came in" = goods received (وصلت بضاعة) plus each product's first entry in the inventory.
+// - "Left" = the inventory's stock now (tracked products only) — not limited by the dates.
+import { isSaleStatus, type AnalyticsOrder, type OrderStatus } from "./analytics-report.ts";
+import { isPersonalTake, type DirectSale } from "./direct-sales.ts";
+import type { StockMove, StockRow } from "./inventory.ts";
+import type { OldOrder } from "./old-orders.ts";
+import { categoryInfo, categoryOrder, findProduct, type CatalogCategory } from "./site-data.ts";
+
+export type PieceProductRow = {
+  productId: string;
+  name: string;
+  category: CatalogCategory | null;
+  image: string | null;
+  /** Pieces in confirmed / delivered orders. */
+  soldOnline: number;
+  soldDirect: number;
+  sold: number;
+  /** Orders (site + Telegram) with the product that became a sale. */
+  orders: number;
+  returned: number;
+  waiting: number;
+  personal: number;
+  /** Stock now; null when the product is not in the inventory yet. */
+  stock: number | null;
+  /** Share of all sold pieces (0–1). */
+  share: number;
+};
+
+export type PiecesReport = {
+  range: { from: string | null; to: string | null };
+  totals: {
+    /** Sold (online + direct) + taken for herself. */
+    out: number;
+    sold: number;
+    soldOnline: number;
+    soldDirect: number;
+    delivered: number;
+    personal: number;
+    returned: number;
+    waiting: number;
+    cameIn: number;
+    /** Stock now (all tracked products, not limited by the dates). */
+    left: number;
+    trackedProducts: number;
+  };
+  products: PieceProductRow[];
+  categories: { category: CatalogCategory; label: string; sold: number; share: number }[];
+  /** Sold pieces per month (inside the dates), oldest first. */
+  months: { month: string; sold: number }[];
+  /** In stock but nothing sold in the dates. */
+  still: { productId: string; name: string; stock: number }[];
+};
+
+type Line = { productId: string; quantity: number };
+type Order = { orderId: string; day: string; status: OrderStatus; lines: Line[] };
+
+const isDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+const cairoDay = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(iso));
+
+function ordersOnce(live: AnalyticsOrder[], old: OldOrder[]): Order[] {
+  const orders: Order[] = live.map((order) => ({ orderId: order.orderId, day: order.day, status: order.status, lines: order.products.map((line) => ({ productId: line.modelId, quantity: line.quantity })) }));
+  const seen = new Set(orders.map((order) => order.orderId));
+  for (const order of old) {
+    if (seen.has(order.orderId)) continue;
+    seen.add(order.orderId);
+    orders.push({ orderId: order.orderId, day: cairoDay(order.createdAt), status: order.status, lines: order.products.map((line) => ({ productId: line.modelId, quantity: line.quantity })) });
+  }
+  return orders;
+}
+
+export function buildPiecesReport(input: {
+  live: AnalyticsOrder[];
+  old: OldOrder[];
+  direct: DirectSale[];
+  moves: StockMove[];
+  stock: StockRow[];
+  from?: string | null;
+  to?: string | null;
+}): PiecesReport {
+  const from = isDay(input.from) ? input.from : null;
+  const to = isDay(input.to) ? input.to : null;
+  const inRange = (day: string) => (!from || day >= from) && (!to || day <= to);
+
+  const rows = new Map<string, Omit<PieceProductRow, "share">>();
+  const row = (productId: string) => {
+    let current = rows.get(productId);
+    if (!current) {
+      const product = findProduct(productId);
+      current = { productId, name: product?.name ?? productId, category: product?.category ?? null, image: product?.image ?? null, soldOnline: 0, soldDirect: 0, sold: 0, orders: 0, returned: 0, waiting: 0, personal: 0, stock: null };
+      rows.set(productId, current);
+    }
+    return current;
+  };
+  const months = new Map<string, number>();
+  let delivered = 0;
+
+  for (const order of ordersOnce(input.live, input.old)) {
+    if (!inRange(order.day)) continue;
+    const counted = new Set<string>();
+    for (const line of order.lines) {
+      if (!line.productId || line.quantity <= 0) continue;
+      const target = row(line.productId);
+      if (isSaleStatus(order.status)) {
+        target.soldOnline += line.quantity;
+        target.sold += line.quantity;
+        if (!counted.has(line.productId)) target.orders += 1;
+        counted.add(line.productId);
+        if (order.status === "delivered") delivered += line.quantity;
+        months.set(order.day.slice(0, 7), (months.get(order.day.slice(0, 7)) ?? 0) + line.quantity);
+      } else if (order.status === "returned") target.returned += line.quantity;
+      else if (order.status === "submitted") target.waiting += line.quantity;
+    }
+  }
+  for (const sale of input.direct) {
+    if (!inRange(sale.date)) continue;
+    for (const line of sale.lines) {
+      if (!line.productId) continue;
+      const target = row(line.productId);
+      if (isPersonalTake(sale)) {
+        target.personal += line.quantity;
+        continue;
+      }
+      target.soldDirect += line.quantity;
+      target.sold += line.quantity;
+      months.set(sale.date.slice(0, 7), (months.get(sale.date.slice(0, 7)) ?? 0) + line.quantity);
+    }
+  }
+  for (const stock of input.stock) if (stock.tracked) row(stock.productId).stock = stock.stock;
+
+  // Came in: every arrival, and the first entry of each product (count or arrival) — later counts are corrections.
+  const firstMove = new Map<string, StockMove>();
+  for (const move of input.moves.toSorted((a, b) => a.at.localeCompare(b.at))) if (!firstMove.has(move.productId)) firstMove.set(move.productId, move);
+  let cameIn = 0;
+  for (const move of input.moves) {
+    if (!inRange(cairoDay(move.at))) continue;
+    if (move.kind === "arrival" || (move.kind === "count" && firstMove.get(move.productId) === move)) cameIn += move.quantity;
+  }
+
+  const list = [...rows.values()];
+  const sum = (pick: (item: Omit<PieceProductRow, "share">) => number) => list.reduce((total, item) => total + pick(item), 0);
+  const sold = sum((item) => item.sold);
+  const products = list
+    .filter((item) => item.sold || item.returned || item.waiting || item.personal || item.stock !== null)
+    .map((item) => ({ ...item, share: sold > 0 ? item.sold / sold : 0 }))
+    .toSorted((a, b) => b.sold - a.sold || b.orders - a.orders || a.name.localeCompare(b.name, "ar"));
+  const categories = categoryOrder
+    .map((category) => {
+      const pieces = list.filter((item) => item.category === category).reduce((total, item) => total + item.sold, 0);
+      return { category, label: categoryInfo[category].label, sold: pieces, share: sold > 0 ? pieces / sold : 0 };
+    })
+    .filter((item) => item.sold > 0)
+    .toSorted((a, b) => b.sold - a.sold);
+  const tracked = input.stock.filter((item) => item.tracked);
+  return {
+    range: { from, to },
+    totals: {
+      out: sold + sum((item) => item.personal),
+      sold,
+      soldOnline: sum((item) => item.soldOnline),
+      soldDirect: sum((item) => item.soldDirect),
+      delivered,
+      personal: sum((item) => item.personal),
+      returned: sum((item) => item.returned),
+      waiting: sum((item) => item.waiting),
+      cameIn,
+      left: tracked.reduce((total, item) => total + Math.max(0, item.stock), 0),
+      trackedProducts: tracked.length,
+    },
+    products,
+    categories,
+    months: [...months.entries()].toSorted(([a], [b]) => a.localeCompare(b)).map(([month, pieces]) => ({ month, sold: pieces })),
+    still: products.filter((item) => item.sold === 0 && (item.stock ?? 0) > 0).map((item) => ({ productId: item.productId, name: item.name, stock: item.stock ?? 0 })),
+  };
+}

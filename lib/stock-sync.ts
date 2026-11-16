@@ -28,8 +28,9 @@ export async function computeStock() {
     loadDirectSales(),
     loadStockMoves(),
   ]);
-  const rows = buildStock({ productIds: catalog.map((product) => product.id), moves, live: live.map((item) => item.order), old: old.orders, direct });
-  return { rows, moves, vault };
+  const input = { productIds: catalog.map((product) => product.id), moves, live: live.map((item) => item.order), old: old.orders, direct };
+  const rows = buildStock(input);
+  return { rows, moves, vault, input };
 }
 
 /** Rewrites the auto sold-out set when it changed, and refreshes the store pages. */

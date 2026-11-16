@@ -4,11 +4,11 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CircleSlash, ClipboardCheck, PackageCheck, PackagePlus, RefreshCw, SlidersHorizontal, Trash2, X } from "lucide-react";
 
-import { LOW_STOCK, STOCK_MOVE_KINDS, type StockMove, type StockMoveKind, type StockRow } from "@/lib/inventory";
+import { LOW_STOCK, STOCK_MOVE_KINDS, type StockMove, type StockMoveKind, type StockRow, type TargetProgress } from "@/lib/inventory";
 import { categoryInfo, categoryOrder, type CatalogCategory } from "@/lib/site-data";
 
 type ProductStock = StockRow & { name: string; category: CatalogCategory; image: string; hidden: boolean; soldOut: boolean; autoSoldOut: boolean };
-type Data = { products: ProductStock[]; moves: StockMove[]; vaultConfigured: boolean };
+type Data = { products: ProductStock[]; moves: StockMove[]; target: TargetProgress | null; vaultConfigured: boolean };
 type Action = { product: ProductStock; kind: StockMoveKind } | null;
 
 const KIND_LABEL = Object.fromEntries(STOCK_MOVE_KINDS.map((kind) => [kind.id, kind.label])) as Record<StockMoveKind, string>;
@@ -113,6 +113,7 @@ export function InventoryTab() {
         {!data && !error && <p className="admin-muted">جاري التحميل…</p>}
         {data && (
           <>
+            <TargetCounter target={data.target} onShowMissing={() => setFilter("untracked")} onSaved={load} />
             <section className="admin-cards">
               <div className="admin-card"><span>قطع في المخزون</span><strong>{totalPieces}</strong><small>{tracked.length} منتج متسجل</small></div>
               <div className={`admin-card${out.length ? " bad" : ""}`}><span>خلص</span><strong>{out.length}</strong><small>منتج</small></div>
@@ -286,5 +287,71 @@ function MoveDialog({ action, onClose, onSaved }: { action: NonNullable<Action>;
         </div>
       </form>
     </dialog>
+  );
+}
+
+/** "عندي 45 قطعة": how many of them are already in the inventory and how many are left to type in. */
+function TargetCounter({ target, onShowMissing, onSaved }: { target: TargetProgress | null; onShowMissing: () => void; onSaved: () => Promise<void> }) {
+  const api = useApi();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save(total: number | null) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/admin/inventory", { method: "PUT", body: JSON.stringify({ total }) });
+      setEditing(false);
+      await onSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const form = (
+    <form className="stock-target-form" onSubmit={(event) => { event.preventDefault(); void save(Number(value)); }}>
+      <label className="admin-field"><span>عندك كام قطعة دلوقتي (كل البضاعة)؟</span><input type="number" min={0} inputMode="numeric" required value={value} onChange={(event) => setValue(event.target.value)} placeholder="مثلاً 45" /></label>
+      <button type="submit" className="admin-primary" disabled={busy || value.trim() === ""}>حفظ</button>
+      {editing && <button type="button" className="admin-chip" onClick={() => setEditing(false)}><X size={14} /> إلغاء</button>}
+    </form>
+  );
+
+  if (!target || editing) {
+    return (
+      <div className="stock-target">
+        <strong className="stock-target-title">عداد البضاعة</strong>
+        <p className="admin-muted small">اكتبي عدد القطع اللي عندك فعلاً، وهنعرّفك دخلتي كام منهم في المخزون وفاضل كام.</p>
+        {form}
+        {error && <p className="admin-error" role="alert">{error}</p>}
+      </div>
+    );
+  }
+
+  const done = target.missing <= 0;
+  const percent = target.expected > 0 ? Math.min(100, Math.round((target.entered / target.expected) * 100)) : 100;
+  return (
+    <div className={`stock-target${done ? " done" : ""}`}>
+      <div className="stock-target-head">
+        <strong className="stock-target-title">عداد البضاعة</strong>
+        <button type="button" className="admin-link small" onClick={() => { setValue(String(target.expected)); setEditing(true); }}>تغيير العدد</button>
+      </div>
+      <div className="stock-target-numbers">
+        <div><span>عندك</span><strong>{target.expected}</strong><small>قطعة</small></div>
+        <div><span>دخلتيهم المخزون</span><strong>{target.entered}</strong><small>قطعة</small></div>
+        <div className="missing"><span>{target.missing >= 0 ? "فاضل تدخليهم" : "داخلين زيادة"}</span><strong>{Math.abs(target.missing)}</strong><small>قطعة</small></div>
+      </div>
+      <div className="stock-target-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="اللي اتسجل في المخزون"><span style={{ width: `${percent}%` }} /></div>
+      <p className="admin-muted small">
+        {done ? (target.missing === 0 ? "كل القطع متسجلة في المخزون ✓" : `المسجل في المخزون أكتر من العدد اللي كتبتيه بـ ${-target.missing} قطعة — راجعي الجرد أو غيّري العدد.`) : <>فاضل {target.missing} قطعة مش متسجلين. {target.untrackedProducts > 0 && <button type="button" className="admin-link small" onClick={onShowMissing}>وريني المنتجات اللي لسه متسجلتش ({target.untrackedProducts})</button>}</>}
+      </p>
+      <p className="admin-muted small">
+        كتبتي {target.total} قطعة يوم {cairoTime(target.at)}{target.outSince > 0 && ` · خرج من وقتها ${target.outSince} (بيع أو ليكي)`}{target.arrivedSince > 0 && ` · وصل ${target.arrivedSince} جديد`}. علشان تسجلي القطع اللي عندك استخدمي &quot;جرد&quot; لكل منتج.
+      </p>
+      {error && <p className="admin-error" role="alert">{error}</p>}
+    </div>
   );
 }

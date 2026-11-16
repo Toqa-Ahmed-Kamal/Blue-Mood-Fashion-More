@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
-import { sanitizeStockMove } from "@/lib/inventory";
-import { saveStockMove } from "@/lib/inventory-store";
+import { sanitizeStockMove, sanitizeStockTarget, targetProgress } from "@/lib/inventory";
+import { loadStockTarget, saveStockMove, saveStockTarget } from "@/lib/inventory-store";
 import { RedisUnavailableError } from "@/lib/redis";
 import { catalog, isAutoSoldOut, isManualSoldOut } from "@/lib/site-data";
 import { computeStock, outOfStockIds, syncStoreStock, writeAutoSoldOut } from "@/lib/stock-sync";
@@ -16,7 +16,7 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 export async function GET(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
   try {
-    const { rows, moves, vault } = await computeStock();
+    const [{ rows, moves, vault, input }, target] = await Promise.all([computeStock(), loadStockTarget()]);
     // Opening the inventory also brings the store's "نفدت الكمية" up to date.
     await writeAutoSoldOut(outOfStockIds(rows)).catch(() => false);
     const byId = new Map(rows.map((row) => [row.productId, row]));
@@ -29,7 +29,8 @@ export async function GET(request: Request) {
       soldOut: isManualSoldOut(product.id),
       autoSoldOut: isAutoSoldOut(product.id),
     }));
-    return json(200, { success: true, products, moves: moves.slice(0, 200), vaultConfigured: vault });
+    const progress = target ? targetProgress(target, input, rows) : null;
+    return json(200, { success: true, products, moves: moves.slice(0, 200), target: progress, vaultConfigured: vault });
   } catch (error) {
     console.error("[admin] inventory load failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
     return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحمل المخزون دلوقتي. جربي تاني." } });
@@ -55,6 +56,29 @@ export async function POST(request: Request) {
     return saved ? json(200, { success: true, move: saved }) : json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });
   } catch (error) {
     console.error("[admin] stock move save failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+    return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مقدرناش نحفظ دلوقتي. جربي تاني." } });
+  }
+}
+
+/** Sets "عندي كذا قطعة" (counted from now on). Body: { total } or { total: null } to remove it. */
+export async function PUT(request: Request) {
+  if (!isAdminRequest(request)) return unauthorized();
+  if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json(400, { success: false, error: { code: "INVALID_JSON" } });
+  }
+  const remove = typeof body === "object" && body !== null && (body as Record<string, unknown>).total === null;
+  const checked = remove ? null : sanitizeStockTarget(body);
+  if (checked && "error" in checked) return json(400, { success: false, error: { code: "INVALID_TOTAL", message: checked.error } });
+  try {
+    const saved = await saveStockTarget(checked ? checked.target : null);
+    if (!remove && !saved) return json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });
+    return json(200, { success: true, target: saved });
+  } catch (error) {
+    console.error("[admin] stock total save failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
     return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مقدرناش نحفظ دلوقتي. جربي تاني." } });
   }
 }

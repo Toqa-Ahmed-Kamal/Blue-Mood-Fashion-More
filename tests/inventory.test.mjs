@@ -109,3 +109,23 @@ test("linked to the store: tracked products at 0 are out; untracked ones are nev
   setSoldOut([]);
   assert.equal(isSoldOut(ROBE), false);
 });
+
+test("عداد البضاعة: total she has − what is already in the inventory; sales and new goods keep it true", async () => {
+  const { targetProgress, sanitizeStockTarget } = await import("../lib/inventory.ts");
+  const OTHER = "bm-robe-004";
+  const SET_AT = "2026-11-10T09:00:00.000Z";
+  const moves = [
+    move("count", 10, "2026-11-10T10:00:00.000Z"), // robe entered after the total: just typing in what she has
+    move("arrival", 4, "2026-11-12T10:00:00.000Z"), // new goods for the robe
+    move("arrival", 5, "2026-11-11T10:00:00.000Z", OTHER), // first entry of OTHER: typing in, not new goods
+  ];
+  const live = [site("BM-AAAAAAAAAAAAAAAAAAA1", "confirmed", 3, { soldAt: "2026-11-11T12:00:00.000Z" })];
+  const takes = [{ ...direct(1, "2026-11-11T13:00:00.000Z"), kind: "personal" }];
+  const input = { productIds: [ROBE, OTHER, "bm-robe-005"], moves, live, old: [], direct: takes };
+  const rows = buildStock(input);
+  const p = targetProgress({ total: 45, at: SET_AT }, input, rows);
+  // Robe: 10 + 4 − 3 − 1 = 10; OTHER: 5 → entered 15. Expected: 45 − 4 out + 4 new = 45.
+  assert.deepEqual([p.outSince, p.arrivedSince, p.expected, p.entered, p.missing, p.untrackedProducts], [4, 4, 45, 15, 30, 1]);
+  assert.ok("error" in sanitizeStockTarget({ total: -1 }));
+  assert.equal(sanitizeStockTarget({ total: "45" }, new Date(SET_AT)).target.total, 45);
+});

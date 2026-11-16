@@ -151,3 +151,51 @@ export function buildStock(input: { productIds: string[]; moves: StockMove[]; li
 /** Product IDs the store shows as "نفدت الكمية" by themselves: tracked (counted or received) and stock at 0 or below. */
 export const outOfStockIds = (rows: { productId: string; tracked: boolean; stock: number }[]) =>
   rows.filter((row) => row.tracked && row.stock <= 0).map((row) => row.productId).toSorted();
+
+/**
+ * "عندي كذا قطعة": the total the owner says she has on hand, and when she said it.
+ * Pieces that leave after that (sold, direct sale, taken for herself) come off the total by themselves, and
+ * goods that arrive later for a product already in the inventory are added, so the total stays true.
+ * An arrival that is a product's very first entry is just her typing in what she already had.
+ */
+export type StockTarget = { total: number; at: string };
+
+export type TargetProgress = {
+  total: number;
+  at: string;
+  /** Pieces that left (orders, direct sales, personal) since the total was set. */
+  outSince: number;
+  /** New goods received since then. */
+  arrivedSince: number;
+  /** What she should have now: total − outSince + arrivedSince. */
+  expected: number;
+  /** Pieces already in the inventory (tracked products, stock above 0). */
+  entered: number;
+  /** expected − entered: still to type into the inventory (negative = more entered than the total). */
+  missing: number;
+  untrackedProducts: number;
+};
+
+export function sanitizeStockTarget(raw: unknown, now = new Date()): { target: StockTarget } | { error: string } {
+  const total = Number((raw as Record<string, unknown> | null)?.total);
+  if (!Number.isInteger(total) || total < 0 || total > MAX_QUANTITY) return { error: "اكتبي عدد القطع اللي عندك (رقم صحيح)." };
+  return { target: { total, at: now.toISOString() } };
+}
+
+export function targetProgress(
+  target: StockTarget,
+  input: { productIds: string[]; moves: StockMove[]; live: AnalyticsOrder[]; old: OldOrder[]; direct: DirectSale[] },
+  rows: StockRow[],
+): TargetProgress {
+  const { sold } = orderLines(input.live, input.old);
+  const directOut = input.direct.flatMap((sale) => sale.lines.filter((line) => line.productId).map((line) => ({ quantity: line.quantity, at: sale.createdAt })));
+  const outSince = [...sold, ...directOut].filter((line) => line.at > target.at).reduce((sum, line) => sum + line.quantity, 0);
+  const firstMove = new Map<string, string>();
+  for (const move of input.moves.toSorted((a, b) => a.at.localeCompare(b.at))) if (!firstMove.has(move.productId)) firstMove.set(move.productId, move.id);
+  const arrivedSince = input.moves
+    .filter((move) => move.kind === "arrival" && move.at > target.at && firstMove.get(move.productId) !== move.id)
+    .reduce((sum, move) => sum + move.quantity, 0);
+  const entered = rows.filter((row) => row.tracked).reduce((sum, row) => sum + Math.max(0, row.stock), 0);
+  const expected = target.total - outSince + arrivedSince;
+  return { total: target.total, at: target.at, outSince, arrivedSince, expected, entered, missing: expected - entered, untrackedProducts: rows.filter((row) => !row.tracked).length };
+}
