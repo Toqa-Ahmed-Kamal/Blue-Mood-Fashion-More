@@ -13,10 +13,12 @@ import {
   categoryInfo,
   categoryOrder,
   findProduct,
+  isBigSize,
   landingPromotion,
   offerCategories,
   productsIn,
   startingPriceOf,
+  visibleCatalog,
   type CatalogCategory,
   type CatalogProduct,
 } from "@/lib/site-data";
@@ -43,10 +45,12 @@ const categoryCovers: Record<CatalogCategory, string> = {
   robes: "bm-robe-001",
   "winter-pajamas": "bm-winter-pajama-008",
   "wearable-blankets": "bm-winter-blanket-003",
+  onesies: "bm-onesie-001",
 };
 
 export function BlueMoodHome() {
   const [quickView, setQuickView] = useState<CatalogProduct | null>(null);
+  const bigSizeItems = visibleCatalog.filter((product) => isBigSize(product.id));
 
   return (
     <div className="store" dir="rtl">
@@ -139,6 +143,19 @@ export function BlueMoodHome() {
             </div>
           </div>
         </section>
+
+        {bigSizeItems.length > 0 && (
+          <section className="container catalog-section big-size-section" id="big-size" aria-labelledby="big-size-title">
+            <header className="section-head">
+              <span className="section-ornament" aria-hidden="true">✦</span>
+              <h2 id="big-size-title">بيج سايز</h2>
+              <p>مقاسات كبيرة مريحة · {bigSizeItems.length} موديل</p>
+            </header>
+            <div className="product-grid">
+              {bigSizeItems.map((product) => <ProductCard key={`big-${product.id}`} product={product} onQuickView={setQuickView} />)}
+            </div>
+          </section>
+        )}
 
         {categoryOrder.map((category) => {
           const items = productsIn(category);

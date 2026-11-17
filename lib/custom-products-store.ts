@@ -10,7 +10,7 @@
 import { parseCustomProduct } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import type { ProductStat } from "./piece-analytics.ts";
-import { findProduct, setCustomProducts, setPriceOverrides, setSoldOut, setWasPrices, type CatalogProduct } from "./site-data.ts";
+import { findProduct, setBigSize, setCustomProducts, setPriceOverrides, setSoldOut, setWasPrices, type CatalogProduct } from "./site-data.ts";
 
 export const CUSTOM_PRODUCTS_TAG = "custom-products";
 const PRODUCTS = () => `${keyPrefix()}catalog:custom`;
@@ -19,6 +19,8 @@ const SOLD_OUT = () => `${keyPrefix()}catalog:soldout`;
 const PRICES = () => `${keyPrefix()}catalog:prices`;
 const WAS_PRICES = () => `${keyPrefix()}catalog:wasprices`;
 export const AUTO_SOLD_OUT = () => `${keyPrefix()}catalog:soldout:auto`;
+/** SET product IDs shown in the store's "بيج سايز" section (picked from the admin). */
+const BIG_SIZE = () => `${keyPrefix()}catalog:bigsize`;
 /** STR JSON { productId: { sold, left, best? } } shown on the store (written by lib/stock-sync.ts). */
 export const PRODUCT_STATS = () => `${keyPrefix()}catalog:stats`;
 
@@ -99,6 +101,18 @@ export async function loadSoldOut(): Promise<string[]> {
   return Array.isArray(members) ? members.map(String).toSorted() : [];
 }
 
+export async function loadBigSize(): Promise<string[]> {
+  const [members] = await redisPipeline([["SMEMBERS", BIG_SIZE()]], "read", 5000);
+  return Array.isArray(members) ? members.map(String).toSorted() : [];
+}
+
+/** Adds / removes a product from the Big Size section, then reads the flag back. */
+export async function setProductBigSize(productId: string, bigSize: boolean) {
+  const [, member] = await redisPipeline([[bigSize ? "SADD" : "SREM", BIG_SIZE(), productId], ["SISMEMBER", BIG_SIZE(), productId]], "write");
+  cached = null;
+  return Number(member) === 1;
+}
+
 export async function loadAutoSoldOut(): Promise<string[]> {
   const [members] = await redisPipeline([["SMEMBERS", AUTO_SOLD_OUT()]], "read", 5000);
   return Array.isArray(members) ? members.map(String).toSorted() : [];
@@ -120,10 +134,11 @@ let cached: { at: number; products: CatalogProduct[] } | null = null;
 export async function ensureCustomProducts(force = false) {
   if (!force && cached && Date.now() - cached.at < CACHE_MS) return cached.products;
   try {
-    const [products, soldOut, autoSoldOut, prices, wasPrices] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadAutoSoldOut(), loadPrices(), loadWasPrices()]);
+    const [products, soldOut, autoSoldOut, prices, wasPrices, bigSize] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadAutoSoldOut(), loadPrices(), loadWasPrices(), loadBigSize()]);
     cached = { at: Date.now(), products };
     setCustomProducts(products);
     setSoldOut(soldOut, autoSoldOut);
+    setBigSize(bigSize);
     setPriceOverrides(prices);
     setWasPrices(wasPrices);
     return products;
@@ -146,10 +161,10 @@ function parseStats(raw: unknown): Record<string, ProductStat> {
   }
 }
 
-export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat> }> {
+export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat>; bigSize: string[] }> {
   const url = process.env.KV_REST_API_URL?.trim().replace(/\/+$/, "");
   const token = (process.env.KV_REST_API_READ_ONLY_TOKEN ?? process.env.KV_REST_API_TOKEN)?.trim();
-  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {} };
+  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {}, bigSize: [] };
   const read = async (command: string) => {
     try {
       const response = await fetch(`${url}/${command}`, {
@@ -163,17 +178,18 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
       return null;
     }
   };
-  const [products, soldOut, autoSoldOut, prices, wasPrices, stats] = await Promise.all([
+  const [products, soldOut, autoSoldOut, prices, wasPrices, stats, bigSize] = await Promise.all([
     read(`hgetall/${encodeURIComponent(PRODUCTS())}`),
     read(`smembers/${encodeURIComponent(SOLD_OUT())}`),
     read(`smembers/${encodeURIComponent(AUTO_SOLD_OUT())}`),
     read(`hgetall/${encodeURIComponent(PRICES())}`),
     read(`hgetall/${encodeURIComponent(WAS_PRICES())}`),
     read(`get/${encodeURIComponent(PRODUCT_STATS())}`),
+    read(`smembers/${encodeURIComponent(BIG_SIZE())}`),
   ]);
   // The store does not need to know why a product is out: the admin's switch and the inventory both count.
   const out = [...new Set([...(Array.isArray(soldOut) ? soldOut : []), ...(Array.isArray(autoSoldOut) ? autoSoldOut : [])].map(String))];
-  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats) };
+  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats), bigSize: Array.isArray(bigSize) ? bigSize.map(String) : [] };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */

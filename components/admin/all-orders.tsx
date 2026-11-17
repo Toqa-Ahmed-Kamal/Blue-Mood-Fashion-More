@@ -11,7 +11,7 @@ import type { CourierStep, OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import { productImage } from "@/lib/quantity-summary";
-import { findProduct, offerPieceCount } from "@/lib/site-data";
+import { findProduct, offerPieceCount, hasWeightFit } from "@/lib/site-data";
 
 const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", delivered: "تم الاستلام", cancelled: "اتلغى", returned: "مرتجع" };
 const PAGE_SIZE = 30;
@@ -264,7 +264,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier 
                   {order.phone && (
                     <WhatsAppLink compact href={chat(unavailableMessage({ name: order.customerName, orderId: order.orderId, productName: product.name, productId: product.modelId, origin, category: catalog?.category }))} label={`${product.name} مش متوفر — ابعتي بدائل`} />
                   )}
-                  {order.phone && catalog?.category === "winter-pajamas" && (
+                  {order.phone && hasWeightFit(catalog?.category) && (
                     <WhatsAppLink compact text="وزنها؟" href={chat(weightMessage({ name: order.customerName, orderId: order.orderId, productName: product.name, productId: product.modelId }))} label={`اسألي عن وزنها علشان ${product.name}`} />
                   )}
                 </li>

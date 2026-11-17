@@ -15,7 +15,7 @@
 //   a photo has image null.
 import type { AnalyticsOrder, OrderStatus } from "./analytics-report.ts";
 import { factorySize, shortSize, sizeFromFit, type OldOrder } from "./old-orders.ts";
-import { findProduct, type CatalogCategory } from "./site-data.ts";
+import { findProduct, type CatalogCategory, hasWeightFit } from "./site-data.ts";
 
 export { shortSize };
 
@@ -107,7 +107,7 @@ export function siteOrderLines({ order, fits }: LiveOrderForSummary): FactoryLin
     const fit = product.fit ?? fits[index] ?? null;
     // Catalog pajamas get their size from the product data. Only a pajama no longer in the catalog
     // with no saved note is "not recorded"; other categories have no size.
-    const recordedSize = fit !== null ? sizeFromFit(fit) : product.category === "winter-pajamas" && !findProduct(product.modelId) ? SIZE_NOT_RECORDED : "";
+    const recordedSize = fit !== null ? sizeFromFit(fit) : hasWeightFit(product.category as never) && !findProduct(product.modelId) ? SIZE_NOT_RECORDED : "";
     return line({ orderId: order.orderId, status: order.status, source: "site", productId: product.modelId, name: product.modelId, recordedSize, quantity: product.quantity });
   });
 }

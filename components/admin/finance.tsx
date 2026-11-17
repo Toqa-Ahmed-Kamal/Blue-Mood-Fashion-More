@@ -7,7 +7,7 @@ import { Calculator, CircleSlash, ImageOff, ImagePlus, PackageCheck, Pencil, Plu
 import { directSaleMoney, isPersonalTake, type DirectSale } from "@/lib/direct-sales";
 import { EXPENSE_CATEGORIES, OFFER_PIECE_PRICE, pricingRows, type Expense, type ExpenseCategory, type FinanceReport } from "@/lib/finance";
 import { formatEGP } from "@/lib/format";
-import { categoryInfo, categoryOrder, categoryPrices, type CatalogCategory } from "@/lib/site-data";
+import { categoryInfo, categoryOrder, categoryPrices, type CatalogCategory, hasWeightFit } from "@/lib/site-data";
 
 type ProductRow = {
   productId: string;
@@ -27,6 +27,8 @@ type ProductRow = {
   soldOut: boolean;
   /** Out because the inventory reached 0 (comes back by itself). */
   autoSoldOut?: boolean;
+  /** Shown in the store's "بيج سايز" section. */
+  bigSize?: boolean;
   imageAlt: string;
   /** The product's own price (null = the category price / offer only). */
   price: number | null;
@@ -217,6 +219,19 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
     });
   };
 
+  async function toggleBigSize(product: ProductRow) {
+    setBusy(product.productId);
+    setError("");
+    try {
+      await api(`/api/admin/products/${product.productId}/big-size`, { method: "PUT", body: JSON.stringify({ bigSize: !product.bigSize }) });
+      await onSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نحفظ.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function toggleSoldOut(product: ProductRow) {
     if (!product.soldOut && !window.confirm(`${product.name}: يظهر للعميلات "نفدت الكمية" ومحدش يقدر يطلبه لحد ما ترجّعيه متاح؟`)) return;
     setBusy(product.productId);
@@ -371,6 +386,9 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
                       {product.soldOut ? <><CircleSlash size={13} aria-hidden="true" /> نفدت الكمية</> : <><PackageCheck size={13} aria-hidden="true" /> متاح</>}
                     </button>
                     {product.autoSoldOut && !product.soldOut && <span className="admin-flag warn" title="المخزون خلص؛ هيرجع متاح لوحده لما تسجلي بضاعة وصلت">نفدت (المخزون)</span>}
+                    <button type="button" className={`admin-bigsize${product.bigSize ? " on" : ""}`} disabled={busy === product.productId} onClick={() => void toggleBigSize(product)} aria-pressed={Boolean(product.bigSize)} title={product.bigSize ? "دوسي علشان تشيليه من قسم بيج سايز" : "دوسي علشان يظهر في قسم بيج سايز على الموقع"}>
+                      {product.bigSize ? "✓ بيج سايز" : "+ بيج سايز"}
+                    </button>
                   </td>
                   <td className="actions">
                     {locked && <button type="button" onClick={() => setUnlocked((current) => new Set(current).add(product.productId))}><Pencil size={14} /> تعديل السعر</button>}
@@ -1003,7 +1021,7 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
         category: form.category,
         price: form.price.trim() === "" ? null : Number(form.price),
         imageAlt: form.imageAlt,
-        maxWeightKg: form.category === "winter-pajamas" && form.maxWeightKg.trim() ? Number(form.maxWeightKg) : null,
+        maxWeightKg: hasWeightFit(form.category) && form.maxWeightKg.trim() ? Number(form.maxWeightKg) : null,
         hidden: form.hidden,
         ...(photo ? { image: photo.base64 } : {}),
         ...(!editing ? { factory: form.factory, cost: form.cost.trim() === "" ? null : Number(form.cost) } : {}),
@@ -1051,7 +1069,7 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
             <label className="admin-field"><span>سعر البيع للقطعة (ج.م)</span>
               <input type="number" min={1} inputMode="numeric" value={form.price} onChange={(event) => set("price", event.target.value)} placeholder={offerOnly ? (categoryPrice ? `فاضي = ${categoryPrice}` : "فاضي = ضمن العرض بس") : (categoryPrice ? String(categoryPrice) : "")} />
             </label>
-            {form.category === "winter-pajamas" && (
+            {hasWeightFit(form.category) && (
               <label className="admin-field"><span>المقاس: One Size لحد كام كيلو</span>
                 <input type="number" min={30} max={200} inputMode="numeric" value={form.maxWeightKg} onChange={(event) => set("maxWeightKg", event.target.value)} placeholder="فاضي = 85–90" />
               </label>

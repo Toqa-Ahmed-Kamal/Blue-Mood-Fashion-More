@@ -380,7 +380,7 @@ h1, h2, h3 { font-family: var(--font-display); }
 .category-card:hover .category-arch img { transform: scale(1.05); }
 .category-card strong { font-family: var(--font-display); font-size: 22px; font-weight: 700; }
 .category-card small { color: var(--gold); font-weight: 700; font-size: 14px; }
-@media (min-width: 760px) { .categories { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; } }
+@media (min-width: 760px) { .categories { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; } }
 
 /* ───────────── Offer ───────────── */
 .offer-section {
@@ -1601,6 +1601,10 @@ select.admin-inline-input { width: 160px; }
 .admin-stock { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: .76rem; font-weight: 700; border-radius: 999px; padding: 4px 10px; cursor: pointer; border: 1px solid #b8e3c8; color: #157a3e; background: #ecf8f0; white-space: nowrap; }
 .admin-stock.out { border-color: #f1c2c8; color: var(--danger); background: #fbe9eb; }
 .admin-stock:disabled { opacity: .5; cursor: default; }
+.admin-bigsize { display: inline-flex; align-items: center; margin-inline-start: 6px; font: inherit; font-size: .74rem; font-weight: 700; border-radius: 999px; padding: 3px 9px; cursor: pointer; border: 1px dashed var(--line); color: var(--muted); background: transparent; white-space: nowrap; }
+.admin-bigsize.on { border-style: solid; border-color: #c9b6ef; color: #5b3aa6; background: #f2ecfd; }
+.admin-bigsize:disabled { opacity: .5; cursor: default; }
+.big-size-tag { display: inline-block; margin-inline-start: 6px; padding: 0 7px; border-radius: 999px; background: #f2ecfd; color: #5b3aa6; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
 .admin-calc-inputs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; align-items: end; margin-bottom: 4px; }
 .admin-calc-share { display: grid; gap: 2px; background: var(--brand-soft); border-radius: var(--radius); padding: 8px 12px; font-size: .78rem; color: var(--brand-dark); }
 .admin-calc-share strong { font-size: 1.25rem; color: var(--navy); }

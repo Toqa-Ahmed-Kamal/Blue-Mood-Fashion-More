@@ -1,3 +1,4 @@
+import { hasWeightFit } from "./site-data.ts";
 import type { CatalogCategory } from "./site-data.ts";
 
 export type OfferModelCategory = "winter-pajamas" | "wearable-blankets";
@@ -15,7 +16,7 @@ const weightLimit = (maxWeightKg?: number) => (maxWeightKg ? `${maxWeightKg}` : 
 
 /** Short size note for product cards, or null when the category has no size claim. */
 export function fitNoteFor(category: CatalogCategory, maxWeightKg?: number) {
-  return category === "winter-pajamas" ? `One Size · لحد ${weightLimit(maxWeightKg)} كيلو` : null;
+  return hasWeightFit(category) ? `One Size · لحد ${weightLimit(maxWeightKg)} كيلو` : null;
 }
 
 /** maxWeightKg: per-product override of the default pajama weight note. */
@@ -25,6 +26,7 @@ export function categoryDetailLabel(category: CatalogCategory, maxWeightKg?: num
     case "wearable-blankets": return "بلانكيت شتوي قابل للارتداء";
     case "abayas": return "عباية";
     case "robes": return "روب";
+    case "onesies": return maxWeightKg ? `سالوبيت One Size – يناسب لحد ${maxWeightKg} كيلو` : "سالوبيت One Size";
   }
 }
 

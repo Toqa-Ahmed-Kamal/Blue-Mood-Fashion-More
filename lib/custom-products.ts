@@ -1,16 +1,17 @@
 // Products added from the admin (pure, tested). They become regular catalog products: shown in the
 // store, orderable, counted in the factory summary and the financials. Storage: custom-products-store.
-import { categoryInfo, isBuiltInProduct, type CatalogCategory, type CatalogProduct } from "./site-data.ts";
+import { categoryInfo, isBuiltInProduct, type CatalogCategory, type CatalogProduct, hasWeightFit } from "./site-data.ts";
 
 export const MAX_IMAGE_BASE64_LENGTH = 900_000;
 export const IMAGE_ID_PATTERN = /^img-[a-z\d]{8,40}$/;
-export const CUSTOM_PRODUCT_ID_PATTERN = /^bm-(abaya|robe|winter-pajama|winter-blanket)-n[a-z\d]{6,24}$/;
+export const CUSTOM_PRODUCT_ID_PATTERN = /^bm-(abaya|robe|winter-pajama|winter-blanket|onesie)-n[a-z\d]{6,24}$/;
 
 const ID_PREFIX: Record<CatalogCategory, string> = {
   abayas: "bm-abaya",
   robes: "bm-robe",
   "winter-pajamas": "bm-winter-pajama",
   "wearable-blankets": "bm-winter-blanket",
+  onesies: "bm-onesie",
 };
 
 /** A new product code in the same style as the catalog ("bm-robe-n…"); never reused. */
@@ -58,7 +59,7 @@ export function sanitizeProductInput(raw: unknown): { input: ProductInput } | { 
   const offerOnlyAllowed = category === "winter-pajamas" || category === "wearable-blankets";
   if (price === null && !offerOnlyAllowed) return { error: "العبايات والأرواب لازم يبقى ليها سعر بيع." };
   let maxWeightKg: number | null = null;
-  if (category === "winter-pajamas" && value.maxWeightKg !== null && value.maxWeightKg !== undefined && value.maxWeightKg !== "") {
+  if (hasWeightFit(category) && value.maxWeightKg !== null && value.maxWeightKg !== undefined && value.maxWeightKg !== "") {
     const number = Number(value.maxWeightKg);
     if (!Number.isInteger(number) || number < 30 || number > 200) return { error: "حد الوزن لازم يبقى رقم صحيح بالكيلو (مثلاً 70)." };
     maxWeightKg = number;

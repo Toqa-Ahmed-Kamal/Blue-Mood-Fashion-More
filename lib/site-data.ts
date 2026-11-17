@@ -1,4 +1,4 @@
-export type CatalogCategory = "abayas" | "robes" | "winter-pajamas" | "wearable-blankets";
+export type CatalogCategory = "abayas" | "robes" | "winter-pajamas" | "wearable-blankets" | "onesies";
 
 export type CatalogProduct = {
   /** Stable internal identifier used in orders; never shown to customers. */
@@ -31,6 +31,7 @@ export const categoryPrices: Record<CatalogCategory, number | null> = {
   robes: 250,
   "winter-pajamas": 275,
   "wearable-blankets": 250,
+  onesies: 270,
 };
 
 /** Categories that can also be picked inside the winter offer. */
@@ -41,10 +42,15 @@ export const categoryInfo: Record<CatalogCategory, { label: string; singular: st
   robes: { label: "أرواب", singular: "روب", anchor: "robes", tagline: "فرو ناعم ودافي بغطاء رأس" },
   "winter-pajamas": { label: "بيجامات", singular: "بيجاما", anchor: "pajamas", tagline: "فليس وفرو ناعم · لوحدها أو ضمن عرض الشتاء" },
   "wearable-blankets": { label: "بلانكيت", singular: "بلانكيت", anchor: "blankets", tagline: "بلانكيت يُلبس · لوحده أو ضمن عرض الشتاء" },
+  onesies: { label: "سالوبيت", singular: "سالوبيت", anchor: "onesies", tagline: "فرو ناعم بكابشون وسوستة · قطعة واحدة دافية" },
 };
 
+/** Categories sold One Size with a "لحد كام كيلو" note (pajamas and onesies). */
+export const weightFitCategories: CatalogCategory[] = ["winter-pajamas", "onesies"];
+export const hasWeightFit = (category: CatalogCategory | undefined) => category !== undefined && weightFitCategories.includes(category);
+
 /** Order of the sections on the store (and in the menu): blankets, pajamas, robes, abayas. */
-export const categoryOrder: CatalogCategory[] = ["wearable-blankets", "winter-pajamas", "robes", "abayas"];
+export const categoryOrder: CatalogCategory[] = ["wearable-blankets", "winter-pajamas", "onesies", "robes", "abayas"];
 
 export const catalog: CatalogProduct[] = [
   // ── عبايات ──
@@ -118,6 +124,9 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-pajama-041", name: "طقم مضلع Smile · نبيتي", category: "winter-pajamas", image: "/images/bejama/ribbed-smile-set-burgundy.jpg", imageAlt: "طقم مضلع نبيتي، بلوزة عليها وش ضاحك أصفر مطرز وكلمة Smile وبنطلون واسع" },
   { id: "bm-winter-pajama-042", name: "طقم قطيفة مضلع بسوستة · فوشيا", category: "winter-pajamas", image: "/images/bejama/ribbed-zip-set-fuchsia.jpg", imageAlt: "طقم قطيفة مضلع فوشيا، بلوزة واسعة برقبة عالية وسوستة وبنطلون واسع" },
 
+  // ── سالوبيت ──
+  { id: "bm-onesie-001", name: "سالوبيت فرو ستيتش بكابشون", category: "onesies", image: "/images/onesies/stitch-fleece-onesie.jpg", imageAlt: "سالوبيت فرو أزرق بكابشون وسوستة كاملة مطبوع عليه رسومات ستيتش وقلوب وردي، بجيوب وأساور عند الكاحل", price: 270, maxWeightKg: 70 },
+
   // ── بلانكيت ──
   { id: "bm-winter-blanket-001", name: "بلانكيت أسود بغطاء للرأس", category: "wearable-blankets", image: "/images/bejama/black-hooded-blanket-cropped.jpg", imageAlt: "بلانكيت فرو أسود واسع بغطاء للرأس يُلبس فوق الملابس", price: 350 },
   { id: "bm-winter-blanket-002", name: "بلانكيت هودي بقلوب وودان أرنب", category: "wearable-blankets", image: "/images/bejama/1000507693.jpg", imageAlt: "هودي بطانية واسع من الفرو مطبوع عليه قلوب بيضاء وبكابشون بودان أرنب" },
@@ -168,6 +177,18 @@ export function isManualSoldOut(id: string) {
 /** Out because the inventory reached 0 (comes back by itself when stock is added). */
 export function isAutoSoldOut(id: string) {
   return autoSoldOutIds.has(id);
+}
+
+// ── Big Size (picked from the admin, stored in Redis): also shown together in their own store section ──
+const bigSizeIds = new Set<string>();
+
+export function setBigSize(ids: readonly string[]) {
+  bigSizeIds.clear();
+  for (const id of ids) bigSizeIds.add(id);
+}
+
+export function isBigSize(id: string) {
+  return bigSizeIds.has(id);
 }
 
 // ── Store numbers from the inventory: sold so far, left, best seller (stored in Redis, see lib/stock-sync.ts) ──

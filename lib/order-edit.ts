@@ -8,7 +8,7 @@ import type { OldOrder, OldOrderProduct } from "./old-orders.ts";
 import { categoryDetailLabel } from "./order-flow.ts";
 import type { OrderRecordProduct } from "./order-record.ts";
 import type { OrderDetails } from "./order-vault.ts";
-import { findProduct } from "./site-data.ts";
+import { findProduct, hasWeightFit } from "./site-data.ts";
 
 export const MAX_EDIT_LINES = 40;
 
@@ -155,7 +155,7 @@ export function applyEditToOldOrder(order: OldOrder, edit: OrderEdit, now = new 
     return {
       modelId: product.modelId,
       name: product.name,
-      size: product.category === "winter-pajamas" ? product.fit : "",
+      size: hasWeightFit(product.category) ? product.fit : "",
       // A color typed in earlier stays only when the same piece is still on that line.
       color: before && before.modelId === product.modelId ? before.color : "",
       quantity: product.quantity,

@@ -35,7 +35,7 @@ import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, w
 import { formatEGP } from "@/lib/format";
 import type { JourneyEntry } from "@/lib/journey";
 import type { OrderDetails } from "@/lib/order-vault";
-import { findProduct } from "@/lib/site-data";
+import { findProduct, hasWeightFit } from "@/lib/site-data";
 import { SOURCE_TYPES, TRAFFIC_SOURCES, sourceTypeOf, type SourceType, type TrafficSource } from "@/lib/traffic-source";
 
 const SOURCE_COLORS: Record<TrafficSource, string> = {
@@ -1084,7 +1084,7 @@ function OrderCard({ row, details, vaultConfigured, busy, onChange, onJourney, o
                       label={`${product.name} مش متوفر — ابعتي بدائل`}
                     />
                   )}
-                  {details && findProduct(product.modelId)?.category === "winter-pajamas" && (
+                  {details && hasWeightFit(findProduct(product.modelId)?.category) && (
                     <WhatsAppLink
                       compact
                       text="وزنها؟"

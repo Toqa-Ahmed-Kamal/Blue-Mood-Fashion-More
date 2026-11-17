@@ -12,7 +12,7 @@ import { formatEGP } from "@/lib/format";
 import { trackCartRemove, trackProductView } from "@/lib/journey-tracker";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
-import { categoryInfo, discountPercentOf, isSoldOut, landingPromotion, offerCategories, priceOf, statOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
+import { categoryInfo, discountPercentOf, isBigSize, isSoldOut, landingPromotion, offerCategories, priceOf, statOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
 
 function offerLinkFor(product: CatalogProduct) {
   return product.category === "wearable-blankets"
@@ -107,7 +107,7 @@ export function ProductCard({ product, onQuickView }: { product: CatalogProduct;
         <span className="media-zoom" aria-hidden="true"><Expand size={16} /></span>
       </button>
       <div className="product-body">
-        <span className="product-kicker">{categoryInfo[product.category].singular}</span>
+        <span className="product-kicker">{categoryInfo[product.category].singular}{isBigSize(product.id) && <span className="big-size-tag">Big Size</span>}</span>
         <h3>{product.name}</h3>
         <SocialProof product={product} />
         <FitNote product={product} />
@@ -150,7 +150,7 @@ export function QuickView({ product, onClose, action }: {
             <Image src={product.image} alt={product.imageAlt} fill sizes="(max-width: 800px) 100vw, 55vw" />
           </div>
           <div className="quick-view-body">
-            <span className="product-kicker">{categoryInfo[product.category].singular}</span>
+            <span className="product-kicker">{categoryInfo[product.category].singular}{isBigSize(product.id) && <span className="big-size-tag">Big Size</span>}</span>
             <h2>{product.name}</h2>
             <SocialProof product={product} />
             <FitNote product={product} />

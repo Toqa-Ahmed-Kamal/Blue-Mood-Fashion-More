@@ -9,12 +9,14 @@ import { OfferCountdown, useOfferIsRunning } from "@/components/promo";
 import { cartPieceCount, resolveCart } from "@/lib/cart";
 import { useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
-import { categoryInfo, categoryOrder, landingPromotion } from "@/lib/site-data";
+import { categoryInfo, categoryOrder, isBigSize, landingPromotion, visibleCatalog } from "@/lib/site-data";
 
-const navLinks = [
-  ...categoryOrder.map((category) => ({ href: `/#${categoryInfo[category].anchor}`, label: categoryInfo[category].label })),
-  { href: "/#offer", label: "العرض" },
-];
+const categoryLinks = categoryOrder.map((category) => ({ href: `/#${categoryInfo[category].anchor}`, label: categoryInfo[category].label }));
+/** Menu links; "بيج سايز" only while that section has products. */
+function navLinksNow() {
+  const bigSize = visibleCatalog.some((product) => isBigSize(product.id)) ? [{ href: "/#big-size", label: "بيج سايز" }] : [];
+  return [...categoryLinks, ...bigSize, { href: "/#offer", label: "العرض" }];
+}
 
 export function BrandWordmark({ className = "" }: { className?: string }) {
   return (
@@ -60,7 +62,7 @@ export function SiteHeader() {
         </Link>
 
         <nav className="main-nav" aria-label="الأقسام">
-          {navLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
+          {navLinksNow().map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
           <Link href="/#faq">أسئلة شائعة</Link>
         </nav>
 
@@ -72,7 +74,7 @@ export function SiteHeader() {
 
       {menuOpen && (
         <nav className="mobile-nav container" aria-label="الأقسام">
-          {navLinks.map((link) => (
+          {navLinksNow().map((link) => (
             <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)}>
               {link.label} <ArrowLeft size={16} aria-hidden="true" />
             </Link>
@@ -115,7 +117,7 @@ export function SiteFooter() {
           <p>بلانكيت، بيجامات، أرواب وعبايات — شحن لكل المحافظات، المعاينة متاحة، والطلب بيتأكد على واتساب.</p>
         </div>
         <nav aria-label="روابط الأقسام">
-          {navLinks.map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
+          {navLinksNow().map((link) => <Link key={link.href} href={link.href}>{link.label}</Link>)}
           <Link href="/#faq">أسئلة شائعة</Link>
         </nav>
       </div>

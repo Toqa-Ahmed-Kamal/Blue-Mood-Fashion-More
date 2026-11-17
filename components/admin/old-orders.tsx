@@ -22,7 +22,7 @@ import {
   type ParsedOldOrder,
 } from "@/lib/old-orders";
 import { productImage } from "@/lib/quantity-summary";
-import { categoryInfo, findProduct } from "@/lib/site-data";
+import { categoryInfo, findProduct, hasWeightFit } from "@/lib/site-data";
 import { buildXlsx, type XlsxCell } from "@/lib/xlsx";
 
 const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "بيع مؤكد", delivered: "تم الاستلام", cancelled: "اتلغى", returned: "مرتجع" };
@@ -448,7 +448,7 @@ function SavedOrders({ orders, onUpdated, onDeleted }: { orders: OldOrder[]; onU
                                   href={whatsappChatUrl(order.phone, unavailableMessage({ name: order.customerName, orderId: order.orderId, productName: product.name, productId: product.modelId, origin: window.location.origin }))}
                                   label={`${product.name} مش متوفر — ابعتي بدائل`}
                                 />
-                                {findProduct(product.modelId)?.category === "winter-pajamas" && (
+                                {hasWeightFit(findProduct(product.modelId)?.category) && (
                                   <WhatsAppLink
                                     compact
                                     text="وزنها؟"

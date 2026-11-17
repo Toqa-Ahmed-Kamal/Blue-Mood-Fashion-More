@@ -8,7 +8,7 @@
 import { ORDER_STATUSES, type CostSnapshot, type Courier, type Deposit, type OrderStatus } from "./analytics-report.ts";
 import { categoryDetailLabel, fitNoteFor } from "./order-flow.ts";
 import type { OrderDetails } from "./order-vault.ts";
-import { findProduct, type CatalogCategory } from "./site-data.ts";
+import { findProduct, type CatalogCategory, hasWeightFit } from "./site-data.ts";
 
 export const OLD_ORDER_ID_PATTERN = /^BM-[A-F\d]{20}$/;
 export const MAX_OLD_ORDERS_PER_REQUEST = 50;
@@ -140,7 +140,7 @@ export function shortSize(size: string) {
  */
 export function factorySize(productId: string, recordedSize: string) {
   const product = productId ? findProduct(productId) : undefined;
-  if (product?.category === "winter-pajamas") return fitNoteFor(product.category, product.maxWeightKg) ?? "";
+  if (product && hasWeightFit(product.category)) return fitNoteFor(product.category, product.maxWeightKg) ?? "";
   return shortSize(recordedSize);
 }
 
@@ -460,7 +460,7 @@ export function oldOrderToDetails(order: OldOrder): OrderDetails | null {
       modelId: product.modelId,
       name: product.name,
       category: catalogProduct.category,
-      fit: product.size || (catalogProduct.category === "winter-pajamas" ? "" : categoryDetailLabel(catalogProduct.category)),
+      fit: product.size || (hasWeightFit(catalogProduct.category) ? "" : categoryDetailLabel(catalogProduct.category)),
       quantity: product.quantity,
       unitPrice: product.unitPrice,
       link: null,

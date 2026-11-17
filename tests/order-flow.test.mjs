@@ -219,7 +219,10 @@ test("pajamas with their own weight limit show it; others keep the default note"
   const { fitNoteFor: note, categoryDetailLabel: detail } = await import("../lib/order-flow.ts");
   const { catalog } = await import("../lib/site-data.ts");
   const seventy = catalog.filter((product) => product.maxWeightKg === 70).map((product) => product.id).sort();
-  assert.deepEqual(seventy, ["bm-winter-pajama-001", "bm-winter-pajama-003", "bm-winter-pajama-007", "bm-winter-pajama-008", "bm-winter-pajama-010"]);
+  assert.deepEqual(seventy, ["bm-onesie-001", "bm-winter-pajama-001", "bm-winter-pajama-003", "bm-winter-pajama-007", "bm-winter-pajama-008", "bm-winter-pajama-010"]);
+  // Onesies are One Size with a weight note too.
+  assert.equal(note("onesies", 70), "One Size · لحد 70 كيلو");
+  assert.equal(detail("onesies", 70), "سالوبيت One Size – يناسب لحد 70 كيلو");
   assert.equal(note("winter-pajamas", 70), "One Size · لحد 70 كيلو");
   assert.equal(note("winter-pajamas"), "One Size · لحد 85–90 كيلو");
   assert.equal(detail("winter-pajamas", 70), "One Size – مقاس واحد يناسب لحد 70 كيلو");
