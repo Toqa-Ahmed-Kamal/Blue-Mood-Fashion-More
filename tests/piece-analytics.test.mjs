@@ -67,7 +67,7 @@ test("store numbers: pieces sold before the system are added for customers and t
   });
 });
 
-test("goods total: stock + delivered + with courier + confirmed + direct + personal + sold before, each once", async () => {
+test("goods total: stock + delivered + with courier + confirmed + direct + personal, each once; sold before is left out", async () => {
   const { goodsTotal } = await import("../lib/piece-analytics.ts");
   const live = [
     site("BM-DDDDDDDDDDDDDDDDDDD1", "2026-11-02", "delivered", [[A, 2]]),
@@ -80,5 +80,5 @@ test("goods total: stock + delivered + with courier + confirmed + direct + perso
   const stock = buildStock({ productIds: [A], moves, live, old: [], direct });
   const report = buildPiecesReport({ live, old: [], direct, moves, stock });
   // Stock: 20 − 2 − 3 − 1 − 1 − 2 = 11 (the waiting order is still in the stock).
-  assert.deepEqual(goodsTotal(report, { [A]: 5 }), { total: 25, inStock: 11, delivered: 2, withCourier: 3, confirmedNotShipped: 1, direct: 1, personal: 2, soldBefore: 5 });
+  assert.deepEqual(goodsTotal(report), { total: 20, inStock: 11, delivered: 2, withCourier: 3, confirmedNotShipped: 1, direct: 1, personal: 2 });
 });

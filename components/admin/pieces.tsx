@@ -85,7 +85,7 @@ export function PiecesTab() {
         {goods && (
           <div className="goods-total">
             <div className="goods-total-head">
-              <span>إجمالي البضاعة اللي اشتريتيها</span>
+              <span>إجمالي القطع المتسجلة على السيستم</span>
               <strong>{count.format(goods.total)} <small>قطعة</small></strong>
               <small className="admin-muted">من الأول لحد دلوقتي · مش متأثر بالتواريخ</small>
             </div>
@@ -97,7 +97,6 @@ export function PiecesTab() {
                 ["مؤكدة لسه متشحنتش", goods.confirmedNotShipped],
                 ["بيع مباشر", goods.direct],
                 ["خدتيها لنفسك", goods.personal],
-                ["اتباعت قبل السيستم", goods.soldBefore],
               ] as const).map(([label, value]) => <li key={label}><span>{label}</span><strong>{count.format(value)}</strong></li>)}
             </ul>
             <small className="admin-muted">&quot;في المخزن&quot; بيحسب المنتجات اللي عملتيلها جرد بس، فالإجمالي بيبقى صح لما كل البضاعة تكون متسجلة في المخزون. القطع اللي في أوردرات مستنية تأكيد لسه في المخزن.</small>

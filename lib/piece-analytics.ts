@@ -210,7 +210,8 @@ export function productStats(report: PiecesReport, stock: StockRow[], soldBefore
 /**
  * "اشتريت كام قطعة": every piece of goods she has had, wherever it is now (all dates, not the chosen ones):
  * in the stock now + delivered + with the shipping company + confirmed not shipped yet + direct sales +
- * taken for herself + sold before the system. Each piece is in one place only, so nothing is counted twice.
+ * taken for herself. Only what is recorded on the system: "sold before the system" is left out (it is for the
+ * store's display only). Each piece is in one place only, so nothing is counted twice.
  */
 export type GoodsTotal = {
   total: number;
@@ -220,12 +221,10 @@ export type GoodsTotal = {
   confirmedNotShipped: number;
   direct: number;
   personal: number;
-  soldBefore: number;
 };
 
-export function goodsTotal(allTime: PiecesReport, soldBefore: Record<string, number> = {}): GoodsTotal {
+export function goodsTotal(allTime: PiecesReport): GoodsTotal {
   const t = allTime.totals;
-  const before = Object.values(soldBefore).reduce((sum, count) => sum + (count > 0 ? count : 0), 0);
   const parts = {
     inStock: t.left,
     delivered: t.delivered,
@@ -233,7 +232,6 @@ export function goodsTotal(allTime: PiecesReport, soldBefore: Record<string, num
     confirmedNotShipped: t.soldOnline - t.delivered - t.withCourier,
     direct: t.soldDirect,
     personal: t.personal,
-    soldBefore: before,
   };
   return { total: Object.values(parts).reduce((sum, value) => sum + value, 0), ...parts };
 }

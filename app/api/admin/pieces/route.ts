@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const report = buildPiecesReport({ live: input.live, old: input.old, direct: input.direct, moves, stock: rows, from: params.get("from"), to: params.get("to") });
     // The goods total covers all dates, whatever dates are chosen.
     const allTime = buildPiecesReport({ live: input.live, old: input.old, direct: input.direct, moves, stock: rows });
-    return json(200, { success: true, report, goods: goodsTotal(allTime, stock.soldBefore), vaultConfigured: vault });
+    return json(200, { success: true, report, goods: goodsTotal(allTime), vaultConfigured: vault });
   } catch (error) {
     console.error("[admin] pieces report failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
     return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحسب القطع دلوقتي. جربي تاني." } });
