@@ -2,7 +2,8 @@ import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
 import { sanitizeProductCost } from "@/lib/finance";
 import { saveProductCost } from "@/lib/finance-store";
 import { RedisUnavailableError } from "@/lib/redis";
-import { ensureCustomProducts } from "@/lib/custom-products-store";
+import { CUSTOM_PRODUCTS_TAG, ensureCustomProducts } from "@/lib/custom-products-store";
+import { revalidateTag } from "next/cache";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,9 @@ export async function PUT(request: Request, context: { params: Promise<{ product
   try {
     const saved = await saveProductCost(cost);
     if (!saved) return json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });
+    // The offer's "one pajama at 220" rule follows the factory price.
+    await ensureCustomProducts(true);
+    revalidateTag(CUSTOM_PRODUCTS_TAG, { expire: 0 });
     return json(200, { success: true, cost: saved });
   } catch (error) {
     console.error("[admin] product cost save failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });

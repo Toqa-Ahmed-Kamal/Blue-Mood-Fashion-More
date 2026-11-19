@@ -16,6 +16,7 @@ import { formatEGP } from "@/lib/format";
 import {
   findOffer,
   findProduct,
+  isOfferLimited,
   isSoldOut,
   landingPromotion,
   productsIn,
@@ -47,6 +48,12 @@ function fitSelectionToOffer(ids: string[], offerId: LandingPromotionOptionId) {
   });
 }
 
+/** Only one pajama of the "one per offer" group: later ones are dropped (not explained to the customer). */
+function keepOneLimited(ids: string[]) {
+  let limited = 0;
+  return ids.filter((id) => !isOfferLimited(findProduct(id)) || ++limited <= 1);
+}
+
 export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromotionOptionId }) {
   const router = useRouter();
   const cart = useCart();
@@ -60,10 +67,11 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
   const offer = findOffer(offerId)!;
   const savedIds = cart.offer?.offerId === offerId ? cart.offer.productIds : [];
   // A piece that sold out meanwhile is dropped from the selection (it can no longer be ordered).
-  const selectedIds = (draft ?? savedIds).filter((id) => !isSoldOut(id));
+  const selectedIds = keepOneLimited((draft ?? savedIds).filter((id) => !isSoldOut(id)));
   const selected = selectedIds.map(findProduct).filter((product): product is CatalogProduct => product !== undefined);
   const neededTotal = offer.pajamaCount + offer.wearableBlanketCount;
   const countOf = (category: OfferCategory) => selected.filter((product) => product.category === category).length;
+  const limitedPicked = selected.some(isOfferLimited);
   const isComplete = countOf("winter-pajamas") === offer.pajamaCount && countOf("wearable-blankets") === offer.wearableBlanketCount;
   const tabs: OfferCategory[] = offer.wearableBlanketCount > 0 ? ["winter-pajamas", "wearable-blankets"] : ["winter-pajamas"];
   const activeTab = tabs.includes(tab) ? tab : "winter-pajamas";
@@ -88,6 +96,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
       setNotice(`${product.name}: نفدت الكمية. اختاري موديل تاني.`);
       return;
     }
+    if (limitedPicked && isOfferLimited(product)) return;
     const limit = limitFor(offerId, product.category);
     if (countOf(product.category) >= limit) {
       setNotice(`اخترتي ${limit} ${tabLabels[product.category]} خلاص. شيلي واحدة الأول عشان تبدليها.`);
@@ -111,7 +120,8 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
     router.push("/checkout");
   }
 
-  const visibleProducts = productsIn(activeTab);
+  // After one "one per offer" pajama is picked, the others are simply not offered.
+  const visibleProducts = productsIn(activeTab).filter((product) => !limitedPicked || !isOfferLimited(product) || selectedIds.includes(product.id));
   const tabFull = countOf(activeTab) >= limitFor(offerId, activeTab);
 
   return (

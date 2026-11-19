@@ -1,8 +1,10 @@
 import {
   findOffer,
   findProduct,
+  isOfferLimited,
   isSoldOut,
   landingPromotion,
+  OFFER_LIMITED_MAX,
   priceOf,
   type CatalogProduct,
   type LandingPromotionOptionId,
@@ -65,6 +67,7 @@ function resolveOffer(value: unknown): { offer: ResolvedCart["offer"] } | { erro
   if (pajamas !== option.pajamaCount || blankets !== option.wearableBlanketCount || pajamas + blankets !== products.length) {
     return { error: "INVALID_BUNDLE" };
   }
+  if (products.filter(isOfferLimited).length > OFFER_LIMITED_MAX) return { error: "INVALID_BUNDLE" };
 
   return { offer: { option, products, price: landingPromotion.price } };
 }

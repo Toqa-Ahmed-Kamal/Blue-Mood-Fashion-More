@@ -123,12 +123,13 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-pajama-040", name: "بيجاما نبيتي بطبعة بجع وبط", category: "winter-pajamas", image: "/images/bejama/burgundy-swan-duck-pajama.jpg", imageAlt: "تيشيرت نبيتي عليه بجعتين وورد، والأكمام والبنطلون مربعات نبيتي وأبيض بطبعة بط" },
   { id: "bm-winter-pajama-041", name: "طقم مضلع Smile · نبيتي", category: "winter-pajamas", image: "/images/bejama/ribbed-smile-set-burgundy.jpg", imageAlt: "طقم مضلع نبيتي، بلوزة عليها وش ضاحك أصفر مطرز وكلمة Smile وبنطلون واسع" },
   { id: "bm-winter-pajama-042", name: "طقم قطيفة مضلع بسوستة · فوشيا", category: "winter-pajamas", image: "/images/bejama/ribbed-zip-set-fuchsia.jpg", imageAlt: "طقم قطيفة مضلع فوشيا، بلوزة واسعة برقبة عالية وسوستة وبنطلون واسع" },
+  { id: "bm-winter-pajama-043", name: "بيجاما نبيتي بجيب كاروهات", category: "winter-pajamas", image: "/images/bejama/burgundy-plaid-pocket-pajama.jpg", imageAlt: "تيشيرت نبيتي بكم طويل وجيب كاروهات على الصدر، وبنطلون واسع كاروهات أحمر وأخضر وأبيض" },
 
   // ── سالوبيت ──
   { id: "bm-onesie-001", name: "سالوبيت فرو ستيتش بكابشون", category: "onesies", image: "/images/onesies/stitch-fleece-onesie.jpg", imageAlt: "سالوبيت فرو أزرق بكابشون وسوستة كاملة مطبوع عليه رسومات ستيتش وقلوب وردي، بجيوب وأساور عند الكاحل", price: 270, maxWeightKg: 70 },
 
   // ── بلانكيت ──
-  { id: "bm-winter-blanket-001", name: "بلانكيت أسود بغطاء للرأس", category: "wearable-blankets", image: "/images/bejama/black-hooded-blanket-cropped.jpg", imageAlt: "بلانكيت فرو أسود واسع بغطاء للرأس يُلبس فوق الملابس", price: 350 },
+  { id: "bm-winter-blanket-001", name: "بلانكيت أسود بغطاء للرأس", category: "wearable-blankets", image: "/images/bejama/black-hooded-blanket-cropped.jpg", imageAlt: "بلانكيت فرو أسود واسع بغطاء للرأس يُلبس فوق الملابس", price: 350, hidden: true },
   { id: "bm-winter-blanket-002", name: "بلانكيت هودي بقلوب وودان أرنب", category: "wearable-blankets", image: "/images/bejama/1000507693.jpg", imageAlt: "هودي بطانية واسع من الفرو مطبوع عليه قلوب بيضاء وبكابشون بودان أرنب" },
   { id: "bm-winter-blanket-003", name: "بلانكيت أزرق بنقط موف", category: "wearable-blankets", image: "/images/blanket/image_1_without_price.jpg", imageAlt: "بلانكيت هودي فرو أزرق واسع مطبوع عليه دوائر موف كبيرة بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
   { id: "bm-winter-blanket-004", name: "بلانكيت لبني بطبعة ستيتش وقلوب", category: "wearable-blankets", image: "/images/blanket/image_2_without_price.jpg", imageAlt: "بلانكيت هودي فرو لبني واسع مطبوع عليه رسومات ستيتش وقلوب بيضاء بجيب أمامي", price: 250, wasPrice: 350 },
@@ -339,6 +340,28 @@ export type LandingPromotionOptionId = (typeof landingPromotion.options)[number]
 export function offerPieceCount(offerName: string) {
   const option = landingPromotion.options.find((item) => offerName.includes(item.label)) ?? landingPromotion.options[0];
   return option.pajamaCount + option.wearableBlanketCount;
+}
+
+// ── Offer rule (never shown to customers): an offer can hold only one pajama whose factory price is 220.
+// Once one is picked, the other ones disappear from the offer's choices. The IDs come from the factory
+// prices (finance:costs) on the server; the prices themselves never reach the browser.
+export const OFFER_LIMITED_COST = 220;
+export const OFFER_LIMITED_MAX = 1;
+const offerLimitedIds = new Set<string>();
+
+export function setOfferLimited(ids: readonly string[]) {
+  offerLimitedIds.clear();
+  for (const id of ids) offerLimitedIds.add(id);
+}
+
+/** A pajama of the "one per offer" group. */
+export function isOfferLimited(product: CatalogProduct | undefined) {
+  return product !== undefined && product.category === "winter-pajamas" && offerLimitedIds.has(product.id);
+}
+
+/** Product IDs whose factory price is 220, from the stored factory prices. */
+export function offerLimitedFromCosts(costs: readonly { productId?: unknown; cost?: unknown }[]) {
+  return costs.filter((item) => typeof item.productId === "string" && item.cost === OFFER_LIMITED_COST).map((item) => item.productId as string).toSorted();
 }
 
 export function findOffer(id: string) {

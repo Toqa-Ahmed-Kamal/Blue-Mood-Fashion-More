@@ -65,13 +65,13 @@ test("pajamas and blankets can also be bought singly at their own prices", () =>
   const result = resolveCart({
     items: [
       { productId: pajamas[0], quantity: 1 },
-      { productId: "bm-winter-blanket-001", quantity: 1 },
+      { productId: "bm-winter-blanket-003", quantity: 1 },
       { productId: "bm-winter-blanket-002", quantity: 1 },
     ],
   });
 
-  assert.deepEqual(result.cart.items.map((line) => line.unitPrice), [275, 350, 250]);
-  assert.equal(result.cart.subtotal, 875);
+  assert.deepEqual(result.cart.items.map((line) => line.unitPrice), [275, 250, 250]);
+  assert.equal(result.cart.subtotal, 775);
 });
 
 test("offer and single pieces add up together", () => {
@@ -123,4 +123,22 @@ test("a saved cart keeps its valid parts and drops stale ones", () => {
   assert.equal(cart.offer, null);
   assert.deepEqual(cart.items, [{ productId: abaya, quantity: 1 }]);
   assert.deepEqual(sanitizeCart(null), emptyCart);
+});
+
+test("an offer holds only one pajama with a factory price of 220 (the others are allowed as usual)", async () => {
+  const { offerLimitedFromCosts, setOfferLimited } = await import("../lib/site-data.ts");
+  const ids = offerLimitedFromCosts([
+    { productId: pajamas[0], cost: 220 },
+    { productId: pajamas[1], cost: 220 },
+    { productId: pajamas[2], cost: 175 },
+    { productId: pajamas[3], cost: null },
+  ]);
+  assert.deepEqual(ids, [pajamas[0], pajamas[1]].toSorted());
+  setOfferLimited(ids);
+  const offer = (productIds) => resolveCart({ offer: { offerId: "four-pajamas", productIds } });
+  assert.ok("cart" in offer([pajamas[0], pajamas[2], pajamas[3], pajamas[4]]), "one at 220 is fine");
+  assert.ok("cart" in offer(pajamas.slice(2, 6)), "none at 220 is fine");
+  assert.equal(offer(pajamas.slice(0, 4)).error, "INVALID_BUNDLE", "two at 220 are refused");
+  setOfferLimited([]);
+  assert.ok("cart" in offer(pajamas.slice(0, 4)));
 });
