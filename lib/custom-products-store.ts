@@ -7,10 +7,11 @@
 //   catalog:prices         HASH  productId → selling price changed from the admin (built-in products)
 //   catalog:wasprices      HASH  productId → price before the discount ("بدل كذا"), any product
 //   catalog:soldout:auto   SET   product IDs whose inventory reached 0 (written by lib/stock-sync.ts)
-import { parseCustomProduct } from "./custom-products.ts";
+//   catalog:edits          HASH  productId → JSON ProductEdit: a built-in product's name / description / size / hidden
+import { parseCustomProduct, parseProductEdit } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import type { ProductStat } from "./piece-analytics.ts";
-import { findProduct, setBigSize, setCustomProducts, setPriceOverrides, setSoldOut, setWasPrices, type CatalogProduct } from "./site-data.ts";
+import { findProduct, setBigSize, setCustomProducts, setPriceOverrides, setProductEdits, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit } from "./site-data.ts";
 
 export const CUSTOM_PRODUCTS_TAG = "custom-products";
 const PRODUCTS = () => `${keyPrefix()}catalog:custom`;
@@ -21,6 +22,37 @@ const WAS_PRICES = () => `${keyPrefix()}catalog:wasprices`;
 export const AUTO_SOLD_OUT = () => `${keyPrefix()}catalog:soldout:auto`;
 /** SET product IDs shown in the store's "بيج سايز" section (picked from the admin). */
 const BIG_SIZE = () => `${keyPrefix()}catalog:bigsize`;
+const EDITS = () => `${keyPrefix()}catalog:edits`;
+
+/** HGETALL result → { productId: edit } (bad entries skipped). */
+function parseEdits(flat: unknown): Record<string, ProductEdit> {
+  const list = Array.isArray(flat) ? flat : [];
+  const edits: Record<string, ProductEdit> = {};
+  for (let index = 0; index + 1 < list.length; index += 2) {
+    try {
+      const edit = parseProductEdit(JSON.parse(String(list[index + 1])));
+      if (edit) edits[String(list[index])] = edit;
+    } catch {
+      // Skip a corrupt entry.
+    }
+  }
+  return edits;
+}
+
+export async function loadProductEdits(): Promise<Record<string, ProductEdit>> {
+  const [flat] = await redisPipeline([["HGETALL", EDITS()]], "read", 5000);
+  return parseEdits(flat);
+}
+
+/** Saves a built-in product's edit (an empty edit removes it = back to the code's version), then reads it back. */
+export async function saveProductEdit(productId: string, edit: ProductEdit) {
+  const empty = Object.keys(edit).length === 0;
+  const [, stored] = await redisPipeline([empty ? ["HDEL", EDITS(), productId] : ["HSET", EDITS(), productId, JSON.stringify(edit)], ["HGET", EDITS(), productId]], "write");
+  cached = null;
+  if (empty) return stored === null || stored === undefined;
+  return typeof stored === "string" && stored === JSON.stringify(edit);
+}
+
 /** STR JSON { productId: { sold, left, best? } } shown on the store (written by lib/stock-sync.ts). */
 export const PRODUCT_STATS = () => `${keyPrefix()}catalog:stats`;
 
@@ -134,8 +166,9 @@ let cached: { at: number; products: CatalogProduct[] } | null = null;
 export async function ensureCustomProducts(force = false) {
   if (!force && cached && Date.now() - cached.at < CACHE_MS) return cached.products;
   try {
-    const [products, soldOut, autoSoldOut, prices, wasPrices, bigSize] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadAutoSoldOut(), loadPrices(), loadWasPrices(), loadBigSize()]);
+    const [products, soldOut, autoSoldOut, prices, wasPrices, bigSize, edits] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadAutoSoldOut(), loadPrices(), loadWasPrices(), loadBigSize(), loadProductEdits()]);
     cached = { at: Date.now(), products };
+    setProductEdits(edits);
     setCustomProducts(products);
     setSoldOut(soldOut, autoSoldOut);
     setBigSize(bigSize);
@@ -161,10 +194,10 @@ function parseStats(raw: unknown): Record<string, ProductStat> {
   }
 }
 
-export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat>; bigSize: string[] }> {
+export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat>; bigSize: string[]; edits: Record<string, ProductEdit> }> {
   const url = process.env.KV_REST_API_URL?.trim().replace(/\/+$/, "");
   const token = (process.env.KV_REST_API_READ_ONLY_TOKEN ?? process.env.KV_REST_API_TOKEN)?.trim();
-  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {}, bigSize: [] };
+  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {}, bigSize: [], edits: {} };
   const read = async (command: string) => {
     try {
       const response = await fetch(`${url}/${command}`, {
@@ -178,7 +211,7 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
       return null;
     }
   };
-  const [products, soldOut, autoSoldOut, prices, wasPrices, stats, bigSize] = await Promise.all([
+  const [products, soldOut, autoSoldOut, prices, wasPrices, stats, bigSize, edits] = await Promise.all([
     read(`hgetall/${encodeURIComponent(PRODUCTS())}`),
     read(`smembers/${encodeURIComponent(SOLD_OUT())}`),
     read(`smembers/${encodeURIComponent(AUTO_SOLD_OUT())}`),
@@ -186,10 +219,11 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
     read(`hgetall/${encodeURIComponent(WAS_PRICES())}`),
     read(`get/${encodeURIComponent(PRODUCT_STATS())}`),
     read(`smembers/${encodeURIComponent(BIG_SIZE())}`),
+    read(`hgetall/${encodeURIComponent(EDITS())}`),
   ]);
   // The store does not need to know why a product is out: the admin's switch and the inventory both count.
   const out = [...new Set([...(Array.isArray(soldOut) ? soldOut : []), ...(Array.isArray(autoSoldOut) ? autoSoldOut : [])].map(String))];
-  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats), bigSize: Array.isArray(bigSize) ? bigSize.map(String) : [] };
+  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats), bigSize: Array.isArray(bigSize) ? bigSize.map(String) : [], edits: parseEdits(edits) };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */

@@ -5,7 +5,7 @@ import { loadDirectSales, loadExpenses, loadFactories, loadProductCosts } from "
 import { loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
-import { basePriceOf, catalog, isAutoSoldOut, isBigSize, isBuiltInProduct, isManualSoldOut, priceOf, wasPriceOf } from "@/lib/site-data";
+import { basePriceOf, catalog, isAutoSoldOut, isBigSize, isBuiltInProduct, isEditedProduct, isManualSoldOut, priceOf, wasPriceOf } from "@/lib/site-data";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
@@ -45,6 +45,7 @@ export async function GET(request: Request) {
       // Every product without a saved factory comes from the default factory.
       factory: costs[product.id]?.factory || DEFAULT_FACTORY,
       custom: !isBuiltInProduct(product.id),
+      edited: isEditedProduct(product.id),
       soldOut: isManualSoldOut(product.id),
       autoSoldOut: isAutoSoldOut(product.id),
       bigSize: isBigSize(product.id),

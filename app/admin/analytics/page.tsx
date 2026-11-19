@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { AnalyticsDashboard } from "@/components/admin/analytics-dashboard";
 import { CatalogSync } from "@/components/catalog-sync";
-import { loadAutoSoldOut, loadBigSize, loadCustomProducts, loadPrices, loadSoldOut, loadWasPrices } from "@/lib/custom-products-store";
+import { loadAutoSoldOut, loadBigSize, loadCustomProducts, loadPrices, loadProductEdits, loadSoldOut, loadWasPrices } from "@/lib/custom-products-store";
 import { ADMIN_COOKIE, isValidAdminSessionToken } from "@/lib/admin-auth";
 
 export const metadata: Metadata = {
@@ -16,17 +16,18 @@ export default async function AdminAnalyticsPage() {
   // Checked here too, not only in proxy.ts.
   if (!isValidAdminSessionToken((await cookies()).get(ADMIN_COOKIE)?.value)) redirect("/admin/login");
   // Fresh read: the admin must see a product right after adding it.
-  const [products, manualOut, autoOut, bigSize, prices, wasPrices] = await Promise.all([
+  const [products, manualOut, autoOut, bigSize, prices, wasPrices, edits] = await Promise.all([
     loadCustomProducts().catch(() => []),
     loadSoldOut().catch(() => []),
     loadAutoSoldOut().catch(() => []),
     loadBigSize().catch(() => []),
     loadPrices().catch(() => ({})),
     loadWasPrices().catch(() => ({})),
+    loadProductEdits().catch(() => ({})),
   ]);
   const soldOut = [...new Set([...manualOut, ...autoOut])];
   return (
-    <CatalogSync products={products} soldOut={soldOut} prices={prices} wasPrices={wasPrices} bigSize={bigSize}>
+    <CatalogSync products={products} soldOut={soldOut} prices={prices} wasPrices={wasPrices} bigSize={bigSize} edits={edits}>
       <AnalyticsDashboard />
     </CatalogSync>
   );

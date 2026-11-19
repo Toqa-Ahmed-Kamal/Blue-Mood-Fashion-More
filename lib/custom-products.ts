@@ -1,6 +1,6 @@
 // Products added from the admin (pure, tested). They become regular catalog products: shown in the
 // store, orderable, counted in the factory summary and the financials. Storage: custom-products-store.
-import { categoryInfo, isBuiltInProduct, type CatalogCategory, type CatalogProduct, hasWeightFit } from "./site-data.ts";
+import { categoryInfo, isBuiltInProduct, type CatalogCategory, type CatalogProduct, hasWeightFit, type ProductEdit } from "./site-data.ts";
 
 export const MAX_IMAGE_BASE64_LENGTH = 900_000;
 export const IMAGE_ID_PATTERN = /^img-[a-z\d]{8,40}$/;
@@ -106,6 +106,44 @@ export function parseCustomProduct(raw: unknown): CatalogProduct | null {
     ...(value.hidden === true ? { hidden: true } : {}),
     ...(typeof value.maxWeightKg === "number" ? { maxWeightKg: value.maxWeightKg } : {}),
   };
+}
+
+/**
+ * Checks an edit of a built-in product (name, description, size, hidden) against the code's version.
+ * Returns only what differs from the code; an empty edit means "back to the original".
+ */
+export function sanitizeProductEdit(raw: unknown, original: CatalogProduct): { edit: ProductEdit } | { error: string } {
+  if (typeof raw !== "object" || raw === null) return { error: "بيانات المنتج ناقصة." };
+  const value = raw as Record<string, unknown>;
+  const name = text(value.name, 120);
+  if (name.length < 3) return { error: "اكتبي اسم المنتج (٣ حروف على الأقل)." };
+  const imageAlt = text(value.imageAlt, 200) || original.imageAlt;
+  let maxWeightKg: number | null = null;
+  if (hasWeightFit(original.category) && value.maxWeightKg !== null && value.maxWeightKg !== undefined && value.maxWeightKg !== "") {
+    const number = Number(value.maxWeightKg);
+    if (!Number.isInteger(number) || number < 30 || number > 200) return { error: "حد الوزن لازم يبقى رقم صحيح بالكيلو (مثلاً 70)." };
+    maxWeightKg = number;
+  }
+  const hidden = value.hidden === true;
+  const edit: ProductEdit = {};
+  if (name !== original.name) edit.name = name;
+  if (imageAlt !== original.imageAlt) edit.imageAlt = imageAlt;
+  if (hasWeightFit(original.category) && maxWeightKg !== (original.maxWeightKg ?? null)) edit.maxWeightKg = maxWeightKg;
+  if (hidden !== Boolean(original.hidden)) edit.hidden = hidden;
+  return { edit };
+}
+
+/** A stored edit as read back (bad fields dropped); null when nothing usable is left. */
+export function parseProductEdit(raw: unknown): ProductEdit | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const value = raw as Record<string, unknown>;
+  const edit: ProductEdit = {};
+  if (typeof value.name === "string" && value.name.trim().length >= 3) edit.name = value.name.slice(0, 120);
+  if (typeof value.imageAlt === "string" && value.imageAlt.trim()) edit.imageAlt = value.imageAlt.slice(0, 200);
+  const weight = value.maxWeightKg;
+  if (weight === null || (typeof weight === "number" && Number.isInteger(weight) && weight >= 30 && weight <= 200)) edit.maxWeightKg = weight;
+  if (typeof value.hidden === "boolean") edit.hidden = value.hidden;
+  return Object.keys(edit).length > 0 ? edit : null;
 }
 
 /** Accepts a base64 JPEG / PNG / WebP (checked by its first bytes); returns its content type or null. */

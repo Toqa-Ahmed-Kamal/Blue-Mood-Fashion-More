@@ -1604,6 +1604,9 @@ select.admin-inline-input { width: 160px; }
 .admin-bigsize { display: inline-flex; align-items: center; margin-inline-start: 6px; font: inherit; font-size: .74rem; font-weight: 700; border-radius: 999px; padding: 3px 9px; cursor: pointer; border: 1px dashed var(--line); color: var(--muted); background: transparent; white-space: nowrap; }
 .admin-bigsize.on { border-style: solid; border-color: #c9b6ef; color: #5b3aa6; background: #f2ecfd; }
 .admin-bigsize:disabled { opacity: .5; cursor: default; }
+.admin-photo-pick.fixed { cursor: default; }
+.admin-restore { font: inherit; font-weight: 700; color: var(--accent, #5b3aa6); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+.admin-field textarea { font: inherit; resize: vertical; }
 .big-size-tag { display: inline-block; margin-inline-start: 6px; padding: 0 7px; border-radius: 999px; background: #f2ecfd; color: #5b3aa6; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
 .admin-calc-inputs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; align-items: end; margin-bottom: 4px; }
 .admin-calc-share { display: grid; gap: 2px; background: var(--brand-soft); border-radius: var(--radius); padding: 8px 12px; font-size: .78rem; color: var(--brand-dark); }

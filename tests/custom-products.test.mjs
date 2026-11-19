@@ -152,3 +152,41 @@ test("a discount written in the code shows by itself; the admin can change it or
     setWasPrices({});
   }
 });
+
+test("built-in product edits: name, description, size, hidden — stored as the difference, undone by an empty edit", async () => {
+  const { sanitizeProductEdit, parseProductEdit } = await import("../lib/custom-products.ts");
+  const { originalProduct, setProductEdits, isEditedProduct } = await import("../lib/site-data.ts");
+  const id = "bm-onesie-001";
+  const original = originalProduct(id);
+  assert.ok(original);
+  assert.equal(originalProduct("bm-robe-nabcdef1234"), undefined);
+
+  // Same as the code → nothing to save.
+  assert.deepEqual(sanitizeProductEdit({ name: original.name, imageAlt: original.imageAlt, maxWeightKg: original.maxWeightKg, hidden: false }, original), { edit: {} });
+  assert.ok("error" in sanitizeProductEdit({ name: "ab" }, original));
+  assert.ok("error" in sanitizeProductEdit({ name: original.name, maxWeightKg: 20 }, original));
+
+  const checked = sanitizeProductEdit({ name: "  سالوبيت   ستيتش ", imageAlt: "وصف جديد", maxWeightKg: "80", hidden: true }, original);
+  assert.deepEqual(checked, { edit: { name: "سالوبيت ستيتش", imageAlt: "وصف جديد", maxWeightKg: 80, hidden: true } });
+  // Clearing the size of a product that has one in the code is saved as null (= the default note).
+  assert.deepEqual(sanitizeProductEdit({ name: original.name, imageAlt: original.imageAlt, maxWeightKg: "" }, original), { edit: { maxWeightKg: null } });
+  // A robe has no size: ignored.
+  const robe = originalProduct("bm-robe-001");
+  assert.deepEqual(sanitizeProductEdit({ name: robe.name, imageAlt: robe.imageAlt, maxWeightKg: 70 }, robe), { edit: {} });
+
+  assert.deepEqual(parseProductEdit({ name: "x", maxWeightKg: 500, hidden: "yes" }), null);
+  assert.deepEqual(parseProductEdit({ maxWeightKg: null }), { maxWeightKg: null });
+
+  setProductEdits({ [id]: checked.edit });
+  assert.equal(findProduct(id).name, "سالوبيت ستيتش");
+  assert.equal(findProduct(id).maxWeightKg, 80);
+  assert.ok(isEditedProduct(id));
+  assert.ok(!visibleCatalog.some((product) => product.id === id), "hidden from the store");
+  setProductEdits({ [id]: { maxWeightKg: null } });
+  assert.equal(findProduct(id).maxWeightKg, undefined);
+  assert.equal(findProduct(id).name, original.name);
+  setProductEdits({});
+  assert.deepEqual(findProduct(id), original);
+  assert.ok(visibleCatalog.some((product) => product.id === id));
+  assert.ok(!isEditedProduct(id));
+});

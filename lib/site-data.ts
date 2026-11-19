@@ -211,6 +211,44 @@ export function setCustomProducts(products: readonly CatalogProduct[]) {
   visibleCatalog.splice(0, visibleCatalog.length, ...catalog.filter((product) => !product.hidden));
 }
 
+// ── Edits of built-in products from the admin (stored in Redis): name, description, size, hidden ──
+// The code's version is kept, so an edit can be undone and a removed edit brings the original back.
+export type ProductEdit = { name?: string; imageAlt?: string; maxWeightKg?: number | null; hidden?: boolean };
+const originals = catalog.slice(0, BUILT_IN_COUNT).map((product) => ({ ...product }));
+const editedIds = new Set<string>();
+
+/** The product as written in the code (built-in products only). */
+export function originalProduct(id: string) {
+  return originals.find((product) => product.id === id);
+}
+
+export function isEditedProduct(id: string) {
+  return editedIds.has(id);
+}
+
+export function applyProductEdit(product: CatalogProduct, edit: ProductEdit | undefined): CatalogProduct {
+  if (!edit) return product;
+  const next: CatalogProduct = { ...product };
+  if (edit.name) next.name = edit.name;
+  if (edit.imageAlt) next.imageAlt = edit.imageAlt;
+  if (edit.maxWeightKg === null) delete next.maxWeightKg;
+  else if (typeof edit.maxWeightKg === "number") next.maxWeightKg = edit.maxWeightKg;
+  if (edit.hidden === true) next.hidden = true;
+  else if (edit.hidden === false) delete next.hidden;
+  return next;
+}
+
+/** Replaces the saved edits (idempotent; called by the server and on each store page). */
+export function setProductEdits(edits: Readonly<Record<string, ProductEdit>>) {
+  editedIds.clear();
+  originals.forEach((original, index) => {
+    const edit = edits[original.id];
+    if (edit) editedIds.add(original.id);
+    catalog[index] = applyProductEdit(original, edit);
+  });
+  visibleCatalog.splice(0, visibleCatalog.length, ...catalog.filter((product) => !product.hidden));
+}
+
 export function findProduct(id: string) {
   return catalog.find((product) => product.id === id);
 }

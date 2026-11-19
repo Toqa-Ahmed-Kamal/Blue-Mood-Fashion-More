@@ -23,6 +23,8 @@ type ProductRow = {
   costUpdatedAt: string | null;
   /** Added from the admin (editable here); built-in products live in the code. */
   custom: boolean;
+  /** A built-in product whose name / description / size / hidden was changed from here. */
+  edited?: boolean;
   /** Shown to customers as "نفدت الكمية" and cannot be ordered. */
   soldOut: boolean;
   /** Out because the inventory reached 0 (comes back by itself). */
@@ -394,7 +396,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
                     {locked && <button type="button" onClick={() => setUnlocked((current) => new Set(current).add(product.productId))}><Pencil size={14} /> تعديل السعر</button>}
                     {!locked && draft && <button type="button" disabled={busy === product.productId} onClick={() => void save(product)}><Save size={14} /> حفظ</button>}
                     {!locked && product.cost !== null && <button type="button" onClick={() => relock(product.productId)} aria-label="إلغاء التعديل"><X size={14} /></button>}
-                    {product.custom && <button type="button" onClick={() => setDialog({ mode: "edit", product })}><Pencil size={14} /> تعديل المنتج</button>}
+                    <button type="button" onClick={() => setDialog({ mode: "edit", product })}><Pencil size={14} /> تعديل المنتج</button>
                   </td>
                 </tr>
               );
@@ -974,6 +976,8 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
   const api = useFinanceApi();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const editing = product !== null;
+  /** A product from the code: name, description, size and hidden only (price from the table, photo stays). */
+  const builtIn = editing && !product.custom;
   const [form, setForm] = useState<ProductForm>(() => ({
     name: product?.name ?? "",
     category: product?.category ?? "abayas",
@@ -1005,6 +1009,20 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
       setPhoto({ base64, preview: `data:image/jpeg;base64,${base64}` });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "مقدرناش نقرا الصورة.");
+    }
+  }
+
+  async function restore() {
+    if (!product || !window.confirm("ترجّعي الاسم والوصف والمقاس والإظهار زي ما كانوا في الأول؟")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/api/admin/products/${product.productId}`, { method: "PATCH", body: JSON.stringify({ restore: true }) });
+      await onSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "مقدرناش نرجّع المنتج.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1048,15 +1066,15 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
         </header>
 
         <div className="admin-product-form">
-          <label className="admin-photo-pick">
+          <label className={`admin-photo-pick${builtIn ? " fixed" : ""}`}>
             {photo || product?.image ? (
               // eslint-disable-next-line @next/next/no-img-element -- local preview of the chosen photo
               <img src={photo?.preview ?? product?.image} alt="" />
             ) : (
               <span><ImagePlus size={26} aria-hidden="true" /> ارفعي صورة المنتج</span>
             )}
-            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void choosePhoto(event.target.files?.[0])} aria-label="صورة المنتج" />
-            {(photo || product?.image) && <small>دوسي لتغيير الصورة</small>}
+            {!builtIn && <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void choosePhoto(event.target.files?.[0])} aria-label="صورة المنتج" />}
+            {!builtIn && (photo || product?.image) && <small>دوسي لتغيير الصورة</small>}
           </label>
 
           <div className="admin-edit-grid">
@@ -1066,15 +1084,17 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
                 {categoryOrder.map((category) => <option key={category} value={category}>{categoryInfo[category].singular}</option>)}
               </select>
             </label>
-            <label className="admin-field"><span>سعر البيع للقطعة (ج.م)</span>
-              <input type="number" min={1} inputMode="numeric" value={form.price} onChange={(event) => set("price", event.target.value)} placeholder={offerOnly ? (categoryPrice ? `فاضي = ${categoryPrice}` : "فاضي = ضمن العرض بس") : (categoryPrice ? String(categoryPrice) : "")} />
-            </label>
+            {!builtIn && (
+              <label className="admin-field"><span>سعر البيع للقطعة (ج.م)</span>
+                <input type="number" min={1} inputMode="numeric" value={form.price} onChange={(event) => set("price", event.target.value)} placeholder={offerOnly ? (categoryPrice ? `فاضي = ${categoryPrice}` : "فاضي = ضمن العرض بس") : (categoryPrice ? String(categoryPrice) : "")} />
+              </label>
+            )}
             {hasWeightFit(form.category) && (
               <label className="admin-field"><span>المقاس: One Size لحد كام كيلو</span>
                 <input type="number" min={30} max={200} inputMode="numeric" value={form.maxWeightKg} onChange={(event) => set("maxWeightKg", event.target.value)} placeholder="فاضي = 85–90" />
               </label>
             )}
-            <label className="admin-field wide"><span>وصف الصورة (للي مش شايفة الصورة وللبحث)</span><input value={form.imageAlt} onChange={(event) => set("imageAlt", event.target.value)} placeholder="مثلاً: عباية كحلي طويلة بتطريز ذهبي على الصدر" /></label>
+            <label className="admin-field wide"><span>الوصف (بيظهر للعميلة لما تفتح المنتج)</span><textarea rows={2} value={form.imageAlt} onChange={(event) => set("imageAlt", event.target.value)} placeholder="مثلاً: عباية كحلي طويلة بتطريز ذهبي على الصدر" /></label>
             {!editing && (
               <>
                 <label className="admin-field"><span>المصنع</span>
@@ -1092,7 +1112,8 @@ function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
             )}
             <label className="admin-check wide"><input type="checkbox" checked={form.hidden} onChange={(event) => set("hidden", event.target.checked)} /> إخفاء من الموقع (يتحفظ بس مايظهرش للعميلات)</label>
           </div>
-          {editing && <p className="admin-muted small">المصنع وسعر المصنع بيتعدلوا من جدول المنتجات. القسم ثابت لأن كود المنتج مربوط بيه.</p>}
+          {editing && <p className="admin-muted small">{builtIn ? "سعر البيع بيتعدل من القلم ✏️ في عمود سعر البيع، والمصنع وسعر المصنع من زرار \"تعديل السعر\". القسم والصورة ثابتين." : "المصنع وسعر المصنع بيتعدلوا من جدول المنتجات. القسم ثابت لأن كود المنتج مربوط بيه."}</p>}
+          {builtIn && product.edited && <p className="admin-muted small">المنتج ده متعدّل من هنا. <button type="button" className="admin-restore" disabled={busy} onClick={() => void restore()}>رجّعي الأصلي</button></p>}
         </div>
 
         {error && <p className="admin-error" role="alert">{error}</p>}
