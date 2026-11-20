@@ -16,6 +16,7 @@ import { formatEGP } from "@/lib/format";
 import {
   findOffer,
   findProduct,
+  isOfferExcluded,
   isOfferLimited,
   isSoldOut,
   landingPromotion,
@@ -68,7 +69,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
   const offer = findOffer(offerId)!;
   const savedIds = cart.offer?.offerId === offerId ? cart.offer.productIds : [];
   // A piece that sold out meanwhile is dropped from the selection (it can no longer be ordered).
-  const selectedIds = keepOneLimited((draft ?? savedIds).filter((id) => !isSoldOut(id)));
+  const selectedIds = keepOneLimited((draft ?? savedIds).filter((id) => !isSoldOut(id) && !isOfferExcluded(findProduct(id))));
   const selected = selectedIds.map(findProduct).filter((product): product is CatalogProduct => product !== undefined);
   const neededTotal = offer.pajamaCount + offer.wearableBlanketCount;
   const countOf = (category: OfferCategory) => selected.filter((product) => product.category === category).length;
@@ -122,7 +123,8 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
   }
 
   // After one "one per offer" pajama is picked, the others are simply not offered.
-  const visibleProducts = productsIn(activeTab).filter((product) => !limitedPicked || !isOfferLimited(product) || selectedIds.includes(product.id));
+  // Pieces kept out of the offer (factory price 270+) are never offered.
+  const visibleProducts = productsIn(activeTab).filter((product) => !isOfferExcluded(product) && (!limitedPicked || !isOfferLimited(product) || selectedIds.includes(product.id)));
   const tabFull = countOf(activeTab) >= limitFor(offerId, activeTab);
 
   return (

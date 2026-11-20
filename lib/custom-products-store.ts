@@ -11,7 +11,7 @@
 import { parseCustomProduct, parseProductEdit } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import type { ProductStat } from "./piece-analytics.ts";
-import { baseWasPriceOf, findProduct, offerLimitedFromCosts, setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit } from "./site-data.ts";
+import { baseWasPriceOf, findProduct, offerExcludedFromCosts, offerLimitedFromCosts, setBigSize, setCustomProducts, setOfferExcluded, setOfferLimited, setPriceOverrides, setProductEdits, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit } from "./site-data.ts";
 import { loadProductCosts } from "./finance-store.ts";
 import { setBundles, type Bundle } from "./bundles.ts";
 import { BUNDLES, loadBundles, parseBundles } from "./bundles-store.ts";
@@ -29,8 +29,8 @@ const EDITS = () => `${keyPrefix()}catalog:edits`;
 /** Factory prices (finance-store); read here only to find the offer's "one per offer" pajamas. */
 const COSTS = () => `${keyPrefix()}finance:costs`;
 
-/** HGETALL of finance:costs → IDs of the "one per offer" pajamas (no prices kept). */
-function parseOfferLimited(flat: unknown): string[] {
+/** HGETALL of finance:costs → the entries, for the offer rules (only IDs leave this file, never prices). */
+function parseCosts(flat: unknown) {
   const list = Array.isArray(flat) ? flat : [];
   const costs: { productId?: unknown; cost?: unknown }[] = [];
   for (let index = 1; index < list.length; index += 2) {
@@ -40,7 +40,7 @@ function parseOfferLimited(flat: unknown): string[] {
       // Skip a corrupt entry.
     }
   }
-  return offerLimitedFromCosts(costs);
+  return costs;
 }
 
 /** HGETALL result → { productId: edit } (bad entries skipped). */
@@ -190,6 +190,7 @@ export async function ensureCustomProducts(force = false) {
     cached = { at: Date.now(), products };
     setProductEdits(edits);
     setOfferLimited(offerLimitedFromCosts(Object.values(costs)));
+    setOfferExcluded(offerExcludedFromCosts(Object.values(costs)));
     setBundles(bundles);
     setCustomProducts(products);
     setSoldOut(soldOut, autoSoldOut);
@@ -216,10 +217,10 @@ function parseStats(raw: unknown): Record<string, ProductStat> {
   }
 }
 
-export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat>; bigSize: string[]; edits: Record<string, ProductEdit>; offerLimited: string[]; bundles: Bundle[] }> {
+export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat>; bigSize: string[]; edits: Record<string, ProductEdit>; offerLimited: string[]; offerExcluded: string[]; bundles: Bundle[] }> {
   const url = process.env.KV_REST_API_URL?.trim().replace(/\/+$/, "");
   const token = (process.env.KV_REST_API_READ_ONLY_TOKEN ?? process.env.KV_REST_API_TOKEN)?.trim();
-  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {}, bigSize: [], edits: {}, offerLimited: [], bundles: [] };
+  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {}, bigSize: [], edits: {}, offerLimited: [], offerExcluded: [], bundles: [] };
   const read = async (command: string) => {
     try {
       const response = await fetch(`${url}/${command}`, {
@@ -247,7 +248,7 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
   ]);
   // The store does not need to know why a product is out: the admin's switch and the inventory both count.
   const out = [...new Set([...(Array.isArray(soldOut) ? soldOut : []), ...(Array.isArray(autoSoldOut) ? autoSoldOut : [])].map(String))];
-  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats), bigSize: Array.isArray(bigSize) ? bigSize.map(String) : [], edits: parseEdits(edits), offerLimited: parseOfferLimited(costs), bundles: parseBundles(bundles).filter((bundle) => bundle.status === "live") };
+  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats), bigSize: Array.isArray(bigSize) ? bigSize.map(String) : [], edits: parseEdits(edits), offerLimited: offerLimitedFromCosts(parseCosts(costs)), offerExcluded: offerExcludedFromCosts(parseCosts(costs)), bundles: parseBundles(bundles).filter((bundle) => bundle.status === "live") };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */

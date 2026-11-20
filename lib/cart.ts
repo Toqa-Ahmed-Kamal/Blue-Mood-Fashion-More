@@ -1,6 +1,7 @@
 import {
   findOffer,
   findProduct,
+  isOfferExcluded,
   isOfferLimited,
   isSoldOut,
   landingPromotion,
@@ -81,6 +82,7 @@ function resolveOffer(value: unknown): { offer: ResolvedCart["offer"] } | { erro
     return { error: "INVALID_BUNDLE" };
   }
   if (products.filter(isOfferLimited).length > OFFER_LIMITED_MAX) return { error: "INVALID_BUNDLE" };
+  if (products.some(isOfferExcluded)) return { error: "INVALID_BUNDLE" };
 
   return { offer: { option, products, price: offerPrice() } };
 }

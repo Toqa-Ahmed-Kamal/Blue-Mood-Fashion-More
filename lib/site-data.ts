@@ -460,6 +460,26 @@ export function offerLimitedFromCosts(costs: readonly { productId?: unknown; cos
   return costs.filter((item) => typeof item.productId === "string" && item.cost === OFFER_LIMITED_COST).map((item) => item.productId as string).toSorted();
 }
 
+// ── Offer rule (never shown to customers): a piece whose factory price is 270 or more is not offered in the
+// winter offer at all (sold singly only). IDs from the factory prices, like the rule above. ──
+export const OFFER_EXCLUDED_MIN_COST = 270;
+const offerExcludedIds = new Set<string>();
+
+export function setOfferExcluded(ids: readonly string[]) {
+  offerExcludedIds.clear();
+  for (const id of ids) offerExcludedIds.add(id);
+}
+
+/** A piece that can't be picked in the winter offer. */
+export function isOfferExcluded(product: CatalogProduct | undefined) {
+  return product !== undefined && offerExcludedIds.has(product.id);
+}
+
+/** Product IDs whose factory price is 270 or more. */
+export function offerExcludedFromCosts(costs: readonly { productId?: unknown; cost?: unknown }[]) {
+  return costs.filter((item) => typeof item.productId === "string" && typeof item.cost === "number" && item.cost >= OFFER_EXCLUDED_MIN_COST).map((item) => item.productId as string).toSorted();
+}
+
 export function findOffer(id: string) {
   return landingPromotion.options.find((option) => option.id === id);
 }

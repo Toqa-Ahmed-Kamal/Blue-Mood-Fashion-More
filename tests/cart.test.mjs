@@ -148,6 +148,25 @@ test("an offer holds only one pajama with a factory price of 220 (the others are
   assert.ok("cart" in offer(pajamas.slice(0, 4)));
 });
 
+test("a piece with a factory price of 270 or more is kept out of the offer, but still sold singly", async () => {
+  const { offerExcludedFromCosts, setOfferExcluded } = await import("../lib/site-data.ts");
+  const ids = offerExcludedFromCosts([
+    { productId: pajamas[0], cost: 270 },
+    { productId: pajamas[1], cost: 300 },
+    { productId: pajamas[2], cost: 269 },
+    { productId: pajamas[3], cost: null },
+  ]);
+  assert.deepEqual(ids, [pajamas[0], pajamas[1]].toSorted());
+  setOfferExcluded(ids);
+  const offer = (productIds) => resolveCart({ offer: { offerId: "four-pajamas", productIds } });
+  assert.equal(offer(pajamas.slice(0, 4)).error, "INVALID_BUNDLE");
+  assert.equal(offer([pajamas[0], ...pajamas.slice(2, 5)]).error, "INVALID_BUNDLE", "one is enough to refuse");
+  assert.ok("cart" in offer(pajamas.slice(2, 6)));
+  assert.ok("cart" in resolveCart({ items: [{ productId: pajamas[0], quantity: 1 }] }), "sold singly as usual");
+  setOfferExcluded([]);
+  assert.ok("cart" in offer(pajamas.slice(0, 4)));
+});
+
 test("prices by size: pajamas up to 70 / 75 kg are 285 instead of 320, other pajamas 300 instead of 350, blankets 295 instead of 400", async () => {
   const { findProduct, priceOf, wasPriceOf, setProductEdits, setPriceOverrides, setWasPrices } = await import("../lib/site-data.ts");
   setPriceOverrides({});

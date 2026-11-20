@@ -15,9 +15,9 @@ export default async function OfferPage({ params }: OfferPageProps) {
 
   if (!offer) notFound();
 
-  const { products, soldOut, prices, wasPrices, stats, bigSize, edits, offerLimited, bundles } = await loadCustomProductsForPage();
+  const { products, soldOut, prices, wasPrices, stats, bigSize, edits, offerLimited, offerExcluded, bundles } = await loadCustomProductsForPage();
   return (
-    <CatalogSync products={products} soldOut={soldOut} prices={prices} wasPrices={wasPrices} stats={stats} bigSize={bigSize} edits={edits} offerLimited={offerLimited} bundles={bundles}>
+    <CatalogSync products={products} soldOut={soldOut} prices={prices} wasPrices={wasPrices} stats={stats} bigSize={bigSize} edits={edits} offerLimited={offerLimited} offerExcluded={offerExcluded} bundles={bundles}>
       <OfferBuilder initialOfferId={offer.id} />
     </CatalogSync>
   );

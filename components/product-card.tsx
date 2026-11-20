@@ -12,7 +12,7 @@ import { formatEGP } from "@/lib/format";
 import { trackCartRemove, trackProductView } from "@/lib/journey-tracker";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
-import { categoryInfo, discountPercentOf, isBigSize, isSoldOut, landingPromotion, offerCategories, offerPrice, priceOf, statOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
+import { categoryInfo, discountPercentOf, isBigSize, isOfferExcluded, isSoldOut, landingPromotion, offerCategories, offerPrice, priceOf, statOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
 
 function offerLinkFor(product: CatalogProduct) {
   return product.category === "wearable-blankets"
@@ -92,7 +92,7 @@ export function PriceTag({ product }: { product: CatalogProduct }) {
 
 /** Pieces that also fit the winter offer point to it. */
 export function OfferHint({ product }: { product: CatalogProduct }) {
-  if (isSoldOut(product.id) || !offerCategories.includes(product.category) || priceOf(product) === null) return null;
+  if (isSoldOut(product.id) || isOfferExcluded(product) || !offerCategories.includes(product.category) || priceOf(product) === null) return null;
   return (
     <Link href={offerLinkFor(product)} className="offer-hint">
       أو ضمن عرض ٤ قطع بـ {offerPrice()}
