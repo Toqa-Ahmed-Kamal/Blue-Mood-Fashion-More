@@ -6,7 +6,7 @@ import { BadgeCheck, Check, CheckCircle2, Copy, PackageCheck, Pencil, RefreshCw,
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
-import { ORDER_FILTERS, courierCollection, courierText, filterCounts, matchesFilter, matchesSearch, withEdit, type OrderFilter, type UnifiedOrder } from "@/lib/all-orders";
+import { MARGIN_PRESETS, ORDER_FILTERS, courierCollection, courierText, filterCounts, matchesFilter, matchesMargin, matchesSearch, withEdit, type MarginRange, type OrderFilter, type UnifiedOrder } from "@/lib/all-orders";
 import type { CourierStep, OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
@@ -25,6 +25,10 @@ export function AllOrdersTab() {
   const [filter, setFilter] = useState<OrderFilter>("all");
   const [source, setSource] = useState<"" | "site" | "telegram">("");
   const [query, setQuery] = useState("");
+  // هامش الربح filter: a preset, or "custom" with the owner's own numbers.
+  const [marginPreset, setMarginPreset] = useState("");
+  const [marginMin, setMarginMin] = useState("");
+  const [marginMax, setMarginMax] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busyId, setBusyId] = useState("");
@@ -58,7 +62,13 @@ export function AllOrdersTab() {
     void load();
   }, [load]);
 
-  const scoped = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived) && matchesSearch(order, query)), [orders, source, showArchived, query]);
+  const marginRange = useMemo<MarginRange>(() => {
+    if (marginPreset !== "custom") return MARGIN_PRESETS.find((preset) => preset.id === marginPreset)?.range ?? { min: null, max: null };
+    const number = (text: string) => (text.trim() === "" || !Number.isFinite(Number(text)) ? null : Number(text));
+    return { min: number(marginMin), max: number(marginMax) };
+  }, [marginPreset, marginMin, marginMax]);
+  const scoped = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived) && matchesSearch(order, query) && matchesMargin(order, marginRange)), [orders, source, showArchived, query, marginRange]);
+  const marginActive = marginRange.min !== null || marginRange.max !== null;
   const counts = useMemo(() => filterCounts(scoped), [scoped]);
   const rows = scoped.filter((order) => matchesFilter(order, filter));
   const shown = rows.slice(0, limit);
@@ -127,8 +137,22 @@ export function AllOrdersTab() {
           <option value="site">أوردرات الموقع بس</option>
           <option value="telegram">أوردرات تيليجرام القديمة بس</option>
         </select>
+        <select value={marginPreset} onChange={(event) => { setMarginPreset(event.target.value); setLimit(PAGE_SIZE); }} aria-label="هامش الربح">
+          {MARGIN_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+        </select>
+        {marginPreset === "custom" && (
+          <span className="admin-margin-range">
+            <label>هامش من <input type="number" inputMode="numeric" value={marginMin} onChange={(event) => { setMarginMin(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
+            <label>لأقل من <input type="number" inputMode="numeric" value={marginMax} onChange={(event) => { setMarginMax(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
+          </span>
+        )}
         <label className="admin-check"><input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> اعرضي المؤرشف</label>
       </div>
+      {orders && marginActive && (
+        <p className="admin-muted small" role="status">
+          {rows.length} أوردر · إجمالي هامش الربح {formatEGP(rows.reduce((sum, order) => sum + (order.money?.margin ?? 0), 0))} · الأوردرات الملغية والمرتجعة مش بتظهر مع الفلتر ده (مالهاش مكسب).
+        </p>
+      )}
 
       {error && <p className="admin-error" role="alert">{error}</p>}
       {!orders && !error && <p className="admin-muted">جاري التحميل…</p>}

@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { setPriceClock } from "../lib/site-data.ts";
+
+// Prices go up after the offer countdown: tests use a fixed time before it.
+setPriceClock(() => Date.parse("2026-11-20T12:00:00+02:00"));
 
 import { availableBundles, BUNDLE_ID_PATTERN, isBundleAvailable, newBundleId, parseBundle, sanitizeBundleInput, setBundles, splitBundlePrice } from "../lib/bundles.ts";
 import { cartPieceCount, emptyCart, removeCartBundle, resolveCart, sanitizeCart, setCartBundle } from "../lib/cart.ts";

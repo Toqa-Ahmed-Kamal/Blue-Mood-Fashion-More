@@ -17,6 +17,7 @@ import {
   isBigSize,
   landingPromotion,
   offerCategories,
+  offerPrice,
   productsIn,
   startingPriceOf,
   visibleCatalog,
@@ -38,7 +39,7 @@ const FAQ = [
   { q: "لو قطعة طلعت مش مناسبة؟", a: "بترجعيها مع المندوب وقت الاستلام على طول." },
   { q: "الصور حقيقية؟", a: "بنصورلك القطع على الطبيعة قبل ما نبعتها، علشان تبقي شايفة بالظبط اللي جايلك." },
   { q: "المقاسات إزاي؟", a: "البيجامات One Size، ومكتوب على كل بيجاما لحد كام كيلو بتلبس. لو محتارة ابعتيلنا على واتساب ونساعدك." },
-  { q: `عرض الشتاء إيه؟`, a: `٤ قطع بـ ${landingPromotion.price} جنيه: ${landingPromotion.options.map((option) => option.label).join("، أو ")}. وانتي اللي بتختاري الموديلات.` },
+  { q: `عرض الشتاء إيه؟`, a: `٤ قطع بـ ${offerPrice()} جنيه: ${landingPromotion.options.map((option) => option.label).join("، أو ")}. وانتي اللي بتختاري الموديلات.` },
 ];
 
 /** Photo on each category card (a category without one shows its first product). */
@@ -70,7 +71,7 @@ export function BlueMoodHome() {
               <h1>دفا الشتا<br /><span className="hl">بلمسة رقيقة</span></h1>
               <p>بلانكيت، بيجامات، أرواب فرو وعبايات قطيفة. اختاري اللي يعجبك واطلبي في دقيقة، والتأكيد على واتساب.</p>
               <div className="hero-actions">
-                <Link href="/#offer" className="btn btn-pink btn-lg">عرض الشتاء بـ {landingPromotion.price} <ArrowLeft size={18} /></Link>
+                <Link href="/#offer" className="btn btn-pink btn-lg">عرض الشتاء بـ {offerPrice()} <ArrowLeft size={18} /></Link>
                 <Link href="/#blankets" className="btn btn-outline btn-lg">تسوقي الكولكشن</Link>
               </div>
               <ul className="hero-perks">
@@ -120,7 +121,7 @@ export function BlueMoodHome() {
             <div className="offer-head">
               <OfferCountdown />
               <h2 id="offer-title">عرض الشتاء</h2>
-              <p>٤ قطع بـ <strong>{formatEGP(landingPromotion.price)}</strong>. اختاري الباقة واختاري الموديلات بنفسك.</p>
+              <p>٤ قطع بـ <strong>{formatEGP(offerPrice())}</strong>. اختاري الباقة واختاري الموديلات بنفسك.</p>
             </div>
 
             <Link href={`/offer/${landingPromotion.options[0].id}`} className="offer-poster" aria-label="ابدئي عرض الشتاء">
@@ -140,7 +141,7 @@ export function BlueMoodHome() {
                     <strong>{option.label}</strong>
                     <small>{option.description}</small>
                   </span>
-                  <span className="offer-option-price">{formatEGP(landingPromotion.price)}</span>
+                  <span className="offer-option-price">{formatEGP(offerPrice())}</span>
                   <span className="btn btn-pink">اختاري القطع <ArrowLeft size={16} /></span>
                 </Link>
               ))}
@@ -174,7 +175,7 @@ export function BlueMoodHome() {
                 <p>{info.tagline} · {items.length} موديل</p>
                 {offerCategories.includes(category) && (
                   <Link href={`/offer/${category === "wearable-blankets" ? landingPromotion.options[1].id : landingPromotion.options[0].id}`} className="section-offer-link">
-                    كوّني عرض الـ {landingPromotion.price} <ArrowLeft size={15} />
+                    كوّني عرض الـ {offerPrice()} <ArrowLeft size={15} />
                   </Link>
                 )}
               </header>

@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { setPriceClock } from "../lib/site-data.ts";
+
+// Prices go up after the offer countdown: tests use a fixed time before it.
+setPriceClock(() => Date.parse("2026-11-20T12:00:00+02:00"));
 
 import { parseDepositAmount } from "../lib/analytics-report.ts";
 import { resolveCart, addCartItem, emptyCart } from "../lib/cart.ts";
 import { categoryUrl, orderMessage, retargetWhatsApp, unavailableMessage, whatsappChatUrl, whatsappNumber } from "../lib/customer-whatsapp.ts";
-import { OFFER_PIECE_PRICE, pricingRows } from "../lib/finance.ts";
+import { offerPiecePrice, pricingRows } from "../lib/finance.ts";
 import { classifyChannel, touchFromVisit } from "../lib/attribution.ts";
 import { trafficSourceOf } from "../lib/traffic-source.ts";
 import { isSoldOut, setSoldOut } from "../lib/site-data.ts";
@@ -79,7 +83,7 @@ test("pricing calculator: expense share per piece, full cost, current profit and
   const rows = pricingRows(products, { expenses: 1000, pieces: 20, profitPercent: 30 });
   assert.equal(rows.length, 2, "products without a factory price are left out");
   assert.deepEqual(rows[0], { productId: "a", name: "عباية", cost: 200, expenseShare: 50, fullCost: 250, currentPrice: 350, inOfferOnly: false, currentProfit: 100, currentProfitPercent: 40, suggestedPrice: 325 });
-  assert.equal(rows[1].currentPrice, OFFER_PIECE_PRICE);
+  assert.equal(rows[1].currentPrice, offerPiecePrice());
   assert.equal(rows[1].inOfferOnly, true);
   assert.equal(rows[1].suggestedPrice, 260, "(150 + 50) × 1.3 = 260");
   assert.equal(pricingRows(products, { expenses: 1000, pieces: 0, profitPercent: 30 })[0].expenseShare, 0, "no pieces → no share (no division by zero)");

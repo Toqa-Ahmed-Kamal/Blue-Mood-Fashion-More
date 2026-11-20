@@ -19,7 +19,7 @@ import {
   productLink,
 } from "@/lib/order-flow";
 import { UNSERVED_AREA_NOTE, findShippingRate, governorateShippingFee, isValidShippingArea, shippingAreasFor, shippingGovernorates, unservedAreasIn } from "@/lib/shipping-rates";
-import { findProduct, isSoldOut, landingPromotion, priceOf, visibleCatalog } from "@/lib/site-data";
+import { findProduct, isSoldOut, offerPrice, priceOf, visibleCatalog } from "@/lib/site-data";
 import { SiteHeader } from "@/components/store-chrome";
 
 type CustomerDetails = {
@@ -448,7 +448,7 @@ function CartLines({ cart, disabled }: { cart: ResolvedCart; disabled: boolean }
 
       {!cart.offer && (
         <Link href="/#offer" className="cart-offer-promo">
-          ضيفي عرض الشتاء: ٤ قطع بـ {formatEGP(landingPromotion.price)} <ArrowLeft size={16} />
+          ضيفي عرض الشتاء: ٤ قطع بـ {formatEGP(offerPrice())} <ArrowLeft size={16} />
         </Link>
       )}
     </section>

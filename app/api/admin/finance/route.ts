@@ -5,7 +5,7 @@ import { loadDirectSales, loadExpenses, loadFactories, loadProductCosts } from "
 import { loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
-import { basePriceOf, catalog, isAutoSoldOut, isBigSize, isBuiltInProduct, isEditedProduct, isManualSoldOut, priceOf, wasPriceOf } from "@/lib/site-data";
+import { basePriceOf, catalog, isAutoSoldOut, isBigSize, isBuiltInProduct, isEditedProduct, isManualSoldOut, listPriceOf, wasPriceOf } from "@/lib/site-data";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 
 export const runtime = "nodejs";
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       category: product.category,
       image: product.image,
       hidden: Boolean(product.hidden),
-      salePrice: priceOf(product),
+      salePrice: listPriceOf(product),
       // Original price (code, or saved with an added product); differs from salePrice after a change.
       basePrice: basePriceOf(product),
       // Price before the discount ("بدل كذا"), shown struck through on the store.

@@ -19,6 +19,7 @@ import {
   isOfferLimited,
   isSoldOut,
   landingPromotion,
+  offerPrice,
   productsIn,
   type CatalogProduct,
   type LandingPromotionOptionId,
@@ -132,7 +133,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
         <Link href="/#offer" className="back-link"><ChevronRight size={18} /> رجوع للمتجر</Link>
 
         <header className="builder-head">
-          <span className="eyebrow">عرض الشتاء · {formatEGP(landingPromotion.price)}</span>
+          <span className="eyebrow">عرض الشتاء · {formatEGP(offerPrice())}</span>
           <h1>كوّني عرضك</h1>
           <p>اختاري الباقة، وبعدين دوسي على القطع اللي عاجباكي. كل موديل مرة واحدة بس.</p>
           <OfferCountdown />
@@ -149,7 +150,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
               key={option.id}
             >
               <strong>{option.label}</strong>
-              <small>{formatEGP(landingPromotion.price)}</small>
+              <small>{formatEGP(offerPrice())}</small>
             </button>
           ))}
         </div>

@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowLeft, Check, Expand, Minus, Plus, X } from "lucide-react";
 
-import { SocialProof } from "@/components/promo";
+import { PriceCountdown, SocialProof } from "@/components/promo";
 import { addCartItem, setCartItemQuantity, MAX_ITEM_QUANTITY } from "@/lib/cart";
 import { updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
 import { trackCartRemove, trackProductView } from "@/lib/journey-tracker";
 import { trackAddToCart } from "@/lib/meta-pixel";
 import { fitNoteFor } from "@/lib/order-flow";
-import { categoryInfo, discountPercentOf, isBigSize, isSoldOut, landingPromotion, offerCategories, priceOf, statOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
+import { categoryInfo, discountPercentOf, isBigSize, isSoldOut, landingPromotion, offerCategories, offerPrice, priceOf, statOf, wasPriceOf, type CatalogProduct } from "@/lib/site-data";
 
 function offerLinkFor(product: CatalogProduct) {
   return product.category === "wearable-blankets"
@@ -74,15 +74,19 @@ export function FitNote({ product }: { product: CatalogProduct }) {
 
 export function PriceTag({ product }: { product: CatalogProduct }) {
   const price = priceOf(product);
-  if (price === null) return <span className="price-tag offer-only">ضمن عرض الـ {landingPromotion.price}</span>;
+  if (price === null) return <span className="price-tag offer-only">ضمن عرض الـ {offerPrice()}</span>;
   const was = wasPriceOf(product);
-  if (was === null) return <span className="price-tag">{formatEGP(price)}</span>;
+  const timer = isSoldOut(product.id) ? null : <PriceCountdown />;
+  if (was === null) return <><span className="price-tag">{formatEGP(price)}</span>{timer}</>;
   return (
-    <span className="price-tag on-sale">
-      {formatEGP(price)}
-      <s className="price-was" aria-label={`بدل ${formatEGP(was)}`}>بدل {formatEGP(was)}</s>
-      <span className="price-off">خصم {discountPercentOf(product)}٪</span>
-    </span>
+    <>
+      <span className="price-tag on-sale">
+        {formatEGP(price)}
+        <s className="price-was" aria-label={`بدل ${formatEGP(was)}`}>بدل {formatEGP(was)}</s>
+        <span className="price-off">خصم {discountPercentOf(product)}٪</span>
+      </span>
+      {timer}
+    </>
   );
 }
 
@@ -91,7 +95,7 @@ export function OfferHint({ product }: { product: CatalogProduct }) {
   if (isSoldOut(product.id) || !offerCategories.includes(product.category) || priceOf(product) === null) return null;
   return (
     <Link href={offerLinkFor(product)} className="offer-hint">
-      أو ضمن عرض ٤ قطع بـ {landingPromotion.price}
+      أو ضمن عرض ٤ قطع بـ {offerPrice()}
     </Link>
   );
 }

@@ -141,6 +141,7 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-pajama-046", name: "بيجاما كحلي بطبعة رجل الثلج", category: "winter-pajamas", image: "/images/bejama/navy-snowman-pajama.jpg", imageAlt: "بلوزة كحلي بكم طويل عليها رجل ثلج بطاقية وكوفية، وبنطلون كحلي بطبعة رجل الثلج وعصيان حلوى وندف ثلج" },
   // Hidden: the photo shows another brand's character and name (Hello Kitty). Show it from the admin only with a photo without it.
   { id: "bm-winter-pajama-047", name: "بيجاما فرو لبني وبنطلون كاروهات", category: "winter-pajamas", image: "/images/bejama/blue-kitty-gingham-pajama.jpg", imageAlt: "بلوزة فرو لبني بكم طويل عليها قطة مطرزة بفيونكة، وبنطلون كاروهات لبني وأبيض", hidden: true },
+  { id: "bm-winter-pajama-048", name: "طقم فرو أصفر بكابشون", category: "winter-pajamas", image: "/images/bejama/yellow-fleece-hoodie-pajama.jpg", imageAlt: "طقم فرو أصفر فاتح، هودي بكابشون وجيب كانجارو وكتابة سودا على الصدر، وبنطلون واسع" },
 
   // ── سالوبيت ──
   { id: "bm-onesie-001", name: "سالوبيت فرو ستيتش بكابشون", category: "onesies", image: "/images/onesies/stitch-fleece-onesie.jpg", imageAlt: "سالوبيت فرو أزرق بكابشون وسوستة كاملة مطبوع عليه رسومات ستيتش وقلوب وردي، بجيوب وأساور عند الكاحل", price: 270, maxWeightKg: 70 },
@@ -307,15 +308,42 @@ export function baseWasPriceOf(product: CatalogProduct) {
   return isSmallPajama(product) ? 320 : categoryWasPrices[product.category];
 }
 
+// ── When the countdown (landingPromotion.endsAt) is over, prices go up: the offer to its `priceAfter`,
+// every single piece by PRICE_RISE_AFTER_PROMO. Checked on the server (orders) and in the browser alike. ──
+export const PRICE_RISE_AFTER_PROMO = 20;
+
+// The clock used for prices (tests pin it, so they do not depend on the time they run).
+let priceClock = () => Date.now();
+export function setPriceClock(clock: (() => number) | null) {
+  priceClock = clock ?? (() => Date.now());
+}
+
+export function isPromoOver(now = priceClock()) {
+  const end = Date.parse(landingPromotion.endsAt);
+  return Number.isFinite(end) && now >= end;
+}
+
+/** The winter offer's price now. */
+export function offerPrice(now = priceClock()) {
+  return isPromoOver(now) ? landingPromotion.priceAfter : landingPromotion.price;
+}
+
 /** The price written in the code (or saved with an added product), before any admin change. */
 export function basePriceOf(product: CatalogProduct) {
   if (product.price !== undefined) return product.price;
   return isSmallPajama(product) ? SMALL_PAJAMA_PRICE : categoryPrices[product.category];
 }
 
-export function priceOf(product: CatalogProduct) {
+/** The price set for the product (code or admin), without the rise after the countdown — what the admin edits. */
+export function listPriceOf(product: CatalogProduct) {
   const base = basePriceOf(product);
   return base === null ? null : priceOverrides.get(product.id) ?? base;
+}
+
+/** What a customer pays for one piece now (the listed price, plus the rise once the countdown is over). */
+export function priceOf(product: CatalogProduct, now = priceClock()) {
+  const listed = listPriceOf(product);
+  return listed === null ? null : listed + (isPromoOver(now) ? PRICE_RISE_AFTER_PROMO : 0);
 }
 
 // ── "بدل كذا": price before the discount (in the code, or set from the admin and stored in Redis) ──
@@ -359,7 +387,9 @@ export const landingPromotion = {
    * When the offer ends (Cairo time). The site counts down to it and hides the
    * timer once it passes — move this date to extend or restart the offer.
    */
-  endsAt: "2026-11-11T23:59:59+02:00",
+  endsAt: "2026-11-20T17:00:00+02:00",
+  /** The offer's price once the countdown is over. */
+  priceAfter: 1200,
   options: [
     {
       id: "four-pajamas",

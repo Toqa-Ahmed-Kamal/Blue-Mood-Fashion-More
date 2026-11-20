@@ -10,7 +10,7 @@ import { cartPieceCount, resolveCart } from "@/lib/cart";
 import { useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
 import { availableBundles } from "@/lib/bundles";
-import { categoryInfo, categoryOrder, isBigSize, landingPromotion, visibleCatalog } from "@/lib/site-data";
+import { categoryInfo, categoryOrder, isBigSize, offerPrice, visibleCatalog } from "@/lib/site-data";
 
 
 /** Menu links; "بيج سايز" only while that section has products. */
@@ -36,7 +36,7 @@ export function AnnouncementBar() {
   const running = useOfferIsRunning();
   return (
     <Link href="/#offer" className="announcement">
-      <span>❄ عرض الشتاء: ٤ قطع بـ {formatEGP(landingPromotion.price)}</span>
+      <span>❄ عرض الشتاء: ٤ قطع بـ {formatEGP(offerPrice())}</span>
       {running && <OfferCountdown variant="bar" />}
       <ArrowLeft size={14} aria-hidden="true" />
     </Link>

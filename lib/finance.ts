@@ -17,7 +17,7 @@
 import { confirmedValueOf, isSaleStatus, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
 import { directSaleMoney, isPersonalTake, type DirectSale } from "./direct-sales.ts";
 import { oldOrderValue, type OldOrder } from "./old-orders.ts";
-import { catalog, landingPromotion } from "./site-data.ts";
+import { catalog, landingPromotion, offerPrice } from "./site-data.ts";
 
 /** Factory of every product that has none saved yet (all products at launch come from it). */
 export const DEFAULT_FACTORY = "مصنع القاهرة";
@@ -392,7 +392,9 @@ export function buildFinanceReport(input: {
 // ── Pricing calculator ──────────────────────────────────────────────────────
 
 /** Price of one piece inside the winter offer (offer price ÷ pieces in the offer). */
-export const OFFER_PIECE_PRICE = Math.round(landingPromotion.price / (landingPromotion.options[0].pajamaCount + landingPromotion.options[0].wearableBlanketCount));
+export function offerPiecePrice() {
+  return Math.round(offerPrice() / (landingPromotion.options[0].pajamaCount + landingPromotion.options[0].wearableBlanketCount));
+}
 
 export type PricingInput = {
   /** Expenses to spread over the pieces (EGP). */
@@ -429,7 +431,7 @@ export function pricingRows(products: { productId: string; name: string; cost: n
   return products.flatMap((product) => {
     if (product.cost === null) return [];
     const fullCost = round(product.cost + share);
-    const currentPrice = product.salePrice ?? OFFER_PIECE_PRICE;
+    const currentPrice = product.salePrice ?? offerPiecePrice();
     const currentProfit = round(currentPrice - fullCost);
     return [{
       productId: product.productId,

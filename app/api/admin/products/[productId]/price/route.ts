@@ -3,7 +3,7 @@ import { revalidateTag } from "next/cache";
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
 import { CUSTOM_PRODUCTS_TAG, ensureCustomProducts, loadCustomProduct, saveCustomProduct, setProductPrice, setProductWasPrice } from "@/lib/custom-products-store";
 import { RedisUnavailableError } from "@/lib/redis";
-import { basePriceOf, findProduct, isBuiltInProduct, priceOf, wasPriceOf } from "@/lib/site-data";
+import { basePriceOf, findProduct, isBuiltInProduct, listPriceOf, wasPriceOf } from "@/lib/site-data";
 
 export const runtime = "nodejs";
 
@@ -70,8 +70,8 @@ export async function PUT(request: Request, context: { params: Promise<{ product
     // Store pages show the new price on their next visit.
     revalidateTag(CUSTOM_PRODUCTS_TAG, { expire: 0 });
     const updated = findProduct(productId)!;
-    console.info("[admin] selling price changed", { productId, price: priceOf(updated), was: wasPriceOf(updated) });
-    return json(200, { success: true, productId, price: priceOf(updated), basePrice: basePriceOf(updated), wasPrice: wasPriceOf(updated) });
+    console.info("[admin] selling price changed", { productId, price: listPriceOf(updated), was: wasPriceOf(updated) });
+    return json(200, { success: true, productId, price: listPriceOf(updated), basePrice: basePriceOf(updated), wasPrice: wasPriceOf(updated) });
   } catch (error) {
     console.error("[admin] price update failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
     return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مقدرناش نحفظ دلوقتي. جربي تاني." } });

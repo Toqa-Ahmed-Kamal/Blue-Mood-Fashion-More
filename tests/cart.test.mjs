@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { setPriceClock } from "../lib/site-data.ts";
+
+// Prices go up after the offer countdown: tests use a fixed time before it.
+setPriceClock(() => Date.parse("2026-11-20T12:00:00+02:00"));
 
 import {
   addCartItem,
@@ -164,4 +168,27 @@ test("prices by size: pajamas up to 70 / 75 kg are 285 instead of 320, other paj
   setPriceOverrides({});
   setProductEdits({});
   assert.deepEqual(p("bm-winter-pajama-001"), [285, 320]);
+});
+
+test("after the offer countdown: the offer is 1,200 and every single piece 20 more", async () => {
+  const { findProduct, priceOf, listPriceOf, offerPrice, isPromoOver, landingPromotion, setPriceClock: clock } = await import("../lib/site-data.ts");
+  const end = Date.parse(landingPromotion.endsAt);
+  try {
+    clock(() => end - 1000);
+    assert.equal(isPromoOver(), false);
+    assert.equal(offerPrice(), 1100);
+    assert.equal(priceOf(findProduct("bm-winter-pajama-002")), 300);
+    clock(() => end);
+    assert.equal(isPromoOver(), true);
+    assert.equal(offerPrice(), 1200);
+    assert.equal(priceOf(findProduct("bm-winter-pajama-002")), 320);
+    assert.equal(priceOf(findProduct("bm-winter-pajama-001")), 305, "small size 285 + 20");
+    assert.equal(listPriceOf(findProduct("bm-winter-pajama-002")), 300, "the admin still edits the listed price");
+    const four = visible("winter-pajamas").slice(0, 4);
+    const result = resolveCart({ offer: { offerId: "four-pajamas", productIds: four }, items: [{ productId: "bm-winter-pajama-002", quantity: 1 }] });
+    assert.equal(result.cart.offerTotal, 1200);
+    assert.equal(result.cart.itemsTotal, 320);
+  } finally {
+    clock(() => Date.parse("2026-11-20T12:00:00+02:00"));
+  }
 });

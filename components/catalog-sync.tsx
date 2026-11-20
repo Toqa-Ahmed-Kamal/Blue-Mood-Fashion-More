@@ -1,10 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
 
 import { setBundles, type Bundle } from "@/lib/bundles";
 
-import { setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setProductStats, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit, type StoreStat } from "@/lib/site-data";
+import { landingPromotion, setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setProductStats, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit, type StoreStat } from "@/lib/site-data";
 
 /**
  * Adds the products created in the admin to the catalog before the page renders (server render
@@ -36,5 +37,20 @@ export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, st
   setBigSize(bigSize);
   setOfferLimited(offerLimited);
   setBundles(bundles);
+  usePriceRiseRefresh();
   return children;
+}
+
+/**
+ * When the offer countdown ends while the page is open, prices go up (lib/site-data): the page is refreshed
+ * in place (no reload, so a half-filled checkout form is kept) and every price is worked out again.
+ */
+function usePriceRiseRefresh() {
+  const router = useRouter();
+  useEffect(() => {
+    const left = Date.parse(landingPromotion.endsAt) - Date.now();
+    if (!(left > 0) || left > 2 ** 31 - 1) return;
+    const id = window.setTimeout(() => router.refresh(), left + 1000);
+    return () => window.clearTimeout(id);
+  }, [router]);
 }

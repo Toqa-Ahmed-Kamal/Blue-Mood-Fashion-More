@@ -1942,9 +1942,14 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
 .team-admin .team-card { margin-top: 8px; }
 .admin-ok { color: #1f7a45; font-weight: 700; margin: 6px 0; }
 .admin-chip.danger { color: #b42318; }
+.admin-margin-range { display: inline-flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.admin-margin-range label { display: inline-flex; gap: 6px; align-items: center; font-size: .85rem; }
+.admin-margin-range input { width: 96px; font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--paper); }
 @media (max-width: 560px) {
   .team-item { grid-template-columns: 60px minmax(0, 1fr); }
   .team-item > img { width: 60px; height: 76px; }
   .team-item-actions { grid-column: 1 / -1; flex-direction: row; }
   .team-item-actions button { flex: 1; }
 }
+.price-countdown { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: .76rem; font-weight: 700; color: #b4234f; background: #fdecf1; border-radius: 999px; padding: 3px 10px; width: fit-content; }
+.price-countdown b { font-variant-numeric: tabular-nums; letter-spacing: .02em; }

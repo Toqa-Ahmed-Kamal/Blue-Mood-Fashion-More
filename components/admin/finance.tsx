@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Calculator, CircleSlash, ImageOff, ImagePlus, PackageCheck, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 
 import { directSaleMoney, isPersonalTake, type DirectSale } from "@/lib/direct-sales";
-import { EXPENSE_CATEGORIES, OFFER_PIECE_PRICE, pricingRows, type Expense, type ExpenseCategory, type FinanceReport } from "@/lib/finance";
+import { EXPENSE_CATEGORIES, offerPiecePrice, pricingRows, type Expense, type ExpenseCategory, type FinanceReport } from "@/lib/finance";
 import { formatEGP } from "@/lib/format";
 import { photoToBase64 } from "@/lib/photo-resize";
 import { categoryInfo, categoryOrder, categoryPrices, type CatalogCategory, hasWeightFit } from "@/lib/site-data";
@@ -592,7 +592,7 @@ function DirectSales({ sales, products, range, onChanged }: { sales: DirectSale[
       productId,
       name: product ? "" : line.name,
       // Start from the store price and the factory cost; both can be changed for this sale.
-      price: product ? String(product.salePrice ?? OFFER_PIECE_PRICE) : line.price,
+      price: product ? String(product.salePrice ?? offerPiecePrice()) : line.price,
       cost: product ? (product.cost === null ? "" : String(product.cost)) : line.cost,
     });
   }
@@ -1161,7 +1161,7 @@ function PricingCalculator({ products, report }: { products: ProductRow[]; repor
         </div>
       )}
       {missing > 0 && rows.length > 0 && <p className="admin-muted small">{missing} منتج مالوش سعر مصنع لسه ومش ظاهر في الحاسبة.</p>}
-      <p className="admin-muted small">قطع العرض بتتحسب بسعر القطعة جوه العرض ({money(OFFER_PIECE_PRICE)} = سعر العرض ÷ عدد قطعه). الحاسبة للتخطيط بس ومش بتغيّر أسعار الموقع.</p>
+      <p className="admin-muted small">قطع العرض بتتحسب بسعر القطعة جوه العرض ({money(offerPiecePrice())} = سعر العرض ÷ عدد قطعه). الحاسبة للتخطيط بس ومش بتغيّر أسعار الموقع.</p>
     </section>
   );
 }

@@ -5,6 +5,7 @@ import {
   isSoldOut,
   landingPromotion,
   OFFER_LIMITED_MAX,
+  offerPrice,
   priceOf,
   type CatalogProduct,
   type LandingPromotionOptionId,
@@ -81,7 +82,7 @@ function resolveOffer(value: unknown): { offer: ResolvedCart["offer"] } | { erro
   }
   if (products.filter(isOfferLimited).length > OFFER_LIMITED_MAX) return { error: "INVALID_BUNDLE" };
 
-  return { offer: { option, products, price: landingPromotion.price } };
+  return { offer: { option, products, price: offerPrice() } };
 }
 
 function resolveItems(value: unknown): { items: ResolvedCartLine[] } | { error: CartError } {

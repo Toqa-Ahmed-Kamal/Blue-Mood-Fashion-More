@@ -62,6 +62,28 @@ export function OfferCountdown({ variant = "chip" }: { variant?: "chip" | "bar" 
   );
 }
 
+/** On each priced product while the countdown runs: the price holds until the end, then goes up. */
+export function PriceCountdown() {
+  const left = useOfferSecondsLeft();
+  if (left === null) return null;
+  const { days, hours, minutes, seconds } = splitTime(left);
+  const clock = `${days > 0 ? `${days} يوم · ` : ""}${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  return (
+    <span className="price-countdown" role="timer" aria-label={`السعر ده لحد ما العرض يخلص، باقي ${hours} ساعة و${minutes} دقيقة`}>
+      <Timer size={13} aria-hidden="true" /> السعر ده لحد {endLabel} · باقي <b dir="ltr">{clock}</b>
+    </span>
+  );
+}
+
+/** "الساعة 5 العصر" style label of the end time (Cairo). */
+const endLabel = (() => {
+  if (!Number.isFinite(OFFER_END)) return "";
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "numeric", hourCycle: "h23" }).format(OFFER_END));
+  const twelve = hour % 12 === 0 ? 12 : hour % 12;
+  const part = hour < 12 ? "الصبح" : hour < 15 ? "الضهر" : hour < 18 ? "العصر" : "بالليل";
+  return `الساعة ${twelve} ${part}`;
+})();
+
 /** True while the offer countdown is running (client only). */
 export function useOfferIsRunning() {
   return useOfferSecondsLeft() !== null;

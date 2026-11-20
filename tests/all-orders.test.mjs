@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { setPriceClock } from "../lib/site-data.ts";
+
+// Prices go up after the offer countdown: tests use a fixed time before it.
+setPriceClock(() => Date.parse("2026-11-20T12:00:00+02:00"));
 
 import { courierCollection, courierText, filterCounts, matchesFilter, matchesSearch, mergeAllOrders } from "../lib/all-orders.ts";
 import { applyCourierStep, isSaleStatus, parseCourierChange } from "../lib/analytics-report.ts";
@@ -138,4 +142,22 @@ test("filter 'مستني تأكيد العميل': not received, not cancelled/r
     { order: site("BM-GGGGGGGGGGGGGGGGGGG7", "returned"), details: null },
   ], [old("BM-EEEEEEEEEEEEEEEEEEE9", "submitted")]);
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "to-call")).map((row) => row.orderId).sort(), ["BM-EEEEEEEEEEEEEEEEEEE9", "BM-GGGGGGGGGGGGGGGGGGG1", "BM-GGGGGGGGGGGGGGGGGGG2"]);
+});
+
+test("margin filter: more / less than an amount; cancelled, returned and orders without numbers are left out", async () => {
+  const { matchesMargin, MARGIN_PRESETS } = await import("../lib/all-orders.ts");
+  const order = (status, margin) => ({ status, money: margin === undefined ? null : { margin } });
+  const range = (id) => MARGIN_PRESETS.find((preset) => preset.id === id).range;
+  assert.ok(matchesMargin(order("cancelled", undefined), range("")), "no filter → everything");
+  assert.ok(matchesMargin(order("confirmed", 345), range("gte300")));
+  assert.ok(!matchesMargin(order("confirmed", 299), range("gte300")));
+  assert.ok(matchesMargin(order("submitted", 199.5), range("lt200")));
+  assert.ok(!matchesMargin(order("submitted", 200), range("lt200")));
+  assert.ok(matchesMargin(order("delivered", 200), range("200-300")));
+  assert.ok(!matchesMargin(order("delivered", 300), range("200-300")));
+  assert.ok(matchesMargin(order("confirmed", -20), range("loss")));
+  assert.ok(!matchesMargin(order("cancelled", 400), range("gte200")), "cancelled has no profit");
+  assert.ok(!matchesMargin(order("returned", 400), range("gte200")));
+  assert.ok(!matchesMargin(order("confirmed", undefined), range("gte200")));
+  assert.ok(matchesMargin(order("confirmed", 250), { min: 240, max: null }), "custom");
 });
