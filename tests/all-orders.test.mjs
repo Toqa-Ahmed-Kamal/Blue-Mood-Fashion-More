@@ -45,7 +45,7 @@ test("one list: every site order and every old order once; site status wins; Tel
 
 test("filters: pending, confirmed, deposit paid, delivered, returned, cancelled — with counts", () => {
   const rows = mergeAllOrders(live, oldOrders);
-  assert.deepEqual(filterCounts(rows), { all: 5, submitted: 1, "to-call": 1, confirmed: 1, deposit: 2, "to-ship": 1, "with-courier": 0, delivered: 1, returned: 1, cancelled: 1 });
+  assert.deepEqual(filterCounts(rows), { all: 5, submitted: 1, "to-call": 1, confirmed: 1, deposit: 2, "to-ship": 1, "courier-notified": 0, "with-courier": 0, delivered: 1, returned: 1, cancelled: 1 });
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "deposit")).map((row) => row.orderId).sort(), ["BM-AAAAAAAAAAAAAAAAAAA2", "BM-BBBBBBBBBBBBBBBBBBB2"]);
 });
 
@@ -112,8 +112,11 @@ test("shipping company steps: handed means told too; untelling clears both; filt
     { order: site("BM-DDDDDDDDDDDDDDDDDDD1", "confirmed"), details: null },
     { order: site("BM-DDDDDDDDDDDDDDDDDDD2", "confirmed", { courier: handed }), details: null },
     { order: site("BM-DDDDDDDDDDDDDDDDDDD3", "delivered", { courier: handed }), details: null },
+    { order: site("BM-DDDDDDDDDDDDDDDDDDD4", "confirmed", { courier: told }), details: null },
+    { order: site("BM-DDDDDDDDDDDDDDDDDDD5", "cancelled", { courier: told }), details: null },
   ], []);
-  assert.deepEqual(rows.filter((row) => matchesFilter(row, "to-ship")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD1"]);
+  assert.deepEqual(rows.filter((row) => matchesFilter(row, "courier-notified")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD4"], "told, not picked up yet");
+  assert.deepEqual(rows.filter((row) => matchesFilter(row, "to-ship")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD1", "BM-DDDDDDDDDDDDDDDDDDD4"]);
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "with-courier")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD2"]);
   assert.deepEqual(rows.find((row) => row.orderId === "BM-DDDDDDDDDDDDDDDDDDD3").courier, handed);
 });
