@@ -152,6 +152,9 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-blanket-008", name: "بلانكيت قطيفة بكابشون · بني شوكولاتة", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-brown.jpg", imageAlt: "بلانكيت قطيفة واسع بلون بني شوكولاتة بكابشون يُلبس فوق الملابس" },
   { id: "bm-winter-blanket-009", name: "بلانكيت قطيفة بكابشون · رمادي", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-gray.jpg", imageAlt: "بلانكيت قطيفة واسع رمادي غامق بكابشون يُلبس فوق الملابس" },
   { id: "bm-winter-blanket-010", name: "بلانكيت هودي زيبرا أسود وأبيض", category: "wearable-blankets", image: "/images/blanket/zebra-hoodie-blanket.jpg", imageAlt: "بلانكيت هودي فرو واسع بخطوط زيبرا سوداء وبيضاء بجيب أمامي كبير وكابشون" },
+  { id: "bm-winter-blanket-011", name: "بلانكيت قطيفة بكابشون · أحمر", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-red.jpg", imageAlt: "بلانكيت قطيفة أحمر نبيتي ناعم بنقشة بارزة، واسع ويُلبس بكابشون وبيغطي الجسم كله" },
+  { id: "bm-winter-blanket-012", name: "بلانكيت قطيفة بكابشون · زيتي", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-olive.jpg", imageAlt: "بلانكيت قطيفة زيتي ناعم بنقشة بارزة، واسع ويُلبس بكابشون وبيغطي الجسم كله" },
+  { id: "bm-winter-blanket-013", name: "بلانكيت قطيفة بكابشون · موف", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-purple.jpg", imageAlt: "بلانكيت قطيفة موف غامق ناعم بنقشة بارزة، واسع ويُلبس بكابشون وبيغطي الجسم كله" },
 ];
 
 export const visibleCatalog: CatalogProduct[] = catalog.filter((product) => !product.hidden);
