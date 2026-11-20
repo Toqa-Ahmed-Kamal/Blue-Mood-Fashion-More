@@ -137,6 +137,10 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-pajama-043", name: "بيجاما نبيتي بجيب كاروهات", category: "winter-pajamas", image: "/images/bejama/burgundy-plaid-pocket-pajama.jpg", imageAlt: "تيشيرت نبيتي بكم طويل وجيب كاروهات على الصدر، وبنطلون واسع كاروهات أحمر وأخضر وأبيض" },
   // Hidden: the photo shows another brand's name (London Burberry). Show it from the admin only with a photo without it.
   { id: "bm-winter-pajama-044", name: "طقم قطيفة بتيل بكابشون بطبعة دبدوب", category: "winter-pajamas", image: "/images/bejama/teal-velvet-bear-hoodie-set.jpg", imageAlt: "طقم قطيفة بتيل، هودي بكابشون عليه طبعة دبدوب كاروهات وحرف أبيض من تحت، وبنطلون واسع بجيوب", hidden: true },
+  { id: "bm-winter-pajama-045", name: "بيجاما كاروهات أحمر بزراير", category: "winter-pajamas", image: "/images/bejama/red-plaid-button-pajama.jpg", imageAlt: "بيجاما كاروهات أحمر وأسود، قميص بياقة وزراير وجيب، وبنطلون كاروهات" },
+  { id: "bm-winter-pajama-046", name: "بيجاما كحلي بطبعة رجل الثلج", category: "winter-pajamas", image: "/images/bejama/navy-snowman-pajama.jpg", imageAlt: "بلوزة كحلي بكم طويل عليها رجل ثلج بطاقية وكوفية، وبنطلون كحلي بطبعة رجل الثلج وعصيان حلوى وندف ثلج" },
+  // Hidden: the photo shows another brand's character and name (Hello Kitty). Show it from the admin only with a photo without it.
+  { id: "bm-winter-pajama-047", name: "بيجاما فرو لبني وبنطلون كاروهات", category: "winter-pajamas", image: "/images/bejama/blue-kitty-gingham-pajama.jpg", imageAlt: "بلوزة فرو لبني بكم طويل عليها قطة مطرزة بفيونكة، وبنطلون كاروهات لبني وأبيض", hidden: true },
 
   // ── سالوبيت ──
   { id: "bm-onesie-001", name: "سالوبيت فرو ستيتش بكابشون", category: "onesies", image: "/images/onesies/stitch-fleece-onesie.jpg", imageAlt: "سالوبيت فرو أزرق بكابشون وسوستة كاملة مطبوع عليه رسومات ستيتش وقلوب وردي، بجيوب وأساور عند الكاحل", price: 270, maxWeightKg: 70 },
