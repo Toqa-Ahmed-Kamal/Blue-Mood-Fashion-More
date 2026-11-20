@@ -7,6 +7,7 @@ import { Calculator, CircleSlash, ImageOff, ImagePlus, PackageCheck, Pencil, Plu
 import { directSaleMoney, isPersonalTake, type DirectSale } from "@/lib/direct-sales";
 import { EXPENSE_CATEGORIES, OFFER_PIECE_PRICE, pricingRows, type Expense, type ExpenseCategory, type FinanceReport } from "@/lib/finance";
 import { formatEGP } from "@/lib/format";
+import { photoToBase64 } from "@/lib/photo-resize";
 import { categoryInfo, categoryOrder, categoryPrices, type CatalogCategory, hasWeightFit } from "@/lib/site-data";
 
 type ProductRow = {
@@ -25,6 +26,9 @@ type ProductRow = {
   custom: boolean;
   /** A built-in product whose name / description / size / hidden was changed from here. */
   edited?: boolean;
+  /** Added from the team account and waiting for approval (الفريق والعروض). */
+  pending?: boolean;
+  team?: boolean;
   /** Shown to customers as "نفدت الكمية" and cannot be ordered. */
   soldOut: boolean;
   /** Out because the inventory reached 0 (comes back by itself). */
@@ -334,7 +338,7 @@ function ProductsPricing({ products, factories, onSaved }: { products: ProductRo
                         // eslint-disable-next-line @next/next/no-img-element -- admin thumbnail of the real product photo
                         ? <img src={product.image} alt="" width={34} height={34} loading="lazy" />
                         : <span className="admin-thumb missing"><ImageOff size={14} /></span>}
-                      <span>{product.name}{product.hidden && <small> · مخفي من الموقع</small>}</span>
+                      <span>{product.name}{product.pending ? <small> · مستني موافقتك (من الفريق)</small> : product.hidden && <small> · مخفي من الموقع</small>}{!product.pending && product.team && <small> · من الفريق</small>}</span>
                     </span>
                   </td>
                   <td dir="ltr" className="mono">{product.productId}</td>
@@ -943,28 +947,6 @@ function OrdersProfit({ report }: { report: FinanceReport }) {
 // ── Add / edit a product (shown on the site for sale) ─────────────────────
 
 type ProductForm = { name: string; category: CatalogCategory; price: string; imageAlt: string; maxWeightKg: string; hidden: boolean; factory: string; cost: string };
-
-const MAX_IMAGE_SIDE = 1200;
-const MAX_IMAGE_BASE64 = 850_000;
-
-/** Resizes the chosen photo in the browser to a JPEG small enough to store (≤ ~600 KB). */
-async function photoToBase64(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  for (const [side, quality] of [[MAX_IMAGE_SIDE, 0.85], [1000, 0.8], [800, 0.75], [700, 0.7]] as const) {
-    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const context = canvas.getContext("2d");
-    if (!context) break;
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const base64 = canvas.toDataURL("image/jpeg", quality).split(",")[1] ?? "";
-    if (base64.length <= MAX_IMAGE_BASE64) return base64;
-  }
-  throw new Error("الصورة كبيرة جدًا حتى بعد تصغيرها. جربي صورة تانية.");
-}
 
 function ProductDialog({ product, factories, onNewFactory, onClose, onSaved }: {
   product: ProductRow | null;

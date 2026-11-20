@@ -46,6 +46,8 @@ export async function GET(request: Request) {
       factory: costs[product.id]?.factory || DEFAULT_FACTORY,
       custom: !isBuiltInProduct(product.id),
       edited: isEditedProduct(product.id),
+      pending: Boolean(product.pending),
+      team: product.addedBy === "team",
       soldOut: isManualSoldOut(product.id),
       autoSoldOut: isAutoSoldOut(product.id),
       bigSize: isBigSize(product.id),

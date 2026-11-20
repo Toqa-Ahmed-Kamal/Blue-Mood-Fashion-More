@@ -9,13 +9,15 @@ import { OfferCountdown, useOfferIsRunning } from "@/components/promo";
 import { cartPieceCount, resolveCart } from "@/lib/cart";
 import { useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
+import { availableBundles } from "@/lib/bundles";
 import { categoryInfo, categoryOrder, isBigSize, landingPromotion, visibleCatalog } from "@/lib/site-data";
 
 const categoryLinks = categoryOrder.map((category) => ({ href: `/#${categoryInfo[category].anchor}`, label: categoryInfo[category].label }));
 /** Menu links; "بيج سايز" only while that section has products. */
 function navLinksNow() {
   const bigSize = visibleCatalog.some((product) => isBigSize(product.id)) ? [{ href: "/#big-size", label: "بيج سايز" }] : [];
-  return [...categoryLinks, ...bigSize, { href: "/#offer", label: "العرض" }];
+  const bundles = availableBundles().length > 0 ? [{ href: "/#bundles", label: "عروض خاصة" }] : [];
+  return [...categoryLinks, ...bigSize, { href: "/#offer", label: "العرض" }, ...bundles];
 }
 
 export function BrandWordmark({ className = "" }: { className?: string }) {

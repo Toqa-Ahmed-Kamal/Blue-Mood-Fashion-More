@@ -56,7 +56,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ produ
       if (!type) return json(400, { success: false, error: { code: "INVALID_IMAGE", message: "الصورة لازم تبقى JPG أو PNG أو WebP." } });
       image = { id: newImageId(), type, data: body.image };
     }
-    const product = toCatalogProduct(productId, checked.input, image ? imagePath(image.id) : current.image);
+    // Team marks stay (a product waiting for approval is approved from "الفريق والعروض").
+    const product = toCatalogProduct(productId, checked.input, image ? imagePath(image.id) : current.image, { addedBy: current.addedBy, pending: current.pending, approved: current.approved, removed: current.removed });
     const saved = await saveCustomProduct(product, image);
     if (!saved) return json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });
     await ensureCustomProducts(true);

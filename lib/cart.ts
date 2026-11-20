@@ -9,12 +9,15 @@ import {
   type CatalogProduct,
   type LandingPromotionOptionId,
 } from "./site-data.ts";
+import { bundleChoices, findBundle, isBundleAvailable, splitBundlePrice, type Bundle } from "./bundles.ts";
 
 export type CartOffer = { offerId: LandingPromotionOptionId; productIds: string[] };
 export type CartItem = { productId: string; quantity: number };
-export type Cart = { offer: CartOffer | null; items: CartItem[] };
+/** A bundle (عرض) in the cart: fixed bundles carry their own pieces, pick bundles the customer's picks. */
+export type CartBundle = { bundleId: string; productIds: string[] };
+export type Cart = { offer: CartOffer | null; items: CartItem[]; bundles: CartBundle[] };
 
-export const emptyCart: Cart = { offer: null, items: [] };
+export const emptyCart: Cart = { offer: null, items: [], bundles: [] };
 export const MAX_ITEM_QUANTITY = 10;
 
 type OfferOption = (typeof landingPromotion.options)[number];
@@ -26,11 +29,20 @@ export type ResolvedCartLine = {
   lineTotal: number;
 };
 
+export type ResolvedBundle = {
+  bundle: Bundle;
+  products: CatalogProduct[];
+  /** The bundle price split over its pieces (adds up to the bundle price). */
+  unitPrices: number[];
+};
+
 export type ResolvedCart = {
   offer: { option: OfferOption; products: CatalogProduct[]; price: number } | null;
   items: ResolvedCartLine[];
+  bundles: ResolvedBundle[];
   offerTotal: number;
   itemsTotal: number;
+  bundlesTotal: number;
   subtotal: number;
 };
 
@@ -94,6 +106,38 @@ function resolveItems(value: unknown): { items: ResolvedCartLine[] } | { error: 
   return { items };
 }
 
+function resolveOneBundle(raw: unknown): ResolvedBundle | null {
+  if (!isRecord(raw) || typeof raw.bundleId !== "string") return null;
+  const bundle = findBundle(raw.bundleId);
+  if (!bundle || !isBundleAvailable(bundle)) return null;
+  let products: CatalogProduct[];
+  if (bundle.kind === "fixed") {
+    products = bundleChoices(bundle);
+  } else {
+    const ids = raw.productIds;
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string") || new Set(ids).size !== ids.length || ids.length !== bundle.pickCount) return null;
+    const allowed = new Map(bundleChoices(bundle).map((product) => [product.id, product]));
+    const picked = (ids as string[]).map((id) => allowed.get(id));
+    if (picked.some((product) => product === undefined)) return null;
+    products = picked as CatalogProduct[];
+  }
+  return { bundle, products, unitPrices: splitBundlePrice(bundle.price, products) };
+}
+
+function resolveBundles(value: unknown): { bundles: ResolvedBundle[] } | { error: CartError } {
+  if (value === undefined || value === null) return { bundles: [] };
+  if (!Array.isArray(value)) return { error: "INVALID_BUNDLE" };
+  const seen = new Set<string>();
+  const bundles: ResolvedBundle[] = [];
+  for (const raw of value) {
+    const resolved = resolveOneBundle(raw);
+    if (!resolved || seen.has(resolved.bundle.id)) return { error: "INVALID_BUNDLE" };
+    seen.add(resolved.bundle.id);
+    bundles.push(resolved);
+  }
+  return { bundles };
+}
+
 /** Validates an untrusted cart (request body or saved state) and prices it from the catalog. */
 export function resolveCart(value: unknown): { cart: ResolvedCart } | { error: CartError } {
   if (!isRecord(value)) return { error: "INVALID_CART" };
@@ -103,13 +147,18 @@ export function resolveCart(value: unknown): { cart: ResolvedCart } | { error: C
   const itemsResult = resolveItems(value.items);
   if ("error" in itemsResult) return itemsResult;
 
+  const bundlesResult = resolveBundles(value.bundles);
+  if ("error" in bundlesResult) return bundlesResult;
+
   const { offer } = offerResult;
   const { items } = itemsResult;
-  if (!offer && items.length === 0) return { error: "EMPTY" };
+  const { bundles } = bundlesResult;
+  if (!offer && items.length === 0 && bundles.length === 0) return { error: "EMPTY" };
 
   const offerTotal = offer?.price ?? 0;
   const itemsTotal = items.reduce((sum, line) => sum + line.lineTotal, 0);
-  return { cart: { offer, items, offerTotal, itemsTotal, subtotal: offerTotal + itemsTotal } };
+  const bundlesTotal = bundles.reduce((sum, entry) => sum + entry.bundle.price, 0);
+  return { cart: { offer, items, bundles, offerTotal, itemsTotal, bundlesTotal, subtotal: offerTotal + itemsTotal + bundlesTotal } };
 }
 
 /** Keeps whatever parts of a saved cart are still valid, dropping the rest. */
@@ -129,7 +178,15 @@ export function sanitizeCart(value: unknown): Cart {
     : [];
   const unique = items.filter((item, index) => items.findIndex((other) => other.productId === item.productId) === index);
 
-  return { offer, items: unique };
+  const bundles = Array.isArray(value.bundles)
+    ? value.bundles.flatMap((raw): CartBundle[] => {
+        const resolved = resolveOneBundle(raw);
+        return resolved ? [{ bundleId: resolved.bundle.id, productIds: resolved.products.map((product) => product.id) }] : [];
+      })
+    : [];
+  const uniqueBundles = bundles.filter((entry, index) => bundles.findIndex((other) => other.bundleId === entry.bundleId) === index);
+
+  return { offer, items: unique, bundles: uniqueBundles };
 }
 
 export function setCartItemQuantity(cart: Cart, productId: string, quantity: number): Cart {
@@ -153,6 +210,15 @@ export function setCartOffer(cart: Cart, offer: CartOffer | null): Cart {
   return { ...cart, offer };
 }
 
+/** Puts a bundle in the cart (replacing the same bundle if it is there already). */
+export function setCartBundle(cart: Cart, entry: CartBundle): Cart {
+  return { ...cart, bundles: [...(cart.bundles ?? []).filter((other) => other.bundleId !== entry.bundleId), entry] };
+}
+
+export function removeCartBundle(cart: Cart, bundleId: string): Cart {
+  return { ...cart, bundles: (cart.bundles ?? []).filter((entry) => entry.bundleId !== bundleId) };
+}
+
 export function cartPieceCount(cart: Cart) {
-  return (cart.offer?.productIds.length ?? 0) + cart.items.reduce((sum, item) => sum + item.quantity, 0);
+  return (cart.offer?.productIds.length ?? 0) + cart.items.reduce((sum, item) => sum + item.quantity, 0) + (cart.bundles ?? []).reduce((sum, entry) => sum + entry.productIds.length, 0);
 }

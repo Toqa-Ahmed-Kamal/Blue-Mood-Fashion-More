@@ -20,6 +20,14 @@ export type CatalogProduct = {
    * "اتطلبت +N مرة" — only put real numbers here (fake counts are misleading ads).
    */
   soldCount?: number;
+  /** Added from the team account ("ادمن اكونت"). */
+  addedBy?: "team";
+  /** Team product waiting for the owner's approval (kept hidden until then). */
+  pending?: true;
+  /** The owner approved it at least once (it may be in orders: never deleted, only hidden). */
+  approved?: true;
+  /** Removed by the team account after it was approved: hidden, kept for past orders. */
+  removed?: true;
 };
 
 /**
@@ -124,6 +132,8 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-pajama-041", name: "طقم مضلع Smile · نبيتي", category: "winter-pajamas", image: "/images/bejama/ribbed-smile-set-burgundy.jpg", imageAlt: "طقم مضلع نبيتي، بلوزة عليها وش ضاحك أصفر مطرز وكلمة Smile وبنطلون واسع" },
   { id: "bm-winter-pajama-042", name: "طقم قطيفة مضلع بسوستة · فوشيا", category: "winter-pajamas", image: "/images/bejama/ribbed-zip-set-fuchsia.jpg", imageAlt: "طقم قطيفة مضلع فوشيا، بلوزة واسعة برقبة عالية وسوستة وبنطلون واسع" },
   { id: "bm-winter-pajama-043", name: "بيجاما نبيتي بجيب كاروهات", category: "winter-pajamas", image: "/images/bejama/burgundy-plaid-pocket-pajama.jpg", imageAlt: "تيشيرت نبيتي بكم طويل وجيب كاروهات على الصدر، وبنطلون واسع كاروهات أحمر وأخضر وأبيض" },
+  // Hidden: the photo shows another brand's name (London Burberry). Show it from the admin only with a photo without it.
+  { id: "bm-winter-pajama-044", name: "طقم قطيفة بتيل بكابشون بطبعة دبدوب", category: "winter-pajamas", image: "/images/bejama/teal-velvet-bear-hoodie-set.jpg", imageAlt: "طقم قطيفة بتيل، هودي بكابشون عليه طبعة دبدوب كاروهات وحرف أبيض من تحت، وبنطلون واسع بجيوب", hidden: true },
 
   // ── سالوبيت ──
   { id: "bm-onesie-001", name: "سالوبيت فرو ستيتش بكابشون", category: "onesies", image: "/images/onesies/stitch-fleece-onesie.jpg", imageAlt: "سالوبيت فرو أزرق بكابشون وسوستة كاملة مطبوع عليه رسومات ستيتش وقلوب وردي، بجيوب وأساور عند الكاحل", price: 270, maxWeightKg: 70 },

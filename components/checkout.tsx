@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, Check, ChevronRight, Copy, Minus, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 
-import { addCartItem, emptyCart, MAX_ITEM_QUANTITY, resolveCart, setCartItemQuantity, setCartOffer, type ResolvedCart } from "@/lib/cart";
+import { addCartItem, emptyCart, MAX_ITEM_QUANTITY, removeCartBundle, resolveCart, setCartItemQuantity, setCartOffer, type ResolvedCart } from "@/lib/cart";
 import { readSavedCartRaw, updateCart, useCart } from "@/lib/cart-store";
 import { formatEGP } from "@/lib/format";
 import { currentVisitIds, readAttribution } from "@/lib/attribution-store";
@@ -97,6 +97,7 @@ export function Checkout() {
     updateCart((current) => ({
       offer: offerGone ? null : current.offer,
       items: current.items.filter((item) => !isSoldOut(item.productId)),
+      bundles: current.bundles ?? [],
     }));
     // Telling the customer is the purpose of this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -156,7 +157,10 @@ export function Checkout() {
             price: cartSnapshot.offer.price,
             items: cartSnapshot.offer.products.map((product) => ({ name: product.name, category: product.category, maxWeightKg: product.maxWeightKg, link: productLink(window.location.origin, product.image) })),
           },
-          items: cartSnapshot.items.map((line) => ({ name: line.product.name, quantity: line.quantity, unitPrice: line.unitPrice, link: productLink(window.location.origin, line.product.image) })),
+          items: [
+            ...cartSnapshot.items.map((line) => ({ name: line.product.name, quantity: line.quantity, unitPrice: line.unitPrice, link: productLink(window.location.origin, line.product.image) })),
+            ...cartSnapshot.bundles.flatMap((entry) => entry.products.map((product, index) => ({ name: `${product.name} · ${entry.bundle.name}`, quantity: 1, unitPrice: entry.unitPrices[index], link: productLink(window.location.origin, product.image) }))),
+          ],
         }));
       } catch {
         return null;
@@ -322,6 +326,7 @@ export function Checkout() {
               <h2>الحساب</h2>
               <dl className="totals">
                 {resolved.cart.offer && <div><dt>عرض الشتاء</dt><dd>{formatEGP(resolved.cart.offerTotal)}</dd></div>}
+                {resolved.cart.bundles.length > 0 && <div><dt>العروض</dt><dd>{formatEGP(resolved.cart.bundlesTotal)}</dd></div>}
                 {resolved.cart.items.length > 0 && <div><dt>القطع المنفردة</dt><dd>{formatEGP(resolved.cart.itemsTotal)}</dd></div>}
                 <div>
                   <dt>الشحن</dt>
@@ -395,6 +400,29 @@ function CartLines({ cart, disabled }: { cart: ResolvedCart; disabled: boolean }
           </ul>
         </div>
       )}
+
+      {cart.bundles.map((entry) => (
+        <div className="cart-offer" key={entry.bundle.id}>
+          <div className="cart-offer-head">
+            <div>
+              <strong>{entry.bundle.name}</strong>
+              <span>{formatEGP(entry.bundle.price)}</span>
+            </div>
+            <div className="cart-offer-actions">
+              {entry.bundle.kind === "pick" && <Link href={`/bundle/${entry.bundle.id}`} className="icon-text-btn"><Pencil size={15} /> تعديل</Link>}
+              <button type="button" className="icon-text-btn danger" disabled={disabled} onClick={() => { entry.products.forEach((product) => trackCartRemove(product.id)); updateCart((current) => removeCartBundle(current, entry.bundle.id)); }}><Trash2 size={15} /> حذف</button>
+            </div>
+          </div>
+          <ul className="cart-offer-items">
+            {entry.products.map((product) => (
+              <li key={product.id}>
+                <span className="thumb"><Image src={product.image} alt="" fill sizes="64px" /></span>
+                <span>{product.name}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
 
       {cart.items.length > 0 && (
         <ul className="cart-lines">

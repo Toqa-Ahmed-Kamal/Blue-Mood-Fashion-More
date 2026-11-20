@@ -13,6 +13,8 @@ import { keyPrefix, redisPipeline } from "./redis.ts";
 import type { ProductStat } from "./piece-analytics.ts";
 import { findProduct, offerLimitedFromCosts, setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit } from "./site-data.ts";
 import { loadProductCosts } from "./finance-store.ts";
+import { setBundles, type Bundle } from "./bundles.ts";
+import { BUNDLES, loadBundles, parseBundles } from "./bundles-store.ts";
 
 export const CUSTOM_PRODUCTS_TAG = "custom-products";
 const PRODUCTS = () => `${keyPrefix()}catalog:custom`;
@@ -183,10 +185,11 @@ let cached: { at: number; products: CatalogProduct[] } | null = null;
 export async function ensureCustomProducts(force = false) {
   if (!force && cached && Date.now() - cached.at < CACHE_MS) return cached.products;
   try {
-    const [products, soldOut, autoSoldOut, prices, wasPrices, bigSize, edits, costs] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadAutoSoldOut(), loadPrices(), loadWasPrices(), loadBigSize(), loadProductEdits(), loadProductCosts()]);
+    const [products, soldOut, autoSoldOut, prices, wasPrices, bigSize, edits, costs, bundles] = await Promise.all([loadCustomProducts(), loadSoldOut(), loadAutoSoldOut(), loadPrices(), loadWasPrices(), loadBigSize(), loadProductEdits(), loadProductCosts(), loadBundles()]);
     cached = { at: Date.now(), products };
     setProductEdits(edits);
     setOfferLimited(offerLimitedFromCosts(Object.values(costs)));
+    setBundles(bundles);
     setCustomProducts(products);
     setSoldOut(soldOut, autoSoldOut);
     setBigSize(bigSize);
@@ -212,10 +215,10 @@ function parseStats(raw: unknown): Record<string, ProductStat> {
   }
 }
 
-export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat>; bigSize: string[]; edits: Record<string, ProductEdit>; offerLimited: string[] }> {
+export async function loadCustomProductsForPage(): Promise<{ products: CatalogProduct[]; soldOut: string[]; prices: Record<string, number>; wasPrices: Record<string, number>; stats: Record<string, ProductStat>; bigSize: string[]; edits: Record<string, ProductEdit>; offerLimited: string[]; bundles: Bundle[] }> {
   const url = process.env.KV_REST_API_URL?.trim().replace(/\/+$/, "");
   const token = (process.env.KV_REST_API_READ_ONLY_TOKEN ?? process.env.KV_REST_API_TOKEN)?.trim();
-  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {}, bigSize: [], edits: {}, offerLimited: [] };
+  if (!url || !token) return { products: [], soldOut: [], prices: {}, wasPrices: {}, stats: {}, bigSize: [], edits: {}, offerLimited: [], bundles: [] };
   const read = async (command: string) => {
     try {
       const response = await fetch(`${url}/${command}`, {
@@ -229,7 +232,7 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
       return null;
     }
   };
-  const [products, soldOut, autoSoldOut, prices, wasPrices, stats, bigSize, edits, costs] = await Promise.all([
+  const [products, soldOut, autoSoldOut, prices, wasPrices, stats, bigSize, edits, costs, bundles] = await Promise.all([
     read(`hgetall/${encodeURIComponent(PRODUCTS())}`),
     read(`smembers/${encodeURIComponent(SOLD_OUT())}`),
     read(`smembers/${encodeURIComponent(AUTO_SOLD_OUT())}`),
@@ -239,10 +242,11 @@ export async function loadCustomProductsForPage(): Promise<{ products: CatalogPr
     read(`smembers/${encodeURIComponent(BIG_SIZE())}`),
     read(`hgetall/${encodeURIComponent(EDITS())}`),
     read(`hgetall/${encodeURIComponent(COSTS())}`),
+    read(`hgetall/${encodeURIComponent(BUNDLES())}`),
   ]);
   // The store does not need to know why a product is out: the admin's switch and the inventory both count.
   const out = [...new Set([...(Array.isArray(soldOut) ? soldOut : []), ...(Array.isArray(autoSoldOut) ? autoSoldOut : [])].map(String))];
-  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats), bigSize: Array.isArray(bigSize) ? bigSize.map(String) : [], edits: parseEdits(edits), offerLimited: parseOfferLimited(costs) };
+  return { products: parseList(products), soldOut: out, prices: parsePrices(prices), wasPrices: parseWasPrices(wasPrices), stats: parseStats(stats), bigSize: Array.isArray(bigSize) ? bigSize.map(String) : [], edits: parseEdits(edits), offerLimited: parseOfferLimited(costs), bundles: parseBundles(bundles).filter((bundle) => bundle.status === "live") };
 }
 
 /** Saves a product (and its photo when given), then reads it back before reporting success. */
@@ -254,6 +258,14 @@ export async function saveCustomProduct(product: CatalogProduct, image?: { id: s
   const stored = results.at(-1);
   cached = null;
   return typeof stored === "string" ? parseCustomProduct(JSON.parse(stored)) : null;
+}
+
+/** Deletes an admin-added product and its photo (only for products never approved, so never in an order). */
+export async function deleteCustomProduct(product: CatalogProduct) {
+  const imageId = product.image.startsWith("/api/product-images/") ? product.image.slice("/api/product-images/".length) : "";
+  const [removed] = await redisPipeline([["HDEL", PRODUCTS(), product.id], ...(imageId ? [["DEL", IMAGE(imageId)]] : [])], "write");
+  cached = null;
+  return Number(removed) === 1;
 }
 
 export async function loadCustomProduct(id: string) {

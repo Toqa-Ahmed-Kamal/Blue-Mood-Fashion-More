@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -29,6 +29,7 @@ import { FinanceTab } from "@/components/admin/finance";
 import { InventoryTab } from "@/components/admin/inventory";
 import { PiecesTab } from "@/components/admin/pieces";
 import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
+import { TeamAdminTab } from "@/components/admin/team-admin";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
@@ -73,6 +74,7 @@ const TABS = [
   { id: "inventory", label: "المخزون", icon: Boxes },
   { id: "pieces", label: "تحليل القطع", icon: ChartPie },
   { id: "finance", label: "الإدارة المالية", icon: Wallet },
+  { id: "team", label: "الفريق والعروض", icon: UsersRound },
 ] as const;
 
 type NavItem = { tab: TabId; label: string; icon: typeof Wallet; anchor?: string };
@@ -96,6 +98,9 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     { tab: "finance", label: "بيع مباشر", icon: HandCoins, anchor: "fin-direct" },
     { tab: "finance", label: "خدتها لنفسي", icon: Gift, anchor: "fin-personal" },
     { tab: "finance", label: "مكسب كل أوردر", icon: TrendingUp, anchor: "fin-orders" },
+  ] },
+  { title: "الفريق", items: [
+    { tab: "team", label: "الفريق والعروض", icon: UsersRound },
   ] },
   { title: "التسويق", items: [
     { tab: "traffic", label: "الزيارات", icon: ChartColumn },
@@ -141,6 +146,20 @@ export function AnalyticsDashboard() {
   const [loading, setLoading] = useState(true);
   // Opens on "كل الأوردرات": the section used every day.
   const [tab, setTab] = useState<TabId>("all");
+  // What the team account sent and is waiting for approval (badge on "الفريق والعروض").
+  const [teamPending, setTeamPending] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/approvals", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((result) => {
+        if (alive && result?.success) setTeamPending(result.products.length + result.bundles.filter((bundle: { status: string }) => bundle.status === "pending").length);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   // Old Orders stays mounted once opened, so an import preview is not lost when switching tabs.
   const [oldOpened, setOldOpened] = useState(false);
   // Sections sidebar: open by default on wide screens, closed on phones; the choice is remembered.
@@ -264,6 +283,7 @@ export function AnalyticsDashboard() {
                     <Icon size={17} aria-hidden="true" />
                     <span>{item.label}</span>
                     {item.tab === "orders" && report && report.totals.pending > 0 && <span className="admin-badge">{report.totals.pending}</span>}
+                    {item.tab === "team" && teamPending > 0 && <span className="admin-badge">{teamPending}</span>}
                   </button>
                 );
               })}
@@ -326,6 +346,7 @@ export function AnalyticsDashboard() {
             {tab === "inventory" && <InventoryTab />}
             {tab === "pieces" && <PiecesTab />}
             {tab === "finance" && <FinanceTab />}
+            {tab === "team" && <TeamAdminTab onPendingChange={setTeamPending} />}
           </div>
         </>
       )}

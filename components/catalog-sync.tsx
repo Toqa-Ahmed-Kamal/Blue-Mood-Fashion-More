@@ -2,13 +2,15 @@
 
 import type { ReactNode } from "react";
 
+import { setBundles, type Bundle } from "@/lib/bundles";
+
 import { setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setProductStats, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit, type StoreStat } from "@/lib/site-data";
 
 /**
  * Adds the products created in the admin to the catalog before the page renders (server render
  * and browser alike), so every component that reads the catalog sees them. Renders its children.
  */
-export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, stats = {}, bigSize = [], edits = {}, offerLimited = [], children }: {
+export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, stats = {}, bigSize = [], edits = {}, offerLimited = [], bundles = [], children }: {
   products: CatalogProduct[];
   soldOut: string[];
   prices?: Record<string, number>;
@@ -21,6 +23,8 @@ export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, st
   edits?: Record<string, ProductEdit>;
   /** Pajamas of the "one per offer" group (IDs only). */
   offerLimited?: string[];
+  /** Live bundles (عروض). */
+  bundles?: Bundle[];
   children: ReactNode;
 }) {
   setProductEdits(edits);
@@ -31,5 +35,6 @@ export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, st
   setProductStats(stats);
   setBigSize(bigSize);
   setOfferLimited(offerLimited);
+  setBundles(bundles);
   return children;
 }

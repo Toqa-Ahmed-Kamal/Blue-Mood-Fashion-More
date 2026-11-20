@@ -76,8 +76,13 @@ export function sanitizeProductInput(raw: unknown): { input: ProductInput } | { 
   };
 }
 
+/** Team-account marks kept on a stored product (see CatalogProduct). */
+export type ProductMeta = Pick<CatalogProduct, "addedBy" | "pending" | "approved" | "removed">;
+
 /** The catalog entry for an admin-added product. */
-export function toCatalogProduct(id: string, input: ProductInput, image: string): CatalogProduct {
+export function toCatalogProduct(id: string, input: ProductInput, image: string, meta: ProductMeta = {}): CatalogProduct {
+  // A team product waiting for approval, or removed by the team, is never shown to customers.
+  const hidden = input.hidden || meta.pending === true || meta.removed === true;
   return {
     id,
     name: input.name,
@@ -85,8 +90,24 @@ export function toCatalogProduct(id: string, input: ProductInput, image: string)
     image,
     imageAlt: input.imageAlt,
     ...(input.price !== null ? { price: input.price } : {}),
-    ...(input.hidden ? { hidden: true } : {}),
+    ...(hidden ? { hidden: true } : {}),
     ...(input.maxWeightKg !== null ? { maxWeightKg: input.maxWeightKg } : {}),
+    ...(meta.addedBy === "team" ? { addedBy: "team" as const } : {}),
+    ...(meta.pending ? { pending: true as const } : {}),
+    ...(meta.approved ? { approved: true as const } : {}),
+    ...(meta.removed ? { removed: true as const } : {}),
+  };
+}
+
+/** The form fields of a stored product (to rebuild it with new marks). */
+export function inputOf(product: CatalogProduct): ProductInput {
+  return {
+    name: product.name,
+    category: product.category,
+    price: product.price ?? null,
+    imageAlt: product.imageAlt,
+    maxWeightKg: product.maxWeightKg ?? null,
+    hidden: Boolean(product.hidden) && !product.pending && !product.removed,
   };
 }
 
@@ -105,6 +126,10 @@ export function parseCustomProduct(raw: unknown): CatalogProduct | null {
     ...(typeof value.price === "number" ? { price: value.price } : {}),
     ...(value.hidden === true ? { hidden: true } : {}),
     ...(typeof value.maxWeightKg === "number" ? { maxWeightKg: value.maxWeightKg } : {}),
+    ...(value.addedBy === "team" ? { addedBy: "team" as const } : {}),
+    ...(value.pending === true ? { pending: true as const, hidden: true } : {}),
+    ...(value.approved === true ? { approved: true as const } : {}),
+    ...(value.removed === true ? { removed: true as const, hidden: true } : {}),
   };
 }
 

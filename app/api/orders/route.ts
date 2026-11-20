@@ -196,6 +196,16 @@ export async function POST(request: Request) {
       unitPrice: line.unitPrice,
       link: productLink(origin, line.product.image),
     })),
+    // Bundle pieces: priced lines whose prices add up to the bundle price; the bundle's name is on each line.
+    ...cart.bundles.flatMap((entry) => entry.products.map((product, index) => ({
+      modelId: product.id,
+      name: `${product.name} · ${entry.bundle.name}`,
+      category: product.category,
+      fit: categoryDetailLabel(product.category, product.maxWeightKg),
+      quantity: 1,
+      unitPrice: entry.unitPrices[index],
+      link: productLink(origin, product.image),
+    }))),
   ];
   const shippingNote = rate.unserved
     ? `منطقة غير مخدومة بالشحن العادي (${rate.unserved}): سعر الشحن غير محدد، يتأكد من خدمة العملاء قبل التنفيذ.`
@@ -216,7 +226,7 @@ export async function POST(request: Request) {
     offerName: cart.offer ? `عرض الشتاء: ${cart.offer.option.label}` : "بدون عرض — قطع منفردة",
     products: productRows,
     offerPrice: cart.offerTotal,
-    itemsTotal: cart.itemsTotal,
+    itemsTotal: cart.itemsTotal + cart.bundlesTotal,
     subtotal: cart.subtotal,
     shippingCost,
     total: totals.total,

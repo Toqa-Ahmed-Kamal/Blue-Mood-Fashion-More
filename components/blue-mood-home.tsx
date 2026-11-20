@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, Camera, Eye, HeartHandshake, MessageCircle, RotateCcw, ShoppingBag, Truck } from "lucide-react";
 
+import { BundlesSection } from "@/components/bundles";
 import { ProductCard, QuickView } from "@/components/product-card";
 import { OfferCountdown } from "@/components/promo";
 import { AnnouncementBar, CartBar, SiteFooter, SiteHeader } from "@/components/store-chrome";
@@ -143,6 +144,8 @@ export function BlueMoodHome() {
             </div>
           </div>
         </section>
+
+        <BundlesSection />
 
         {bigSizeItems.length > 0 && (
           <section className="container catalog-section big-size-section" id="big-size" aria-labelledby="big-size-title">

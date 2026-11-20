@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { LockKeyhole } from "lucide-react";
 
-export function AdminLoginForm() {
+/** Sign-in card. `team` = the team account ("ادمن اكونت"), which only reaches /team. */
+export function AdminLoginForm({ team = false }: { team?: boolean }) {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -16,7 +17,7 @@ export function AdminLoginForm() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/admin/login", {
+      const response = await fetch(team ? "/api/team/login" : "/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
@@ -27,7 +28,7 @@ export function AdminLoginForm() {
         return;
       }
       setPassword("");
-      router.replace("/admin/analytics");
+      router.replace(team ? "/team" : "/admin/analytics");
       router.refresh();
     } catch {
       setError("مفيش اتصال. جربي تاني.");
@@ -39,8 +40,8 @@ export function AdminLoginForm() {
   return (
     <form className="admin-login-card" onSubmit={submit}>
       <span className="admin-login-icon"><LockKeyhole size={22} /></span>
-      <h1>لوحة Blue Mood</h1>
-      <p>الصفحة دي خاصة بإدارة المتجر.</p>
+      <h1>{team ? "Blue Mood · ادمن اكونت" : "لوحة Blue Mood"}</h1>
+      <p>{team ? "لإضافة المنتجات والعروض." : "الصفحة دي خاصة بإدارة المتجر."}</p>
       <label>
         <span>الباسورد</span>
         <input type="password" autoComplete="current-password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required />
