@@ -27,6 +27,7 @@ export function categoryDetailLabel(category: CatalogCategory, maxWeightKg?: num
     case "abayas": return "عباية";
     case "robes": return "روب";
     case "onesies": return maxWeightKg ? `سالوبيت One Size – يناسب لحد ${maxWeightKg} كيلو` : "سالوبيت One Size";
+    case "casual": return "كاجوال";
   }
 }
 

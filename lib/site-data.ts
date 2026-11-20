@@ -1,4 +1,4 @@
-export type CatalogCategory = "abayas" | "robes" | "winter-pajamas" | "wearable-blankets" | "onesies";
+export type CatalogCategory = "abayas" | "robes" | "winter-pajamas" | "wearable-blankets" | "onesies" | "casual";
 
 export type CatalogProduct = {
   /** Stable internal identifier used in orders; never shown to customers. */
@@ -37,9 +37,11 @@ export type CatalogProduct = {
 export const categoryPrices: Record<CatalogCategory, number | null> = {
   abayas: 350,
   robes: 250,
-  "winter-pajamas": 275,
-  "wearable-blankets": 250,
+  "winter-pajamas": 300,
+  "wearable-blankets": 285,
   onesies: 270,
+  // No category price: every casual piece has its own price.
+  casual: null,
 };
 
 /** Categories that can also be picked inside the winter offer. */
@@ -51,6 +53,7 @@ export const categoryInfo: Record<CatalogCategory, { label: string; singular: st
   "winter-pajamas": { label: "بيجامات", singular: "بيجاما", anchor: "pajamas", tagline: "فليس وفرو ناعم · لوحدها أو ضمن عرض الشتاء" },
   "wearable-blankets": { label: "بلانكيت", singular: "بلانكيت", anchor: "blankets", tagline: "بلانكيت يُلبس · لوحده أو ضمن عرض الشتاء" },
   onesies: { label: "سالوبيت", singular: "سالوبيت", anchor: "onesies", tagline: "فرو ناعم بكابشون وسوستة · قطعة واحدة دافية" },
+  casual: { label: "كاجوال", singular: "كاجوال", anchor: "casual", tagline: "لبس كاجوال مريح لكل يوم" },
 };
 
 /** Categories sold One Size with a "لحد كام كيلو" note (pajamas and onesies). */
@@ -58,7 +61,7 @@ export const weightFitCategories: CatalogCategory[] = ["winter-pajamas", "onesie
 export const hasWeightFit = (category: CatalogCategory | undefined) => category !== undefined && weightFitCategories.includes(category);
 
 /** Order of the sections on the store (and in the menu): blankets, pajamas, robes, abayas. */
-export const categoryOrder: CatalogCategory[] = ["wearable-blankets", "winter-pajamas", "onesies", "robes", "abayas"];
+export const categoryOrder: CatalogCategory[] = ["wearable-blankets", "winter-pajamas", "onesies", "robes", "abayas", "casual"];
 
 export const catalog: CatalogProduct[] = [
   // ── عبايات ──
@@ -141,14 +144,14 @@ export const catalog: CatalogProduct[] = [
   // ── بلانكيت ──
   { id: "bm-winter-blanket-001", name: "بلانكيت أسود بغطاء للرأس", category: "wearable-blankets", image: "/images/bejama/black-hooded-blanket-cropped.jpg", imageAlt: "بلانكيت فرو أسود واسع بغطاء للرأس يُلبس فوق الملابس", price: 350, hidden: true },
   { id: "bm-winter-blanket-002", name: "بلانكيت هودي بقلوب وودان أرنب", category: "wearable-blankets", image: "/images/bejama/1000507693.jpg", imageAlt: "هودي بطانية واسع من الفرو مطبوع عليه قلوب بيضاء وبكابشون بودان أرنب" },
-  { id: "bm-winter-blanket-003", name: "بلانكيت أزرق بنقط موف", category: "wearable-blankets", image: "/images/blanket/image_1_without_price.jpg", imageAlt: "بلانكيت هودي فرو أزرق واسع مطبوع عليه دوائر موف كبيرة بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
-  { id: "bm-winter-blanket-004", name: "بلانكيت لبني بطبعة ستيتش وقلوب", category: "wearable-blankets", image: "/images/blanket/image_2_without_price.jpg", imageAlt: "بلانكيت هودي فرو لبني واسع مطبوع عليه رسومات ستيتش وقلوب بيضاء بجيب أمامي", price: 250, wasPrice: 350 },
-  { id: "bm-winter-blanket-005", name: "بلانكيت بطبعة زيبرا بيج ورمادي", category: "wearable-blankets", image: "/images/blanket/image_3_without_price.jpg", imageAlt: "بلانكيت هودي فرو واسع بخطوط زيبرا بيج ورمادي بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
-  { id: "bm-winter-blanket-006", name: "بلانكيت رمادي بطبعة فيونكات", category: "wearable-blankets", image: "/images/blanket/image_4_without_price.jpg", imageAlt: "بلانكيت هودي فرو رمادي مبرقش مطبوع عليه فيونكات سوداء بجيب أمامي", price: 250, wasPrice: 350 },
-  { id: "bm-winter-blanket-007", name: "بلانكيت بيج ببقع بني", category: "wearable-blankets", image: "/images/blanket/image_5_without_price.jpg", imageAlt: "بلانكيت هودي فرو بيج واسع مطبوع عليه بقع بني كبيرة بجيب أمامي وكابشون", price: 250, wasPrice: 350 },
-  { id: "bm-winter-blanket-008", name: "بلانكيت قطيفة بكابشون · بني شوكولاتة", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-brown.jpg", imageAlt: "بلانكيت قطيفة واسع بلون بني شوكولاتة بكابشون يُلبس فوق الملابس", price: 250, wasPrice: 350 },
-  { id: "bm-winter-blanket-009", name: "بلانكيت قطيفة بكابشون · رمادي", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-gray.jpg", imageAlt: "بلانكيت قطيفة واسع رمادي غامق بكابشون يُلبس فوق الملابس", price: 250, wasPrice: 350 },
-  { id: "bm-winter-blanket-010", name: "بلانكيت هودي زيبرا أسود وأبيض", category: "wearable-blankets", image: "/images/blanket/zebra-hoodie-blanket.jpg", imageAlt: "بلانكيت هودي فرو واسع بخطوط زيبرا سوداء وبيضاء بجيب أمامي كبير وكابشون", price: 250, wasPrice: 350 },
+  { id: "bm-winter-blanket-003", name: "بلانكيت أزرق بنقط موف", category: "wearable-blankets", image: "/images/blanket/image_1_without_price.jpg", imageAlt: "بلانكيت هودي فرو أزرق واسع مطبوع عليه دوائر موف كبيرة بجيب أمامي وكابشون" },
+  { id: "bm-winter-blanket-004", name: "بلانكيت لبني بطبعة ستيتش وقلوب", category: "wearable-blankets", image: "/images/blanket/image_2_without_price.jpg", imageAlt: "بلانكيت هودي فرو لبني واسع مطبوع عليه رسومات ستيتش وقلوب بيضاء بجيب أمامي" },
+  { id: "bm-winter-blanket-005", name: "بلانكيت بطبعة زيبرا بيج ورمادي", category: "wearable-blankets", image: "/images/blanket/image_3_without_price.jpg", imageAlt: "بلانكيت هودي فرو واسع بخطوط زيبرا بيج ورمادي بجيب أمامي وكابشون" },
+  { id: "bm-winter-blanket-006", name: "بلانكيت رمادي بطبعة فيونكات", category: "wearable-blankets", image: "/images/blanket/image_4_without_price.jpg", imageAlt: "بلانكيت هودي فرو رمادي مبرقش مطبوع عليه فيونكات سوداء بجيب أمامي" },
+  { id: "bm-winter-blanket-007", name: "بلانكيت بيج ببقع بني", category: "wearable-blankets", image: "/images/blanket/image_5_without_price.jpg", imageAlt: "بلانكيت هودي فرو بيج واسع مطبوع عليه بقع بني كبيرة بجيب أمامي وكابشون" },
+  { id: "bm-winter-blanket-008", name: "بلانكيت قطيفة بكابشون · بني شوكولاتة", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-brown.jpg", imageAlt: "بلانكيت قطيفة واسع بلون بني شوكولاتة بكابشون يُلبس فوق الملابس" },
+  { id: "bm-winter-blanket-009", name: "بلانكيت قطيفة بكابشون · رمادي", category: "wearable-blankets", image: "/images/blanket/velvet-hooded-blanket-gray.jpg", imageAlt: "بلانكيت قطيفة واسع رمادي غامق بكابشون يُلبس فوق الملابس" },
+  { id: "bm-winter-blanket-010", name: "بلانكيت هودي زيبرا أسود وأبيض", category: "wearable-blankets", image: "/images/blanket/zebra-hoodie-blanket.jpg", imageAlt: "بلانكيت هودي فرو واسع بخطوط زيبرا سوداء وبيضاء بجيب أمامي كبير وكابشون" },
 ];
 
 export const visibleCatalog: CatalogProduct[] = catalog.filter((product) => !product.hidden);
@@ -274,9 +277,32 @@ export function setPriceOverrides(prices: Readonly<Record<string, number>>) {
   for (const [id, price] of Object.entries(prices)) if (Number.isFinite(price) && price > 0) priceOverrides.set(id, price);
 }
 
+// ── Pajama price by size: the small ones (One Size up to 70 or 75 kg) are 285 "بدل 320";
+// the rest 300 "بدل 350". The size is the product's current one (it can be changed from the admin). ──
+export const SMALL_PAJAMA_KG: readonly number[] = [70, 75];
+export const SMALL_PAJAMA_PRICE = 285;
+
+export function isSmallPajama(product: CatalogProduct) {
+  return product.category === "winter-pajamas" && product.maxWeightKg !== undefined && SMALL_PAJAMA_KG.includes(product.maxWeightKg);
+}
+
+/** "بدل كذا" when neither the product nor the admin sets one. */
+const categoryWasPrices: Partial<Record<CatalogCategory, number>> = {
+  "winter-pajamas": 350,
+  "wearable-blankets": 400,
+};
+
+/** The price before the discount written in the code (product, size or category), before any admin change. */
+export function baseWasPriceOf(product: CatalogProduct) {
+  if (product.wasPrice !== undefined) return product.wasPrice;
+  if (product.price !== undefined) return undefined;
+  return isSmallPajama(product) ? 320 : categoryWasPrices[product.category];
+}
+
 /** The price written in the code (or saved with an added product), before any admin change. */
 export function basePriceOf(product: CatalogProduct) {
-  return product.price ?? categoryPrices[product.category];
+  if (product.price !== undefined) return product.price;
+  return isSmallPajama(product) ? SMALL_PAJAMA_PRICE : categoryPrices[product.category];
 }
 
 export function priceOf(product: CatalogProduct) {
@@ -296,7 +322,7 @@ export function setWasPrices(prices: Readonly<Record<string, number>>) {
 /** The price before the discount, shown struck through — only while it is higher than today's price. */
 export function wasPriceOf(product: CatalogProduct) {
   const price = priceOf(product);
-  const was = wasPrices.get(product.id) ?? product.wasPrice;
+  const was = wasPrices.get(product.id) ?? baseWasPriceOf(product);
   return price !== null && was !== undefined && was > price ? was : null;
 }
 

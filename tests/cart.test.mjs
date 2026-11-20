@@ -70,8 +70,9 @@ test("pajamas and blankets can also be bought singly at their own prices", () =>
     ],
   });
 
-  assert.deepEqual(result.cart.items.map((line) => line.unitPrice), [275, 250, 250]);
-  assert.equal(result.cart.subtotal, 775);
+  // pajamas[0] is One Size up to 70 kg → 285; blankets 285.
+  assert.deepEqual(result.cart.items.map((line) => line.unitPrice), [285, 285, 285]);
+  assert.equal(result.cart.subtotal, 855);
 });
 
 test("offer and single pieces add up together", () => {
@@ -141,4 +142,26 @@ test("an offer holds only one pajama with a factory price of 220 (the others are
   assert.equal(offer(pajamas.slice(0, 4)).error, "INVALID_BUNDLE", "two at 220 are refused");
   setOfferLimited([]);
   assert.ok("cart" in offer(pajamas.slice(0, 4)));
+});
+
+test("prices by size: pajamas up to 70 / 75 kg are 285 instead of 320, other pajamas 300 instead of 350, blankets 285 instead of 400", async () => {
+  const { findProduct, priceOf, wasPriceOf, setProductEdits, setPriceOverrides, setWasPrices } = await import("../lib/site-data.ts");
+  setPriceOverrides({});
+  setWasPrices({});
+  const p = (id) => [priceOf(findProduct(id)), wasPriceOf(findProduct(id))];
+  assert.deepEqual(p("bm-winter-pajama-001"), [285, 320], "70 kg in the code");
+  assert.deepEqual(p("bm-winter-pajama-002"), [300, 350], "default 85–90 kg");
+  assert.deepEqual(p("bm-winter-blanket-003"), [285, 400]);
+  assert.deepEqual(p("bm-winter-blanket-002"), [285, 400]);
+  // The size set from the admin decides.
+  setProductEdits({ "bm-winter-pajama-002": { maxWeightKg: 75 }, "bm-winter-pajama-001": { maxWeightKg: 80 }, "bm-winter-pajama-003": { maxWeightKg: 65 } });
+  assert.deepEqual(p("bm-winter-pajama-002"), [285, 320]);
+  assert.deepEqual(p("bm-winter-pajama-001"), [300, 350]);
+  assert.deepEqual(p("bm-winter-pajama-003"), [300, 350], "65 kg is not in the 70 / 75 group");
+  // A price set from the admin still wins.
+  setPriceOverrides({ "bm-winter-pajama-002": 310 });
+  assert.equal(priceOf(findProduct("bm-winter-pajama-002")), 310);
+  setPriceOverrides({});
+  setProductEdits({});
+  assert.deepEqual(p("bm-winter-pajama-001"), [285, 320]);
 });

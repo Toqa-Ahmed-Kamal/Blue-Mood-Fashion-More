@@ -31,7 +31,7 @@ test("product codes and photo IDs follow the catalog style and never clash with 
 test("product form checks: name, category, price rules, pajama weight", () => {
   assert.ok("error" in sanitizeProductInput({ name: "ab", category: "abayas", price: 350 }));
   assert.ok("error" in sanitizeProductInput({ name: "عباية جديدة", category: "shoes", price: 350 }));
-  assert.equal(sanitizeProductInput({ name: "عباية جديدة", category: "abayas", price: "" }).error, "العبايات والأرواب لازم يبقى ليها سعر بيع.");
+  assert.equal(sanitizeProductInput({ name: "عباية جديدة", category: "abayas", price: "" }).error, "اكتبي سعر البيع (القسم ده ملوش سعر ثابت).");
   assert.ok("error" in sanitizeProductInput({ name: "عباية جديدة", category: "abayas", price: -5 }));
   assert.ok("error" in sanitizeProductInput({ name: "بيجاما جديدة", category: "winter-pajamas", price: null, maxWeightKg: 5 }));
   const pajama = sanitizeProductInput({ name: "  بيجاما   نجوم ", category: "winter-pajamas", price: "", maxWeightKg: "75", imageAlt: "", hidden: false });
@@ -140,12 +140,12 @@ test("a discount written in the code shows by itself; the admin can change it or
   const blanket = findProduct("bm-winter-blanket-003");
   try {
     setWasPrices({});
-    assert.equal(priceOf(blanket), 250);
-    assert.equal(wasPriceOf(blanket), 350);
-    assert.equal(discountPercentOf(blanket), 29, "(350 − 250) ÷ 350 = 28.6%");
+    assert.equal(priceOf(blanket), 285);
+    assert.equal(wasPriceOf(blanket), 400);
+    assert.equal(discountPercentOf(blanket), 29, "(400 − 285) ÷ 400 = 28.75%");
     assert.ok(productsIn("wearable-blankets").length >= 7, "the new blankets are on the store");
-    setWasPrices({ "bm-winter-blanket-003": 400 });
-    assert.equal(wasPriceOf(blanket), 400, "the admin's price wins");
+    setWasPrices({ "bm-winter-blanket-003": 450 });
+    assert.equal(wasPriceOf(blanket), 450, "the admin's price wins");
     setWasPrices({ "bm-winter-blanket-003": 0 });
     assert.equal(wasPriceOf(blanket), null, "removed from the admin");
   } finally {

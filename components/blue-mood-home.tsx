@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { ArrowLeft, Camera, Eye, HeartHandshake, MessageCircle, RotateCcw, ShoppingBag, Truck } from "lucide-react";
 
 import { BundlesSection } from "@/components/bundles";
@@ -41,7 +41,8 @@ const FAQ = [
   { q: `عرض الشتاء إيه؟`, a: `٤ قطع بـ ${landingPromotion.price} جنيه: ${landingPromotion.options.map((option) => option.label).join("، أو ")}. وانتي اللي بتختاري الموديلات.` },
 ];
 
-const categoryCovers: Record<CatalogCategory, string> = {
+/** Photo on each category card (a category without one shows its first product). */
+const categoryCovers: Partial<Record<CatalogCategory, string>> = {
   abayas: "bm-abaya-010",
   robes: "bm-robe-001",
   "winter-pajamas": "bm-winter-pajama-008",
@@ -52,6 +53,8 @@ const categoryCovers: Record<CatalogCategory, string> = {
 export function BlueMoodHome() {
   const [quickView, setQuickView] = useState<CatalogProduct | null>(null);
   const bigSizeItems = visibleCatalog.filter((product) => isBigSize(product.id));
+  // A category without products (e.g. a new one) is not shown until its first product is added.
+  const shownCategories = categoryOrder.filter((category) => productsIn(category).length > 0);
 
   return (
     <div className="store" dir="rtl">
@@ -85,10 +88,10 @@ export function BlueMoodHome() {
           </div>
         </section>
 
-        <section className="container categories" aria-labelledby="categories-title">
+        <section className="container categories" aria-labelledby="categories-title" style={{ "--category-count": shownCategories.length } as CSSProperties}>
           <h2 id="categories-title" className="sr-only">الأقسام</h2>
-          {categoryOrder.map((category) => {
-            const cover = findProduct(categoryCovers[category]);
+          {shownCategories.map((category) => {
+            const cover = findProduct(categoryCovers[category] ?? "") ?? productsIn(category)[0];
             const from = startingPriceOf(category);
             return (
               <Link href={`/#${categoryInfo[category].anchor}`} className="category-card" key={category}>
@@ -160,7 +163,7 @@ export function BlueMoodHome() {
           </section>
         )}
 
-        {categoryOrder.map((category) => {
+        {shownCategories.map((category) => {
           const items = productsIn(category);
           const info = categoryInfo[category];
           return (

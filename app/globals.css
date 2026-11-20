@@ -380,7 +380,7 @@ h1, h2, h3 { font-family: var(--font-display); }
 .category-card:hover .category-arch img { transform: scale(1.05); }
 .category-card strong { font-family: var(--font-display); font-size: 22px; font-weight: 700; }
 .category-card small { color: var(--gold); font-weight: 700; font-size: 14px; }
-@media (min-width: 760px) { .categories { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; } }
+@media (min-width: 760px) { .categories { grid-template-columns: repeat(var(--category-count, 5), minmax(0, 1fr)); gap: 20px; } }
 
 /* ───────────── Offer ───────────── */
 .offer-section {

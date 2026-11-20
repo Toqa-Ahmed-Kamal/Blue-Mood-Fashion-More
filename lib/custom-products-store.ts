@@ -11,7 +11,7 @@
 import { parseCustomProduct, parseProductEdit } from "./custom-products.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import type { ProductStat } from "./piece-analytics.ts";
-import { findProduct, offerLimitedFromCosts, setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit } from "./site-data.ts";
+import { baseWasPriceOf, findProduct, offerLimitedFromCosts, setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit } from "./site-data.ts";
 import { loadProductCosts } from "./finance-store.ts";
 import { setBundles, type Bundle } from "./bundles.ts";
 import { BUNDLES, loadBundles, parseBundles } from "./bundles-store.ts";
@@ -112,7 +112,8 @@ export async function loadWasPrices(): Promise<Record<string, number>> {
  * or saved as 0 when the product's code has a discount of its own (so removing it sticks).
  */
 export async function setProductWasPrice(productId: string, price: number | null) {
-  const codeWas = findProduct(productId)?.wasPrice;
+  const product = findProduct(productId);
+  const codeWas = product ? baseWasPriceOf(product) : undefined;
   const command = price !== null ? ["HSET", WAS_PRICES(), productId, String(price)] : codeWas ? ["HSET", WAS_PRICES(), productId, "0"] : ["HDEL", WAS_PRICES(), productId];
   const [, stored] = await redisPipeline([command, ["HGET", WAS_PRICES(), productId]], "write");
   cached = null;
