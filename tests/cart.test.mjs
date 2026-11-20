@@ -70,9 +70,9 @@ test("pajamas and blankets can also be bought singly at their own prices", () =>
     ],
   });
 
-  // pajamas[0] is One Size up to 70 kg → 285; blankets 285.
-  assert.deepEqual(result.cart.items.map((line) => line.unitPrice), [285, 285, 285]);
-  assert.equal(result.cart.subtotal, 855);
+  // pajamas[0] is One Size up to 70 kg → 285; blankets 295.
+  assert.deepEqual(result.cart.items.map((line) => line.unitPrice), [285, 295, 295]);
+  assert.equal(result.cart.subtotal, 875);
 });
 
 test("offer and single pieces add up together", () => {
@@ -144,15 +144,15 @@ test("an offer holds only one pajama with a factory price of 220 (the others are
   assert.ok("cart" in offer(pajamas.slice(0, 4)));
 });
 
-test("prices by size: pajamas up to 70 / 75 kg are 285 instead of 320, other pajamas 300 instead of 350, blankets 285 instead of 400", async () => {
+test("prices by size: pajamas up to 70 / 75 kg are 285 instead of 320, other pajamas 300 instead of 350, blankets 295 instead of 400", async () => {
   const { findProduct, priceOf, wasPriceOf, setProductEdits, setPriceOverrides, setWasPrices } = await import("../lib/site-data.ts");
   setPriceOverrides({});
   setWasPrices({});
   const p = (id) => [priceOf(findProduct(id)), wasPriceOf(findProduct(id))];
   assert.deepEqual(p("bm-winter-pajama-001"), [285, 320], "70 kg in the code");
   assert.deepEqual(p("bm-winter-pajama-002"), [300, 350], "default 85–90 kg");
-  assert.deepEqual(p("bm-winter-blanket-003"), [285, 400]);
-  assert.deepEqual(p("bm-winter-blanket-002"), [285, 400]);
+  assert.deepEqual(p("bm-winter-blanket-003"), [295, 400]);
+  assert.deepEqual(p("bm-winter-blanket-002"), [295, 400]);
   // The size set from the admin decides.
   setProductEdits({ "bm-winter-pajama-002": { maxWeightKg: 75 }, "bm-winter-pajama-001": { maxWeightKg: 80 }, "bm-winter-pajama-003": { maxWeightKg: 65 } });
   assert.deepEqual(p("bm-winter-pajama-002"), [285, 320]);

@@ -140,9 +140,9 @@ test("a discount written in the code shows by itself; the admin can change it or
   const blanket = findProduct("bm-winter-blanket-003");
   try {
     setWasPrices({});
-    assert.equal(priceOf(blanket), 285);
+    assert.equal(priceOf(blanket), 295);
     assert.equal(wasPriceOf(blanket), 400);
-    assert.equal(discountPercentOf(blanket), 29, "(400 − 285) ÷ 400 = 28.75%");
+    assert.equal(discountPercentOf(blanket), 26, "(400 − 295) ÷ 400 = 26.25%");
     assert.ok(productsIn("wearable-blankets").length >= 7, "the new blankets are on the store");
     setWasPrices({ "bm-winter-blanket-003": 450 });
     assert.equal(wasPriceOf(blanket), 450, "the admin's price wins");
