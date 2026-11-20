@@ -348,7 +348,7 @@ function OrderMoneyBox({ order }: { order: UnifiedOrder }) {
     <section className={`admin-order-money${money.expected ? " expected" : ""}`} aria-label="مكسب الأوردر">
       <h4>{money.expected ? "مكسب الأوردر لو اتأكد (متوقع)" : "مكسب الأوردر"}</h4>
       <dl>
-        <div><dt>البيع</dt><dd>{formatEGP(money.sales)}</dd></div>
+        <div><dt>البيع (من غير الشحن)</dt><dd>{formatEGP(money.sales)}</dd></div>
         <div><dt>تكلفة المنتجات {cost}</dt><dd>− {formatEGP(money.productsCost)}</dd></div>
         <div className="sub"><dt>هامش الربح</dt><dd className={money.margin < 0 ? "admin-negative" : undefined}>{formatEGP(money.margin)}</dd></div>
         <div><dt>نصيبه من مصروفات الشهر <small>({formatEGP(money.perPiece)} للقطعة)</small></dt><dd>− {formatEGP(money.expenseShare)}</dd></div>

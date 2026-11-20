@@ -44,12 +44,13 @@ const oldOrders = [
 
 test("sales, products cost, expenses and net profit follow the agreed rules", () => {
   const report = buildFinanceReport({ live, old: oldOrders, costs, expenses });
-  // Sales: 580 (A1 collected) + 430 (A2 total incl. shipping) + 1430 (B1 total) = 2440. Cancelled, returned, pending: not sales.
-  assert.equal(report.totals.sales, 2440);
+  // Sales without the customer's shipping: 580 (A1 collected, no shipping) + 350 (A2 430 − 80) + 1350 (B1 1430 − 80) = 2280.
+  // Cancelled, returned, pending: not sales.
+  assert.equal(report.totals.sales, 2280);
   // Cost: A1 2 × 100 (snapshot, not today's 120) + A2 1 × 200 (estimated) + B1 1 × 120 (estimated; pajama-002 has no cost) = 520.
   assert.equal(report.totals.productsCost, 520);
   assert.equal(report.totals.expenses, 510);
-  assert.equal(report.totals.netProfit, 2440 - 520 - 510);
+  assert.equal(report.totals.netProfit, 2280 - 520 - 510);
   assert.deepEqual(report.counts, { confirmedOrders: 3, returnedOrders: 1, estimatedOrders: 1, missingCostOrders: 1, expenses: 3 });
   assert.equal(report.returnedValue, 430);
   const rows = Object.fromEntries(report.orders.map((row) => [row.orderId, row]));
@@ -74,7 +75,7 @@ test("a later factory price change does not change an order confirmed earlier", 
 test("date filter: orders by order day, expenses by expense day", () => {
   const report = buildFinanceReport({ live, old: oldOrders, costs, expenses, from: "2026-11-10", to: "2026-11-10" });
   assert.deepEqual(report.orders.map((row) => row.orderId).sort(), ["BM-AAAAAAAAAAAAAAAAAAA2", "BM-AAAAAAAAAAAAAAAAAAA4"]);
-  assert.equal(report.totals.sales, 430);
+  assert.equal(report.totals.sales, 350);
   assert.equal(report.totals.expenses, 210);
   const bad = buildFinanceReport({ live, old: oldOrders, costs, expenses, from: "nonsense" });
   assert.equal(bad.range.from, null, "an invalid date is ignored, not crashed on");
@@ -104,7 +105,7 @@ test("per order: margin, share of the month's expenses by pieces, and net profit
   const a1 = money["BM-AAAAAAAAAAAAAAAAAAA1"];
   assert.deepEqual([a1.sales, a1.productsCost, a1.margin, a1.perPiece, a1.expenseShare, a1.netProfit, a1.expected], [580, 200, 380, 63.75, 127.5, 252.5, false]);
   const a2 = money["BM-AAAAAAAAAAAAAAAAAAA2"];
-  assert.deepEqual([a2.margin, a2.expenseShare, a2.netProfit, a2.costState], [230, 63.75, 166.25, "estimated"]);
+  assert.deepEqual([a2.sales, a2.margin, a2.expenseShare, a2.netProfit, a2.costState], [350, 150, 63.75, 86.25, "estimated"], "the customer's 80 shipping is not the store's");
   assert.equal(money["BM-AAAAAAAAAAAAAAAAAAA3"], undefined, "cancelled: nothing");
   assert.equal(money["BM-AAAAAAAAAAAAAAAAAAA4"], undefined, "returned: nothing");
   // Pending: counted as if all of November's pending orders were confirmed together
@@ -136,8 +137,8 @@ test("profit by stage: confirmed (expected), delivered (collected), waiting (if 
   const withDelivered = live.map((order) => (order.orderId === "BM-AAAAAAAAAAAAAAAAAAA2" ? { ...order, status: "delivered" } : order));
   const report = buildFinanceReport({ live: withDelivered, old: oldOrders, costs, expenses });
   const { confirmed, delivered, pending } = report.stages;
-  assert.deepEqual([confirmed.orders, confirmed.pieces, confirmed.sales], [2, 7, 580 + 1430], "A1 + old B1");
-  assert.deepEqual([delivered.orders, delivered.pieces, delivered.sales], [1, 1, 430], "A2");
+  assert.deepEqual([confirmed.orders, confirmed.pieces, confirmed.sales], [2, 7, 580 + 1350], "A1 + old B1");
+  assert.deepEqual([delivered.orders, delivered.pieces, delivered.sales], [1, 1, 350], "A2");
   assert.equal(Math.round((confirmed.netProfit + delivered.netProfit) * 100) / 100, report.totals.netProfit, "confirmed + delivered = net profit");
   assert.deepEqual([pending.orders, pending.pieces, pending.sales], [2, 12, 1130 + 2250], "A5 + old B2, not in the net profit");
   const byRow = Object.fromEntries(report.orders.map((row) => [row.orderId, row]));

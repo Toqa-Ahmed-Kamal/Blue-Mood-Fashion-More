@@ -2,8 +2,8 @@
 // Pure (no I/O) and tested; storage is lib/finance-store.ts.
 //
 // Rules (agreed with the store owner)
-// - Sales = what confirmed orders brought in: the collected amount when it was entered, else the
-//   order total (shipping paid by the customer included). The store's own courier cost is an expense.
+// - Sales = what confirmed orders brought in for the pieces: the collected amount when it was entered, else the
+//   order total, less the shipping the customer paid (it goes to the shipping company, so it is not the store's).
 // - Products cost = pieces in confirmed orders × the factory cost saved when the order was confirmed.
 //   An order confirmed before its cost was known uses today's factory cost and is marked estimated.
 // - Cancelled and returned orders are neither sales nor products cost. Return shipping is entered as
@@ -16,7 +16,7 @@
 //   net profit on its own line (personal.cost), not inside products cost.
 import { confirmedValueOf, isSaleStatus, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
 import { directSaleMoney, isPersonalTake, type DirectSale } from "./direct-sales.ts";
-import { oldOrderValue, type OldOrder } from "./old-orders.ts";
+import { type OldOrder } from "./old-orders.ts";
 import { catalog, landingPromotion, offerPrice } from "./site-data.ts";
 
 /** Factory of every product that has none saved yet (all products at launch come from it). */
@@ -25,7 +25,7 @@ export const DEFAULT_FACTORY = "مصنع القاهرة";
 export const EXPENSE_CATEGORIES = [
   { id: "stock-purchase", label: "شراء بضاعة من المصنع (منتجات)" },
   { id: "factory-shipping", label: "شحن من المصنع" },
-  { id: "order-shipping", label: "شحن الأوردرات للعميلات (شركة الشحن)" },
+  { id: "order-shipping", label: "شحن الأوردرات على حسابك (شحن مجاني أو فرق)" },
   { id: "returns-shipping", label: "شحن المرتجعات" },
   { id: "ads", label: "إعلانات" },
   { id: "packaging", label: "تغليف" },
@@ -167,6 +167,18 @@ const round = (value: number) => Math.round(value * 100) / 100;
 const monthOf = (day: string) => day.slice(0, 7);
 const piecesOf = (order: Normalized) => order.lines.reduce((sum, line) => sum + line.quantity, 0);
 
+/** A site order's sale without the customer's shipping: the pieces' subtotal, or the collected amount less shipping. */
+export function siteGoodsValue(order: AnalyticsOrder) {
+  if (order.confirmedValue === null && order.total === null) return order.subtotal;
+  return Math.max(0, confirmedValueOf(order) - (order.shippingCost ?? 0));
+}
+
+/** An imported Telegram order's sale without shipping. */
+export function oldGoodsValue(order: OldOrder) {
+  if (order.total === null) return order.offerPrice + order.itemsTotal;
+  return Math.max(0, order.total - (order.shippingCost ?? 0));
+}
+
 /** Site orders and imported Telegram orders, each once (a Telegram copy of a site order is the site order). */
 function normalizeOrders(live: AnalyticsOrder[], old: OldOrder[]): Normalized[] {
   const siteIds = new Set(live.map((order) => order.orderId));
@@ -177,7 +189,7 @@ function normalizeOrders(live: AnalyticsOrder[], old: OldOrder[]): Normalized[] 
       source: "site" as const,
       day: order.day,
       status: order.status,
-      value: confirmedValueOf(order),
+      value: siteGoodsValue(order),
       lines: order.products.map((product) => ({ productId: product.modelId, quantity: product.quantity })),
       snapshot: order.costSnapshot,
     })),
@@ -189,7 +201,7 @@ function normalizeOrders(live: AnalyticsOrder[], old: OldOrder[]): Normalized[] 
         source: "telegram" as const,
         day: cairoDay(order.createdAt),
         status: order.status,
-        value: oldOrderValue(order),
+        value: oldGoodsValue(order),
         lines: order.products.map((product) => ({ productId: product.modelId, quantity: product.quantity })),
         snapshot: order.costSnapshot,
       }];

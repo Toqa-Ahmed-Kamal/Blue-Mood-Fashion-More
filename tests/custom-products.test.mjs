@@ -95,7 +95,7 @@ test("stock purchases from the factory are recorded but not deducted from net pr
   ];
   const order = { orderId: "BM-AAAAAAAAAAAAAAAAAAA1", createdAt: "2026-11-10T10:00:00Z", day: "2026-11-10", subtotal: 500, shippingCost: 80, total: 580, governorate: "", offerName: "", products: [{ modelId: "bm-robe-003", category: "robes", quantity: 2 }], firstTouch: null, lastTouch: null, source: "Direct", sourceType: "Direct", campaign: "", adContent: "", landingPage: "/", status: "confirmed", statusAt: null, confirmedValue: null, costSnapshot: { unitCosts: [120], at: now.toISOString() } };
   const report = buildFinanceReport({ live: [order], old: [], costs: {}, expenses });
-  assert.deepEqual(report.totals, { sales: 580, productsCost: 240, expenses: 300, stockPurchases: 5000, netProfit: 40 });
+  assert.deepEqual(report.totals, { sales: 500, productsCost: 240, expenses: 300, stockPurchases: 5000, netProfit: -40 });
   assert.equal(report.expensesByCategory.find((row) => row.category === "stock-purchase").amount, 5000);
 });
 

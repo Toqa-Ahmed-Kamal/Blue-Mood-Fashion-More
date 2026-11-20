@@ -67,7 +67,7 @@ test("delivered is a sale: counted in sales and products cost like confirmed", (
     costs: {},
     expenses: [],
   });
-  assert.equal(report.totals.sales, 330);
+  assert.equal(report.totals.sales, 250, "330 less the customer's 80 shipping");
   assert.equal(report.totals.productsCost, 120);
   assert.equal(report.counts.confirmedOrders, 1);
 });

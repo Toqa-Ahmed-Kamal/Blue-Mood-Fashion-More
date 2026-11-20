@@ -54,9 +54,9 @@ test("direct sales join the finance totals; the month's expenses stay on online 
   const order = { orderId: "BM-AAAAAAAAAAAAAAAAAAA1", createdAt: "2026-11-10T10:00:00Z", day: "2026-11-10", subtotal: 500, shippingCost: 80, total: 580, governorate: "", offerName: "", products: [{ modelId: "bm-robe-003", category: "robes", quantity: 2 }], firstTouch: null, lastTouch: null, source: "Direct", sourceType: "Direct", campaign: "", adContent: "", landingPage: "/", status: "confirmed", statusAt: null, confirmedValue: null, costSnapshot: { unitCosts: [120], at: NOW.toISOString() } };
   const expenses = [sanitizeExpense({ name: "إعلانات", category: "ads", amount: 100, date: "2026-11-05", notes: "" }, "e1", NOW)];
   const report = buildFinanceReport({ live: [order], old: [], costs: {}, expenses, direct: [sale, before], from: "2026-11-01", to: "2026-11-30" });
-  // Online: 580 − 240 − 100 = 240. Direct: 460 − 240 − 30 = 190.
+  // Online (no customer shipping): 500 − 240 − 100 = 160. Direct: 460 − 240 − 30 = 190.
   assert.deepEqual(report.direct, { count: 1, pieces: 2, sales: 460, productsCost: 240, extraCost: 30, profit: 190, missingCostLines: 0 }, "October sale outside the dates");
-  assert.deepEqual(report.totals, { sales: 1040, productsCost: 480, expenses: 100, stockPurchases: 0, netProfit: 430 });
+  assert.deepEqual(report.totals, { sales: 960, productsCost: 480, expenses: 100, stockPurchases: 0, netProfit: 350 });
   assert.equal(report.orders[0].expenseShare, 100, "ads carried by the online order only");
   assert.equal(report.stages.confirmed.netProfit + report.stages.delivered.netProfit + report.direct.profit, report.totals.netProfit);
 });
