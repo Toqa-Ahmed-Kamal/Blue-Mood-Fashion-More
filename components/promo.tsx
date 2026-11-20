@@ -3,9 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { Flame, Package, Timer } from "lucide-react";
 
-import { isSoldOut, landingPromotion, statOf, type CatalogProduct } from "@/lib/site-data";
-
-const OFFER_END = Date.parse(landingPromotion.endsAt);
+import { isSoldOut, nextPriceChange, statOf, type CatalogProduct } from "@/lib/site-data";
 
 function subscribeToSeconds(onTick: () => void) {
   const id = window.setInterval(onTick, 1000);
@@ -15,12 +13,17 @@ const nowInSeconds = () => Math.floor(Date.now() / 1000);
 // The server has no clock to count with: render nothing there and start on the client.
 const noTimeOnServer = () => null;
 
-/** Seconds left until the offer ends; null on the server and once the offer is over. */
-function useOfferSecondsLeft() {
+/**
+ * Seconds left until the next change of the offer price (what: "offer") or of single pieces ("pieces"),
+ * with that time; null on the server and when no such change is coming.
+ */
+function useSecondsToChange(what: "offer" | "pieces") {
   const now = useSyncExternalStore(subscribeToSeconds, nowInSeconds, noTimeOnServer);
-  if (now === null || !Number.isFinite(OFFER_END)) return null;
-  const left = Math.floor(OFFER_END / 1000) - now;
-  return left > 0 ? left : null;
+  if (now === null) return null;
+  const change = nextPriceChange(now * 1000);
+  if (!change || !(what === "offer" ? change.offerChanges : change.piecesChange)) return null;
+  const left = Math.floor(change.at / 1000) - now;
+  return left > 0 ? { left, at: change.at } : null;
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -36,8 +39,9 @@ function splitTime(total: number) {
 
 /** Live countdown to the real offer end date. Hidden once the offer has ended. */
 export function OfferCountdown({ variant = "chip" }: { variant?: "chip" | "bar" }) {
-  const left = useOfferSecondsLeft();
-  if (left === null) return null;
+  const change = useSecondsToChange("offer");
+  if (change === null) return null;
+  const { left } = change;
   const { days, hours, minutes, seconds } = splitTime(left);
   const units = [
     ...(days > 0 ? [{ value: String(days), label: "يوم" }] : []),
@@ -64,29 +68,29 @@ export function OfferCountdown({ variant = "chip" }: { variant?: "chip" | "bar" 
 
 /** On each priced product while the countdown runs: the price holds until the end, then goes up. */
 export function PriceCountdown() {
-  const left = useOfferSecondsLeft();
-  if (left === null) return null;
+  const change = useSecondsToChange("pieces");
+  if (change === null) return null;
+  const { left, at } = change;
   const { days, hours, minutes, seconds } = splitTime(left);
   const clock = `${days > 0 ? `${days} يوم · ` : ""}${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   return (
     <span className="price-countdown" role="timer" aria-label={`السعر ده لحد ما العرض يخلص، باقي ${hours} ساعة و${minutes} دقيقة`}>
-      <Timer size={13} aria-hidden="true" /> السعر ده لحد {endLabel} · باقي <b dir="ltr">{clock}</b>
+      <Timer size={13} aria-hidden="true" /> السعر ده لحد {endLabel(at)} · باقي <b dir="ltr">{clock}</b>
     </span>
   );
 }
 
-/** "الساعة 5 العصر" style label of the end time (Cairo). */
-const endLabel = (() => {
-  if (!Number.isFinite(OFFER_END)) return "";
-  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "numeric", hourCycle: "h23" }).format(OFFER_END));
+/** "الساعة 5 العصر" / "الساعة 12 بالليل" style label of a time (Cairo). */
+function endLabel(at: number) {
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "numeric", hourCycle: "h23" }).format(at));
   const twelve = hour % 12 === 0 ? 12 : hour % 12;
-  const part = hour < 12 ? "الصبح" : hour < 15 ? "الضهر" : hour < 18 ? "العصر" : "بالليل";
+  const part = hour === 0 || hour >= 18 ? "بالليل" : hour < 12 ? "الصبح" : hour < 15 ? "الضهر" : "العصر";
   return `الساعة ${twelve} ${part}`;
-})();
+}
 
 /** True while the offer countdown is running (client only). */
 export function useOfferIsRunning() {
-  return useOfferSecondsLeft() !== null;
+  return useSecondsToChange("offer") !== null;
 }
 
 /**

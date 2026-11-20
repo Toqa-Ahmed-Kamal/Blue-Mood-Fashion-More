@@ -308,9 +308,9 @@ export function baseWasPriceOf(product: CatalogProduct) {
   return isSmallPajama(product) ? 320 : categoryWasPrices[product.category];
 }
 
-// ── When the countdown (landingPromotion.endsAt) is over, prices go up: the offer to its `priceAfter`,
-// every single piece by PRICE_RISE_AFTER_PROMO. Checked on the server (orders) and in the browser alike. ──
-export const PRICE_RISE_AFTER_PROMO = 20;
+// ── Prices by time (landingPromotion.priceSteps): each step holds until its `until`, then the next one starts —
+// the offer's price and how much is added to every single piece. Checked on the server (orders) and in the browser. ──
+export type PriceStep = { until: string | null; offer: number; pieceRise: number };
 
 // The clock used for prices (tests pin it, so they do not depend on the time they run).
 let priceClock = () => Date.now();
@@ -318,14 +318,35 @@ export function setPriceClock(clock: (() => number) | null) {
   priceClock = clock ?? (() => Date.now());
 }
 
+function stepIndexAt(now: number) {
+  const steps = landingPromotion.priceSteps;
+  const index = steps.findIndex((step) => step.until === null || now < Date.parse(step.until));
+  return index === -1 ? steps.length - 1 : index;
+}
+
+/** The price step in force now. */
+export function priceStepAt(now = priceClock()): PriceStep {
+  return landingPromotion.priceSteps[stepIndexAt(now)];
+}
+
+/** True once the first deadline has passed. */
 export function isPromoOver(now = priceClock()) {
-  const end = Date.parse(landingPromotion.endsAt);
-  return Number.isFinite(end) && now >= end;
+  return stepIndexAt(now) > 0;
+}
+
+/** The next price change (null when there is none): when, and whether the offer / single pieces change then. */
+export function nextPriceChange(now = Date.now()) {
+  const steps = landingPromotion.priceSteps;
+  const index = stepIndexAt(now);
+  const step = steps[index];
+  const next = steps[index + 1];
+  if (!step.until || !next) return null;
+  return { at: Date.parse(step.until), offerChanges: next.offer !== step.offer, piecesChange: next.pieceRise !== step.pieceRise };
 }
 
 /** The winter offer's price now. */
 export function offerPrice(now = priceClock()) {
-  return isPromoOver(now) ? landingPromotion.priceAfter : landingPromotion.price;
+  return priceStepAt(now).offer;
 }
 
 /** The price written in the code (or saved with an added product), before any admin change. */
@@ -343,7 +364,7 @@ export function listPriceOf(product: CatalogProduct) {
 /** What a customer pays for one piece now (the listed price, plus the rise once the countdown is over). */
 export function priceOf(product: CatalogProduct, now = priceClock()) {
   const listed = listPriceOf(product);
-  return listed === null ? null : listed + (isPromoOver(now) ? PRICE_RISE_AFTER_PROMO : 0);
+  return listed === null ? null : listed + priceStepAt(now).pieceRise;
 }
 
 // ── "بدل كذا": price before the discount (in the code, or set from the admin and stored in Redis) ──
@@ -380,16 +401,17 @@ export function productsIn(category: CatalogCategory) {
 }
 
 export const landingPromotion = {
-  price: 1100,
   currency: "EGP",
   durationDays: 3,
   /**
-   * When the offer ends (Cairo time). The site counts down to it and hides the
-   * timer once it passes — move this date to extend or restart the offer.
+   * Prices by time (Cairo): each step holds until `until`, then the next starts. The site counts down to
+   * the next change (the offer timer when the offer changes, a timer on each product when pieces change).
    */
-  endsAt: "2026-11-20T17:00:00+02:00",
-  /** The offer's price once the countdown is over. */
-  priceAfter: 1200,
+  priceSteps: [
+    { until: "2026-11-20T17:00:00+02:00", offer: 1100, pieceRise: 0 },
+    { until: "2026-11-21T00:00:00+02:00", offer: 1200, pieceRise: 20 },
+    { until: null, offer: 1300, pieceRise: 20 },
+  ] satisfies PriceStep[] as PriceStep[],
   options: [
     {
       id: "four-pajamas",

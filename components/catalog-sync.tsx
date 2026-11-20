@@ -5,7 +5,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { setBundles, type Bundle } from "@/lib/bundles";
 
-import { landingPromotion, setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setProductStats, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit, type StoreStat } from "@/lib/site-data";
+import { nextPriceChange, setBigSize, setCustomProducts, setOfferLimited, setPriceOverrides, setProductEdits, setProductStats, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit, type StoreStat } from "@/lib/site-data";
 
 /**
  * Adds the products created in the admin to the catalog before the page renders (server render
@@ -48,9 +48,19 @@ export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, st
 function usePriceRiseRefresh() {
   const router = useRouter();
   useEffect(() => {
-    const left = Date.parse(landingPromotion.endsAt) - Date.now();
-    if (!(left > 0) || left > 2 ** 31 - 1) return;
-    const id = window.setTimeout(() => router.refresh(), left + 1000);
+    let id: number | undefined;
+    // At each price change: refresh, then wait for the next one.
+    const schedule = () => {
+      const change = nextPriceChange(Date.now());
+      if (!change) return;
+      const left = change.at - Date.now();
+      if (left > 2 ** 31 - 1) return;
+      id = window.setTimeout(() => {
+        router.refresh();
+        schedule();
+      }, Math.max(0, left) + 1000);
+    };
+    schedule();
     return () => window.clearTimeout(id);
   }, [router]);
 }
