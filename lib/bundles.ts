@@ -4,7 +4,7 @@
 // A bundle made by the team account waits for the owner's approval ("pending") before customers see it.
 // In an order, a bundle's pieces become ordinary priced lines whose prices add up to the bundle price,
 // so the dashboards, finance and Telegram need nothing special.
-import { findProduct, isSoldOut, priceOf, type CatalogProduct } from "./site-data.ts";
+import { findProduct, isOnStore, isSoldOut, priceOf, type CatalogProduct } from "./site-data.ts";
 
 export type BundleKind = "fixed" | "pick";
 export type BundleStatus = "pending" | "live";
@@ -84,7 +84,7 @@ export function parseBundle(raw: unknown): Bundle | null {
   };
 }
 
-const orderable = (product: CatalogProduct | undefined): product is CatalogProduct => product !== undefined && !product.hidden && !isSoldOut(product.id);
+const orderable = (product: CatalogProduct | undefined): product is CatalogProduct => product !== undefined && isOnStore(product) && !isSoldOut(product.id);
 
 /** The pieces a customer can get now (hidden / sold-out products left out). */
 export function bundleChoices(bundle: Bundle) {

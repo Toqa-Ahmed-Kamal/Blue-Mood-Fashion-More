@@ -163,7 +163,15 @@ export const catalog: CatalogProduct[] = [
   { id: "bm-winter-blanket-010", name: "بلانكيت هودي زيبرا أسود وأبيض", category: "wearable-blankets", image: "/images/blanket/zebra-hoodie-blanket.jpg", imageAlt: "بلانكيت هودي فرو واسع بخطوط زيبرا سوداء وبيضاء بجيب أمامي كبير وكابشون" },
 ];
 
-export const visibleCatalog: CatalogProduct[] = catalog.filter((product) => !product.hidden);
+// Sections taken off the store (their products stay in the catalog for past orders, stock and finance).
+export const closedCategories: readonly CatalogCategory[] = ["abayas"];
+
+/** On the store and orderable: not hidden, and its section is open. */
+export function isOnStore(product: CatalogProduct) {
+  return !product.hidden && !closedCategories.includes(product.category);
+}
+
+export const visibleCatalog: CatalogProduct[] = catalog.filter(isOnStore);
 
 // ── Products added from the admin (stored in Redis) ──
 // They are inserted into the same `catalog` / `visibleCatalog` arrays every module already uses,
@@ -231,7 +239,7 @@ export function statOf(id: string): StoreStat | undefined {
 export function setCustomProducts(products: readonly CatalogProduct[]) {
   const valid = products.filter((product) => !builtInIds.has(product.id) && product.category in categoryInfo);
   catalog.splice(BUILT_IN_COUNT, catalog.length - BUILT_IN_COUNT, ...valid);
-  visibleCatalog.splice(0, visibleCatalog.length, ...catalog.filter((product) => !product.hidden));
+  visibleCatalog.splice(0, visibleCatalog.length, ...catalog.filter(isOnStore));
 }
 
 // ── Edits of built-in products from the admin (stored in Redis): name, description, size, hidden ──
@@ -269,7 +277,7 @@ export function setProductEdits(edits: Readonly<Record<string, ProductEdit>>) {
     if (edit) editedIds.add(original.id);
     catalog[index] = applyProductEdit(original, edit);
   });
-  visibleCatalog.splice(0, visibleCatalog.length, ...catalog.filter((product) => !product.hidden));
+  visibleCatalog.splice(0, visibleCatalog.length, ...catalog.filter(isOnStore));
 }
 
 export function findProduct(id: string) {

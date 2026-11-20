@@ -2,6 +2,7 @@ import {
   findOffer,
   findProduct,
   isOfferExcluded,
+  isOnStore,
   isOfferLimited,
   isSoldOut,
   landingPromotion,
@@ -55,7 +56,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isOrderable(product: CatalogProduct | undefined): product is CatalogProduct {
-  return product !== undefined && !product.hidden && !isSoldOut(product.id);
+  return product !== undefined && isOnStore(product) && !isSoldOut(product.id);
 }
 
 export function isSoldSingly(product: CatalogProduct) {

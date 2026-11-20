@@ -15,19 +15,23 @@ import {
   setCartItemQuantity,
   setCartOffer,
 } from "../lib/cart.ts";
-import { catalog, categoryPrices, visibleCatalog } from "../lib/site-data.ts";
+import { catalog, findProduct, priceOf, visibleCatalog } from "../lib/site-data.ts";
 
 const visible = (category) => visibleCatalog.filter((product) => product.category === category).map((product) => product.id);
 const pajamas = visible("winter-pajamas");
 const blankets = visible("wearable-blankets");
-const abaya = visible("abayas")[0];
 const robe = visible("robes")[0];
+// A second single piece for the cart tests (the abayas section is closed).
+const abaya = visible("robes")[1];
 const hiddenAbaya = catalog.find((product) => product.hidden && product.category === "abayas").id;
 
-test("the store has all four sections with enough pieces for both offers", () => {
-  for (const category of ["abayas", "robes", "winter-pajamas", "wearable-blankets"]) {
+test("the store has its sections with enough pieces for both offers; the abayas section is closed", () => {
+  for (const category of ["robes", "winter-pajamas", "wearable-blankets"]) {
     assert.ok(visible(category).length > 0, category);
   }
+  assert.deepEqual(visible("abayas"), [], "no abayas on the store");
+  const closed = catalog.find((product) => product.category === "abayas" && !product.hidden).id;
+  assert.equal(resolveCart({ items: [{ productId: closed, quantity: 1 }] }).error, "INVALID_ITEM", "an abaya can't be ordered");
   assert.ok(pajamas.length >= 4);
   assert.ok(blankets.length >= 1);
 });
@@ -61,7 +65,7 @@ test("offers reject duplicates, wrong counts, unknown ids, hidden pieces and pri
 test("single pieces are priced from the catalog, not from the request", () => {
   const result = resolveCart({ offer: null, items: [{ productId: abaya, quantity: 2, unitPrice: 1 }, { productId: robe, quantity: 1 }] });
 
-  assert.equal(result.cart.itemsTotal, categoryPrices.abayas * 2 + categoryPrices.robes);
+  assert.equal(result.cart.itemsTotal, priceOf(findProduct(abaya)) * 2 + priceOf(findProduct(robe)));
   assert.equal(result.cart.subtotal, result.cart.itemsTotal);
 });
 
@@ -85,7 +89,7 @@ test("offer and single pieces add up together", () => {
     items: [{ productId: abaya, quantity: 1 }],
   });
 
-  assert.equal(result.cart.subtotal, 1100 + categoryPrices.abayas);
+  assert.equal(result.cart.subtotal, 1100 + priceOf(findProduct(abaya)));
 });
 
 test("invalid single pieces are rejected", () => {
