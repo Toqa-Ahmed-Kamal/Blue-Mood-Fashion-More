@@ -164,3 +164,24 @@ test("margin filter: more / less than an amount; cancelled, returned and orders 
   assert.ok(!matchesMargin(order("confirmed", undefined), range("gte200")));
   assert.ok(matchesMargin(order("confirmed", 250), { min: 240, max: null }), "custom");
 });
+
+test("cancel reasons: only from the list, only on cancelled orders, and the reason filter", async () => {
+  const { CANCEL_REASONS, parseCancelReason } = await import("../lib/analytics-report.ts");
+  const { matchesReason } = await import("../lib/all-orders.ts");
+  assert.deepEqual(CANCEL_REASONS.map((reason) => reason.label), ["العميل مأكدش ومش بيرد", "العميل رجع في كلامه", "الأوردر متكرر", "تأخير مننا", "تأخير من شركة الشحن"]);
+  assert.equal(parseCancelReason("duplicate"), "duplicate");
+  assert.equal(parseCancelReason(null), null, "clear");
+  assert.equal(parseCancelReason(""), null, "clear");
+  assert.equal(parseCancelReason("anything else"), undefined, "refused");
+  const rows = mergeAllOrders([
+    { order: site("BM-EEEEEEEEEEEEEEEEEEE1", "cancelled", { cancelReason: "our-delay" }), details: null },
+    { order: site("BM-EEEEEEEEEEEEEEEEEEE2", "cancelled"), details: null },
+    { order: site("BM-EEEEEEEEEEEEEEEEEEE3", "confirmed"), details: null },
+  ], []);
+  assert.equal(rows.find((row) => row.orderId === "BM-EEEEEEEEEEEEEEEEEEE1").cancelReason, "our-delay");
+  assert.equal(rows.find((row) => row.orderId === "BM-EEEEEEEEEEEEEEEEEEE2").cancelReason, null);
+  const pick = (reason) => rows.filter((row) => matchesReason(row, reason)).map((row) => row.orderId);
+  assert.deepEqual(pick("our-delay"), ["BM-EEEEEEEEEEEEEEEEEEE1"]);
+  assert.deepEqual(pick("none"), ["BM-EEEEEEEEEEEEEEEEEEE2"]);
+  assert.equal(pick("").length, 3, "no reason filter: everything");
+});

@@ -31,6 +31,7 @@ import {
   isSaleStatus,
   orderValue,
   type AnalyticsOrder,
+  type CancelReason,
   type CourierStep,
   type DayVisits,
   type FunnelCounts,
@@ -381,19 +382,35 @@ export async function setOrderStatus(orderId: string, status: OrderStatus, confi
     ? snapshotCosts(order.products.map((product) => product.modelId), await productCostsFor(order.products.map((product) => product.modelId)))
     : undefined);
   const now = new Date().toISOString();
-  const { soldAt: _soldAt, ...withoutSoldAt } = order;
+  const { soldAt: _soldAt, cancelReason: _reason, ...withoutSoldAt } = order;
   void _soldAt;
+  // The cancel reason stays only while the order stays cancelled.
+  const cancelReason = status === "cancelled" ? _reason : undefined;
   // Time it became a sale: kept from confirmed to delivered, cleared when cancelled / returned / back to waiting.
   const soldAt = isSaleStatus(status) ? (isSaleStatus(order.status) ? order.soldAt : now) : undefined;
   const updated: AnalyticsOrder = {
     ...withoutSoldAt,
     ...(soldAt ? { soldAt } : {}),
+    ...(cancelReason ? { cancelReason } : {}),
     status,
     statusAt: now,
     // Delivered keeps the amount entered at confirmation (unless a new one is given).
     confirmedValue: status === "confirmed" ? confirmedValue : status === "delivered" ? confirmedValue ?? order.confirmedValue : null,
     ...(costSnapshot ? { costSnapshot } : {}),
   };
+  const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
+  return result === "OK" ? updated : null;
+}
+
+/** Sets (or clears, with null) why a cancelled order was cancelled. "not_cancelled" for any other order. */
+export async function setOrderCancelReason(orderId: string, reason: CancelReason | null): Promise<AnalyticsOrder | null | "not_cancelled"> {
+  const [raw] = await redisPipeline([["GET", key(`order:${orderId}`)]], "write");
+  if (typeof raw !== "string") return null;
+  const order = JSON.parse(raw) as AnalyticsOrder;
+  if (order.status !== "cancelled") return "not_cancelled";
+  const { cancelReason: _previous, ...rest } = order;
+  void _previous;
+  const updated: AnalyticsOrder = reason ? { ...rest, cancelReason: reason } : rest;
   const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
   return result === "OK" ? updated : null;
 }

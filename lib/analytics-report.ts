@@ -17,6 +17,26 @@ export function isSaleStatus(status: string) {
 /** Booking confirmed by a deposit the customer paid in advance (part of the order total, not extra). */
 export type Deposit = { amount: number; at: string };
 
+/** Why an order was cancelled (chosen from the admin's list; only on cancelled orders). */
+export const CANCEL_REASONS = [
+  { id: "no-answer", label: "العميل مأكدش ومش بيرد" },
+  { id: "changed-mind", label: "العميل رجع في كلامه" },
+  { id: "duplicate", label: "الأوردر متكرر" },
+  { id: "our-delay", label: "تأخير مننا" },
+  { id: "courier-delay", label: "تأخير من شركة الشحن" },
+] as const;
+export type CancelReason = (typeof CANCEL_REASONS)[number]["id"];
+
+export function isCancelReason(value: unknown): value is CancelReason {
+  return CANCEL_REASONS.some((reason) => reason.id === value);
+}
+
+/** { cancelReason: id | null } from the admin: the reason, null to clear it, undefined when invalid. */
+export function parseCancelReason(value: unknown): CancelReason | null | undefined {
+  if (value === null || value === "") return null;
+  return isCancelReason(value) ? value : undefined;
+}
+
 /** Shipping company steps (set from the admin): told about the order, then the parcel was handed to them. */
 export type Courier = { notifiedAt?: string; handedAt?: string };
 export type CourierStep = "notified" | "handed";
@@ -108,6 +128,8 @@ export type AnalyticsOrder = {
   deposit?: Deposit;
   /** Shipping company steps (told / handed over). */
   courier?: Courier;
+  /** Why it was cancelled (cancelled orders only). */
+  cancelReason?: CancelReason;
   /** Last time the admin edited the order (pieces, customer, shipping). */
   editedAt?: string;
 };

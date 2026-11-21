@@ -1,5 +1,5 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
-import { applyCourierStep, isSaleStatus, parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
+import { applyCourierStep, isSaleStatus, parseCancelReason, parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
 import { isOrderStatus } from "@/lib/analytics-store";
 import { OLD_ORDER_ID_PATTERN, sanitizeOldOrder } from "@/lib/old-orders";
 import { VaultNotConfiguredError, deleteOldOrder, loadOldOrder, updateOldOrder } from "@/lib/old-orders-store";
@@ -85,6 +85,15 @@ export async function PATCH(request: Request, context: Context) {
       if (!change) return json(400, { success: false, error: { code: "INVALID_COURIER" } });
       courier = applyCourierStep(current.courier, change.step, change.done, now);
     }
+    // Cancel reason: kept through edits while the order stays cancelled; set only by { cancelReason: id | null }.
+    let cancelReason = current.cancelReason;
+    if (body.cancelReason !== undefined) {
+      const reason = parseCancelReason(body.cancelReason);
+      if (reason === undefined) return json(400, { success: false, error: { code: "INVALID_REASON", message: "اختاري سبب من القايمة." } });
+      if (next.status !== "cancelled") return json(409, { success: false, error: { code: "NOT_CANCELLED", message: "سبب الإلغاء بيتحدد للأوردر الملغي بس." } });
+      cancelReason = reason ?? undefined;
+    }
+    if (next.status !== "cancelled") cancelReason = undefined;
     if (body.archived !== undefined) {
       if (typeof body.archived !== "boolean") return json(400, { success: false, error: { code: "INVALID_ARCHIVED" } });
       next = { ...next, archived: body.archived };
@@ -99,12 +108,13 @@ export async function PATCH(request: Request, context: Context) {
     }
     // Time it became a sale (inventory): kept while it stays a sale, cleared otherwise. Never from the browser.
     const soldAt = isSaleStatus(next.status) ? (isSaleStatus(current.status) ? current.soldAt : now.toISOString()) : undefined;
-    const { costSnapshot: _ignored, deposit: _ignoredDeposit, soldAt: _ignoredSoldAt, courier: _ignoredCourier, ...withoutSnapshot } = next;
+    const { costSnapshot: _ignored, deposit: _ignoredDeposit, soldAt: _ignoredSoldAt, courier: _ignoredCourier, cancelReason: _ignoredReason, ...withoutSnapshot } = next;
+    void _ignoredReason;
     void _ignored;
     void _ignoredDeposit;
     void _ignoredSoldAt;
     void _ignoredCourier;
-    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(soldAt ? { soldAt } : {}), ...(deposit ? { deposit } : {}), ...(courier ? { courier } : {}), updatedAt: now.toISOString() });
+    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(soldAt ? { soldAt } : {}), ...(deposit ? { deposit } : {}), ...(courier ? { courier } : {}), ...(cancelReason ? { cancelReason } : {}), updatedAt: now.toISOString() });
     if (saved && (body.order !== undefined || body.status !== undefined)) await syncStoreStock();
     return saved ? json(200, { success: true, order: saved }) : json(404, NOT_FOUND);
   } catch (error) {

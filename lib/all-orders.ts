@@ -2,7 +2,7 @@
 //
 // Each order appears once. A site order is taken from the site (its status, deposit and totals);
 // when its customer details were never stored, the matching Telegram message fills them in.
-import type { AnalyticsOrder, Courier, Deposit, OrderStatus } from "./analytics-report.ts";
+import type { AnalyticsOrder, CancelReason, Courier, Deposit, OrderStatus } from "./analytics-report.ts";
 import type { OrderMoney } from "./finance.ts";
 import { SHIPPING_SYSTEM_NOTES, type OldOrder } from "./old-orders.ts";
 import { editRecordProducts, editTotals, type OrderEdit } from "./order-edit.ts";
@@ -20,6 +20,8 @@ export type UnifiedOrder = {
   deposit: Deposit | null;
   /** Shipping company steps (told / handed over). */
   courier: Courier | null;
+  /** Why it was cancelled (cancelled orders only). */
+  cancelReason: CancelReason | null;
   archived: boolean;
   /** false when neither the site nor a Telegram message has the customer's details. */
   hasCustomer: boolean;
@@ -61,7 +63,20 @@ export const ORDER_FILTERS = [
 ] as const;
 export type OrderFilter = (typeof ORDER_FILTERS)[number]["id"];
 
-export function matchesFilter(order: UnifiedOrder, filter: OrderFilter) {
+/** Cancel reason filter: any, one reason, or "none" (cancelled without a reason). Only cancelled orders match a reason. */
+export type ReasonFilter = "" | CancelReason | "none";
+
+export function matchesReason(order: Pick<UnifiedOrder, "status" | "cancelReason">, reason: ReasonFilter) {
+  if (!reason) return true;
+  if (order.status !== "cancelled") return false;
+  return reason === "none" ? !order.cancelReason : order.cancelReason === reason;
+}
+
+export function isOrderFilter(value: unknown): value is OrderFilter {
+  return ORDER_FILTERS.some((item) => item.id === value);
+}
+
+export function matchesFilter(order: Pick<UnifiedOrder, "status" | "deposit" | "courier">, filter: OrderFilter) {
   if (filter === "all") return true;
   if (filter === "deposit") return order.deposit !== null;
   // Customers to call: not received, not cancelled or returned, no deposit, the shipping company not told yet.
@@ -146,6 +161,7 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       status: order.status,
       deposit: order.deposit ?? null,
       courier: order.courier ?? null,
+      cancelReason: order.cancelReason ?? null,
       archived: false,
       hasCustomer: customer !== null,
       customerName: customer?.customerName ?? "",
@@ -176,6 +192,7 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       status: order.status,
       deposit: order.deposit ?? null,
       courier: order.courier ?? null,
+      cancelReason: order.cancelReason ?? null,
       archived: order.archived,
       hasCustomer: Boolean(order.customerName || order.phone),
       customerName: order.customerName,

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Download, ImageOff, RefreshCw } from "lucide-react";
 
-import type { OrderStatus } from "@/lib/analytics-report";
+import { CANCEL_REASONS, type OrderStatus } from "@/lib/analytics-report";
+import { ORDER_FILTERS } from "@/lib/all-orders";
 import type { ProductSummary, QuantitySummary } from "@/lib/quantity-summary";
 import { categoryInfo } from "@/lib/site-data";
 import { buildXlsx, type XlsxCell, type XlsxImage } from "@/lib/xlsx";
@@ -16,6 +17,14 @@ const VIEWS = [
   { id: "submitted", label: "المستني تأكيد بس", statuses: ["submitted"] },
 ] as const satisfies readonly { id: string; label: string; statuses: OrderStatus[] }[];
 type ViewId = (typeof VIEWS)[number]["id"];
+const ALL_STATUSES: readonly OrderStatus[] = ["submitted", "confirmed", "delivered", "cancelled", "returned"];
+
+/** Order filters (same as "كل الأوردرات"), plus cancelled by reason. Value: "filter" or "cancelled:reason". */
+const ORDER_CHOICES = [
+  ...ORDER_FILTERS.filter((item) => item.id !== "all").map((item) => ({ value: item.id, label: item.label })),
+  ...CANCEL_REASONS.map((reason) => ({ value: `cancelled:${reason.id}`, label: `اتلغى · ${reason.label}` })),
+  { value: "cancelled:none", label: "اتلغى · من غير سبب" },
+];
 
 const integer = new Intl.NumberFormat("en-US");
 const cairoTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" });
@@ -29,6 +38,8 @@ export function QuantitySummaryTab() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<ViewId>("active");
+  // "" = the views above; otherwise only the orders matching this filter, every status counted.
+  const [orderChoice, setOrderChoice] = useState("");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [query, setQuery] = useState("");
   const [exporting, setExporting] = useState(false);
@@ -36,7 +47,9 @@ export function QuantitySummaryTab() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/admin/quantities?archived=${includeArchived ? "include" : "exclude"}`, { cache: "no-store" });
+      const [filter, reason] = orderChoice.split(":");
+      const params = new URLSearchParams({ archived: includeArchived ? "include" : "exclude", ...(filter ? { filter } : {}), ...(reason ? { reason } : {}) });
+      const response = await fetch(`/api/admin/quantities?${params}`, { cache: "no-store" });
       if (response.status === 401) {
         router.replace("/admin/login");
         return;
@@ -53,7 +66,7 @@ export function QuantitySummaryTab() {
     } finally {
       setLoading(false);
     }
-  }, [includeArchived, router]);
+  }, [includeArchived, orderChoice, router]);
 
   useEffect(() => {
     // Loading when the tab opens, and again every minute so new orders and status changes show up.
@@ -63,7 +76,9 @@ export function QuantitySummaryTab() {
     return () => clearInterval(timer);
   }, [load]);
 
-  const statuses: readonly OrderStatus[] = VIEWS.find((item) => item.id === view)!.statuses;
+  const choiceLabel = ORDER_CHOICES.find((item) => item.value === orderChoice)?.label;
+  const statuses: readonly OrderStatus[] = orderChoice ? ALL_STATUSES : VIEWS.find((item) => item.id === view)!.statuses;
+  const viewLabel = choiceLabel ?? VIEWS.find((item) => item.id === view)!.label;
   const words = query.trim().toLowerCase();
   const products = (data?.summary.products ?? [])
     .filter((product) => sum(product.pieces, statuses) > 0)
@@ -75,7 +90,7 @@ export function QuantitySummaryTab() {
     if (!data) return;
     setExporting(true);
     try {
-      const label = VIEWS.find((item) => item.id === view)!.label;
+      const label = viewLabel;
       const pictures = await Promise.all(products.map((product) => (product.image ? jpegThumbnail(product.image) : Promise.resolve(null))));
       const images: XlsxImage[] = [];
       const rows: XlsxCell[][] = [["الصورة", "كود المنتج", "المنتج", "القسم", `إجمالي القطع (${label})`, "مستني تأكيد", "مؤكد", "عدد الأوردرات", "توزيع المقاسات"]];
@@ -131,9 +146,15 @@ export function QuantitySummaryTab() {
       </div>
 
       <div className="admin-filters">
-        <div className="admin-presets small" role="group" aria-label="الحالات المحسوبة">
-          {VIEWS.map((item) => <button key={item.id} type="button" className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}>{item.label}</button>)}
-        </div>
+        <select value={orderChoice} onChange={(event) => setOrderChoice(event.target.value)} aria-label="حالة الأوردرات">
+          <option value="">كل الأوردرات (حسب الاختيار جنبه)</option>
+          {ORDER_CHOICES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
+        {!orderChoice && (
+          <div className="admin-presets small" role="group" aria-label="الحالات المحسوبة">
+            {VIEWS.map((item) => <button key={item.id} type="button" className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}>{item.label}</button>)}
+          </div>
+        )}
         <input type="search" className="admin-search" placeholder="بحث باسم المنتج أو الكود" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="بحث" />
         <label className="admin-check"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> احسبي الأوردرات القديمة المؤرشفة</label>
       </div>
@@ -146,10 +167,10 @@ export function QuantitySummaryTab() {
       {data && totals && (
         <>
           <section className="admin-cards">
-            <div className="admin-card"><span>القطع المطلوبة</span><strong>{integer.format(sum(totals.pieces, statuses))}</strong><small>{VIEWS.find((item) => item.id === view)!.label}</small></div>
+            <div className="admin-card"><span>القطع المطلوبة</span><strong>{integer.format(sum(totals.pieces, statuses))}</strong><small>{viewLabel}</small></div>
             <div className="admin-card"><span>عدد الأوردرات</span><strong>{integer.format(sum(totals.orders, statuses))}</strong><small>{integer.format(totals.orders.submitted)} مستني · {integer.format(totals.orders.confirmed)} مؤكد</small></div>
             <div className="admin-card"><span>عدد المنتجات</span><strong>{integer.format(products.length)}</strong><small>منتج مختلف مطلوب</small></div>
-            <div className="admin-card"><span>الملغي (مش محسوب)</span><strong>{integer.format(totals.pieces.cancelled)}</strong><small>قطعة في {integer.format(totals.orders.cancelled)} أوردر</small></div>
+            {!orderChoice && <div className="admin-card"><span>الملغي (مش محسوب)</span><strong>{integer.format(totals.pieces.cancelled)}</strong><small>قطعة في {integer.format(totals.orders.cancelled)} أوردر</small></div>}
           </section>
 
           <SourcesBox summary={data.summary} statuses={statuses} includeArchived={includeArchived} />

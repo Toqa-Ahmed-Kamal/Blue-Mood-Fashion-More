@@ -13,7 +13,7 @@
 //   different pieces are never merged; name and photo come from the catalog, and so does a
 //   pajama's size (One Size + the product's weight limit). Nothing is guessed: a product without
 //   a photo has image null.
-import type { AnalyticsOrder, OrderStatus } from "./analytics-report.ts";
+import type { AnalyticsOrder, CancelReason, Courier, Deposit, OrderStatus } from "./analytics-report.ts";
 import { factorySize, shortSize, sizeFromFit, type OldOrder } from "./old-orders.ts";
 import { findProduct, type CatalogCategory, hasWeightFit } from "./site-data.ts";
 
@@ -127,7 +127,18 @@ export function oldOrderLines(order: OldOrder): FactoryLine[] {
   }));
 }
 
-export function buildQuantitySummary(input: { live: LiveOrderForSummary[]; old: OldOrder[]; includeArchived?: boolean }): QuantitySummary {
+/** What an order filter looks at (status, deposit, shipping steps, cancel reason) — same for both sources. */
+export type OrderFacts = { status: OrderStatus; deposit: Deposit | null; courier: Courier | null; cancelReason: CancelReason | null };
+const factsOf = (order: { status: OrderStatus; deposit?: Deposit; courier?: Courier; cancelReason?: CancelReason }): OrderFacts =>
+  ({ status: order.status, deposit: order.deposit ?? null, courier: order.courier ?? null, cancelReason: order.cancelReason ?? null });
+
+/**
+ * `keep` (optional) limits the summary to orders matching a filter (e.g. "the shipping company was told").
+ * It is applied after matching site and Telegram copies, so a filtered-out site order never lets its
+ * Telegram copy count instead.
+ */
+export function buildQuantitySummary(input: { live: LiveOrderForSummary[]; old: OldOrder[]; includeArchived?: boolean; keep?: (order: OrderFacts) => boolean }): QuantitySummary {
+  const keep = input.keep ?? (() => true);
   const siteIds = new Set(input.live.map(({ order }) => order.orderId));
   const inBothIds: string[] = [];
   const archivedIds: string[] = [];
@@ -138,10 +149,11 @@ export function buildQuantitySummary(input: { live: LiveOrderForSummary[]; old: 
     seenOld.add(order.orderId);
     if (siteIds.has(order.orderId)) inBothIds.push(order.orderId);
     else if (order.archived && !input.includeArchived) archivedIds.push(order.orderId);
-    else countedOld.push(order);
+    else if (keep(factsOf(order))) countedOld.push(order);
   }
+  const keptLive = input.live.filter(({ order }) => keep(factsOf(order)));
 
-  const lines = [...input.live.flatMap(siteOrderLines), ...countedOld.flatMap(oldOrderLines)];
+  const lines = [...keptLive.flatMap(siteOrderLines), ...countedOld.flatMap(oldOrderLines)];
 
   type Row = ProductSummary & { orderIds: Record<OrderStatus, Set<string>>; sizeMap: Map<string, Counts> };
   const products = new Map<string, Row>();
@@ -189,7 +201,7 @@ export function buildQuantitySummary(input: { live: LiveOrderForSummary[]; old: 
     products: rows.toSorted((a, b) => active(b.pieces) - active(a.pieces) || a.name.localeCompare(b.name, "ar")),
     totals: { pieces, orders: countsOf(orderIds), bySource },
     sources: {
-      siteOrders: input.live.length,
+      siteOrders: keptLive.length,
       oldOrders: seenOld.size,
       oldCounted: countedOld.length,
       inBoth: inBothIds.length,

@@ -6,8 +6,8 @@ import { BadgeCheck, Check, CheckCircle2, Copy, PackageCheck, Pencil, RefreshCw,
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
-import { MARGIN_PRESETS, ORDER_FILTERS, courierCollection, courierText, filterCounts, matchesFilter, matchesMargin, matchesSearch, withEdit, type MarginRange, type OrderFilter, type UnifiedOrder } from "@/lib/all-orders";
-import type { CourierStep, OrderStatus } from "@/lib/analytics-report";
+import { MARGIN_PRESETS, ORDER_FILTERS, courierCollection, courierText, filterCounts, matchesFilter, matchesMargin, matchesReason, matchesSearch, withEdit, type MarginRange, type OrderFilter, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
+import { CANCEL_REASONS, isCancelReason, type CancelReason, type CourierStep, type OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import { productImage } from "@/lib/quantity-summary";
@@ -23,6 +23,7 @@ export function AllOrdersTab() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<OrderFilter>("all");
+  const [reason, setReason] = useState<ReasonFilter>("");
   const [source, setSource] = useState<"" | "site" | "telegram">("");
   const [query, setQuery] = useState("");
   // هامش الربح filter: a preset, or "custom" with the owner's own numbers.
@@ -70,12 +71,12 @@ export function AllOrdersTab() {
   const scoped = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived) && matchesSearch(order, query) && matchesMargin(order, marginRange)), [orders, source, showArchived, query, marginRange]);
   const marginActive = marginRange.min !== null || marginRange.max !== null;
   const counts = useMemo(() => filterCounts(scoped), [scoped]);
-  const rows = scoped.filter((order) => matchesFilter(order, filter));
+  const rows = scoped.filter((order) => matchesFilter(order, filter) && (filter !== "cancelled" || matchesReason(order, reason)));
   const shown = rows.slice(0, limit);
   const editing = editingId ? orders?.find((order) => order.orderId === editingId) ?? null : null;
 
   /** Sends a status or deposit change to the right API (site order or imported Telegram order), then updates the row. */
-  async function change(order: UnifiedOrder, body: { status?: OrderStatus; deposit?: number | null; courier?: { step: CourierStep; done: boolean } }) {
+  async function change(order: UnifiedOrder, body: { status?: OrderStatus; deposit?: number | null; courier?: { step: CourierStep; done: boolean }; cancelReason?: CancelReason | null }) {
     setBusyId(order.orderId);
     setError("");
     try {
@@ -91,7 +92,7 @@ export function AllOrdersTab() {
         setError(result?.error?.message ?? "مقدرناش نحفظ.");
         return;
       }
-      const saved = result.order as { status?: OrderStatus; deposit?: UnifiedOrder["deposit"]; courier?: UnifiedOrder["courier"] };
+      const saved = result.order as { status?: OrderStatus; deposit?: UnifiedOrder["deposit"]; courier?: UnifiedOrder["courier"]; cancelReason?: CancelReason | null };
       // A new status changes the order's profit and its month's expense share: fetch the numbers again.
       if (body.status) void load();
       setOrders((current) => current?.map((item) => item.orderId === order.orderId
@@ -100,6 +101,7 @@ export function AllOrdersTab() {
           ...(saved.status ? { status: saved.status } : body.status ? { status: body.status } : {}),
           ...("deposit" in body ? { deposit: saved.deposit ?? null } : {}),
           ...("courier" in body ? { courier: saved.courier ?? null } : {}),
+          ...("cancelReason" in body ? { cancelReason: saved.cancelReason ?? null } : {}),
         }
         : item) ?? null);
     } catch {
@@ -146,6 +148,13 @@ export function AllOrdersTab() {
             <label>لأقل من <input type="number" inputMode="numeric" value={marginMax} onChange={(event) => { setMarginMax(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
           </span>
         )}
+        {filter === "cancelled" && (
+          <select value={reason} onChange={(event) => { setReason(event.target.value as ReasonFilter); setLimit(PAGE_SIZE); }} aria-label="سبب الإلغاء">
+            <option value="">كل أسباب الإلغاء</option>
+            {CANCEL_REASONS.map((item) => <option key={item.id} value={item.id}>{item.label} ({scoped.filter((order) => matchesReason(order, item.id)).length})</option>)}
+            <option value="none">من غير سبب ({scoped.filter((order) => matchesReason(order, "none")).length})</option>
+          </select>
+        )}
         <label className="admin-check"><input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> اعرضي المؤرشف</label>
       </div>
       {orders && marginActive && (
@@ -159,7 +168,7 @@ export function AllOrdersTab() {
       {orders && rows.length === 0 && <p className="admin-muted empty">مفيش أوردرات بالاختيار ده.</p>}
 
       <div className="admin-orders">
-        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onEdit={() => setEditingId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} />)}
+        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onEdit={() => setEditingId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} onCancelReason={(cancelReason) => void change(order, { cancelReason })} />)}
       </div>
       {rows.length > shown.length && (
         <button type="button" className="admin-more" onClick={() => setLimit((current) => current + PAGE_SIZE)}>اعرضي {Math.min(PAGE_SIZE, rows.length - shown.length)} أوردر كمان ({rows.length - shown.length} باقيين)</button>
@@ -218,7 +227,7 @@ function CourierCopyButton({ order }: { order: UnifiedOrder }) {
   );
 }
 
-function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onEdit: () => void; onCourier: (step: CourierStep, done: boolean) => void }) {
+function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier, onCancelReason }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onEdit: () => void; onCourier: (step: CourierStep, done: boolean) => void; onCancelReason: (reason: CancelReason | null) => void }) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const chat = (text: string) => (order.phone ? whatsappChatUrl(order.phone, text) : null);
   const remaining = order.deposit && order.total !== null ? Math.max(0, order.total - order.deposit.amount) : null;
@@ -319,6 +328,12 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier 
         {order.status === "confirmed" && <button type="button" disabled={busy} className="good" onClick={() => onStatus("delivered")} title="العميلة استلمت"><PackageCheck size={16} /> تم الاستلام</button>}
         {(order.status === "confirmed" || order.status === "delivered") && <button type="button" disabled={busy} className="danger" onClick={() => onStatus("returned")} title="الأوردر رجع"><Undo2 size={16} /> مرتجع</button>}
         {order.status !== "cancelled" && order.status !== "returned" && order.status !== "delivered" && <button type="button" disabled={busy} className="danger" onClick={() => onStatus("cancelled")} title="إلغاء"><XCircle size={16} /> إلغاء</button>}
+        {order.status === "cancelled" && (
+          <select className={`admin-cancel-reason${order.cancelReason ? "" : " empty"}`} disabled={busy} value={order.cancelReason ?? ""} onChange={(event) => onCancelReason(isCancelReason(event.target.value) ? event.target.value : null)} aria-label="سبب الإلغاء">
+            <option value="">اختاري سبب الإلغاء…</option>
+            {CANCEL_REASONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        )}
         {order.status !== "submitted" && <button type="button" disabled={busy} onClick={() => onStatus("submitted")} title="رجوع لمستني تأكيد" aria-label="رجوع لمستني تأكيد"><RotateCcw size={15} /></button>}
         <span className="admin-order-actions-break" aria-hidden="true" />
         <CourierCopyButton order={order} />

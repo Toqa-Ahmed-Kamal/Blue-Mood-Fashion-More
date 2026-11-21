@@ -169,3 +169,29 @@ test("an imported order listed twice in storage still counts once", () => {
   assert.equal(summary.sources.oldOrders, 1);
   assert.equal(active(summary.products.find((row) => row.productId === "bm-robe-003").pieces), 1);
 });
+
+test("filtered summary: only orders matching the order filter (courier told, cancelled by reason); a site order filtered out never lets its Telegram copy count", async () => {
+  const { matchesFilter, matchesReason } = await import("../lib/all-orders.ts");
+  const told = { notifiedAt: "2026-11-10T12:00:00.000Z" };
+  const liveOrders = [
+    { order: { ...siteOrder("BM-FFFFFFFFFFFFFFFFFFF1", "confirmed", [{ modelId: "bm-winter-pajama-002", category: "winter-pajamas", quantity: 2 }]), courier: told }, fits: [null] },
+    { order: siteOrder("BM-FFFFFFFFFFFFFFFFFFF2", "confirmed", [{ modelId: "bm-winter-pajama-003", category: "winter-pajamas", quantity: 1 }]), fits: [null] },
+    { order: { ...siteOrder("BM-FFFFFFFFFFFFFFFFFFF3", "cancelled", [{ modelId: "bm-winter-pajama-004", category: "winter-pajamas", quantity: 3 }]), cancelReason: "duplicate" }, fits: [null] },
+    { order: siteOrder("BM-FFFFFFFFFFFFFFFFFFF4", "cancelled", [{ modelId: "bm-winter-pajama-005", category: "winter-pajamas", quantity: 4 }]), fits: [null] },
+  ];
+  const old = [
+    // Telegram copy of site order 2 (not told): must not count under "told" just because its own copy says so.
+    { ...oldOrder("BM-FFFFFFFFFFFFFFFFFFF2", "confirmed", [line("bm-winter-pajama-003", 1)]), courier: told },
+    { ...oldOrder("BM-EEEEEEEEEEEEEEEEEEE7", "cancelled", [line("bm-winter-pajama-006", 5)]), cancelReason: "no-answer" },
+  ];
+  const ids = (summary) => summary.products.map((product) => product.productId).toSorted();
+  const notified = buildQuantitySummary({ live: liveOrders, old, keep: (order) => matchesFilter(order, "courier-notified") });
+  assert.deepEqual(ids(notified), ["bm-winter-pajama-002"]);
+  assert.equal(notified.totals.pieces.confirmed, 2);
+  const cancelled = (reason) => buildQuantitySummary({ live: liveOrders, old, keep: (order) => matchesFilter(order, "cancelled") && matchesReason(order, reason) });
+  assert.deepEqual(ids(cancelled("")), ["bm-winter-pajama-004", "bm-winter-pajama-005", "bm-winter-pajama-006"]);
+  assert.deepEqual(ids(cancelled("duplicate")), ["bm-winter-pajama-004"]);
+  assert.deepEqual(ids(cancelled("no-answer")), ["bm-winter-pajama-006"], "Telegram orders keep their reason too");
+  assert.deepEqual(ids(cancelled("none")), ["bm-winter-pajama-005"]);
+  assert.equal(buildQuantitySummary({ live: liveOrders, old }).products.length, 5, "no filter: everything as before");
+});

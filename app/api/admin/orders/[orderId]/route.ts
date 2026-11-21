@@ -1,6 +1,6 @@
 import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
-import { parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
-import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderCourier, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
+import { parseCancelReason, parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
+import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderCancelReason, setOrderCourier, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { sanitizeOrderEdit } from "@/lib/order-edit";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
@@ -69,6 +69,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
       return json(200, { success: true, order: { orderId: order.orderId, courier: order.courier ?? null } });
     } catch (error) {
       console.error("[admin] order courier update failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+      return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
+    }
+  }
+  // Cancel reason only (cancelled orders): { cancelReason: id | null }.
+  if (body.cancelReason !== undefined && body.status === undefined) {
+    const reason = parseCancelReason(body.cancelReason);
+    if (reason === undefined) return json(400, { success: false, error: { code: "INVALID_REASON", message: "اختاري سبب من القايمة." } });
+    try {
+      const order = await setOrderCancelReason(orderId, reason);
+      if (order === "not_cancelled") return json(409, { success: false, error: { code: "NOT_CANCELLED", message: "سبب الإلغاء بيتحدد للأوردر الملغي بس." } });
+      if (!order) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
+      return json(200, { success: true, order: { orderId: order.orderId, cancelReason: order.cancelReason ?? null } });
+    } catch (error) {
+      console.error("[admin] order cancel reason update failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
       return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
     }
   }
