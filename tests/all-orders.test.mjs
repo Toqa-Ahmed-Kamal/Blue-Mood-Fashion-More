@@ -185,3 +185,16 @@ test("cancel reasons: only from the list, only on cancelled orders, and the reas
   assert.deepEqual(pick("none"), ["BM-EEEEEEEEEEEEEEEEEEE2"]);
   assert.equal(pick("").length, 3, "no reason filter: everything");
 });
+
+test("net profit filter: works on the net profit (not the margin); cancelled and returned are left out", async () => {
+  const { matchesNetProfit, NET_PROFIT_PRESETS } = await import("../lib/all-orders.ts");
+  const order = (status, margin, netProfit) => ({ status, money: { margin, netProfit } });
+  const range = (id) => NET_PROFIT_PRESETS.find((preset) => preset.id === id).range;
+  assert.ok(matchesNetProfit(order("confirmed", 210, 118.6), range("100-200")), "the order from the screenshot");
+  assert.ok(!matchesNetProfit(order("confirmed", 210, 38.6), range("100-200")), "its margin is 210 but its net is 38.6");
+  assert.ok(matchesNetProfit(order("confirmed", 210, 38.6), range("lt50")));
+  assert.ok(matchesNetProfit(order("submitted", 80, -12), range("loss")));
+  assert.ok(!matchesNetProfit(order("cancelled", 400, 300), range("gte200")));
+  assert.ok(matchesNetProfit(order("cancelled", 400, 300), range("")), "no filter → everything");
+  assert.ok(matchesNetProfit(order("delivered", 300, 150), { min: 140, max: 160 }), "custom");
+});

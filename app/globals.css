@@ -1976,3 +1976,18 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
 .admin-header h1 { font-size: 1.45rem; line-height: 1.3; }
 .admin-kicker { font-size: .74rem; font-weight: 700; color: var(--peri); }
 @media (prefers-reduced-motion: reduce) { .admin-nav-chevron { transition: none; } }
+
+/* ── Admin: charts page ── */
+.admin-charts { display: grid; gap: 16px; }
+.admin-charts-body { display: grid; gap: 16px; transition: opacity .2s ease; }
+.admin-charts-body.refreshing { opacity: .6; }
+.admin-charts-filters { margin-bottom: 0; }
+.admin-chart-tiles { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.admin-chart-tiles strong { font-variant-numeric: normal; }
+.admin-chart-card { display: grid; gap: 8px; align-content: start; margin: 0; }
+.admin-chart-card .admin-panel-head { margin-bottom: 0; }
+.admin-chart-note { margin: 0; line-height: 1.6; }
+.admin-chart-table summary { cursor: pointer; font-size: .82rem; font-weight: 700; color: var(--brand-dark); padding: 4px 0; width: fit-content; }
+.admin-chart-table[open] summary { margin-bottom: 6px; }
+.admin-charts .admin-grid-2 { align-items: start; }
+.admin-charts .recharts-legend-item-text { color: #52514e !important; font-size: 12px; }

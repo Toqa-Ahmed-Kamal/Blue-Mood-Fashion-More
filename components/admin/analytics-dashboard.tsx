@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, ChevronDown, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, ChartLine, ChevronDown, LayoutDashboard, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -20,6 +20,7 @@ import {
 } from "recharts";
 
 import { AllOrdersTab } from "@/components/admin/all-orders";
+import { ChartsTab } from "@/components/admin/charts";
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { useAdminTableFit } from "@/components/admin/table-fit";
 import { editRecordProducts, editTotals } from "@/lib/order-edit";
@@ -65,6 +66,7 @@ const PRESETS = [
 ] as const;
 
 const TABS = [
+  { id: "charts", label: "الرسوم البيانية", icon: ChartLine },
   { id: "all", label: "كل الأوردرات", icon: ClipboardList },
   { id: "traffic", label: "الزيارات", icon: ChartColumn },
   { id: "journey", label: "رحلة العميلة والمنتجات", icon: Route },
@@ -84,6 +86,9 @@ type NavGroup = { id: string; title: string; icon: typeof Wallet; items: NavItem
  * go straight to that part.
  */
 const NAV_GROUPS: NavGroup[] = [
+  { id: "overview", title: "نظرة عامة", icon: LayoutDashboard, items: [
+    { tab: "charts", label: "الرسوم البيانية", icon: ChartLine },
+  ] },
   { id: "orders", title: "الأوردرات", icon: ShoppingCart, items: [
     { tab: "all", label: "كل الأوردرات", icon: ClipboardList },
     { tab: "orders", label: "أوردرات الموقع", icon: ShoppingBag },
@@ -207,7 +212,7 @@ export function AnalyticsDashboard() {
   const activeItem = NAV_ITEMS.find(isActive);
 
   // Sidebar groups open and close; the open ones are remembered. The group of the open section stays open.
-  const [openGroups, setOpenGroups] = useState<string[]>(["orders"]);
+  const [openGroups, setOpenGroups] = useState<string[]>(["overview", "orders"]);
   useEffect(() => {
     let saved: string[] | null = null;
     try {
@@ -389,6 +394,7 @@ export function AnalyticsDashboard() {
       {(
         <>
           <div id={`panel-${tab}`} aria-label={TABS.find((item) => item.id === tab)?.label}>
+            {tab === "charts" && <ChartsTab />}
             {tab === "all" && <AllOrdersTab />}
             {tab === "traffic" && report && <TrafficTab report={report} />}
             {tab === "journey" && report && <JourneyTab report={report} />}

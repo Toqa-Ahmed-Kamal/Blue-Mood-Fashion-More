@@ -6,7 +6,7 @@ import { BadgeCheck, Check, CheckCircle2, Copy, PackageCheck, Pencil, RefreshCw,
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
-import { MARGIN_PRESETS, ORDER_FILTERS, courierCollection, courierText, filterCounts, matchesFilter, matchesMargin, matchesReason, matchesSearch, withEdit, type MarginRange, type OrderFilter, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
+import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FILTERS, courierCollection, courierText, filterCounts, matchesFilter, matchesMargin, matchesNetProfit, matchesReason, matchesSearch, withEdit, type MarginRange, type OrderFilter, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
 import { CANCEL_REASONS, isCancelReason, type CancelReason, type CourierStep, type OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
@@ -30,6 +30,10 @@ export function AllOrdersTab() {
   const [marginPreset, setMarginPreset] = useState("");
   const [marginMin, setMarginMin] = useState("");
   const [marginMax, setMarginMax] = useState("");
+  // صافي المكسب filter: the same, on the net profit.
+  const [netPreset, setNetPreset] = useState("");
+  const [netMin, setNetMin] = useState("");
+  const [netMax, setNetMax] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busyId, setBusyId] = useState("");
@@ -68,8 +72,14 @@ export function AllOrdersTab() {
     const number = (text: string) => (text.trim() === "" || !Number.isFinite(Number(text)) ? null : Number(text));
     return { min: number(marginMin), max: number(marginMax) };
   }, [marginPreset, marginMin, marginMax]);
-  const scoped = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived) && matchesSearch(order, query) && matchesMargin(order, marginRange)), [orders, source, showArchived, query, marginRange]);
-  const marginActive = marginRange.min !== null || marginRange.max !== null;
+  const netRange = useMemo<MarginRange>(() => {
+    if (netPreset !== "custom") return NET_PROFIT_PRESETS.find((preset) => preset.id === netPreset)?.range ?? { min: null, max: null };
+    const number = (text: string) => (text.trim() === "" || !Number.isFinite(Number(text)) ? null : Number(text));
+    return { min: number(netMin), max: number(netMax) };
+  }, [netPreset, netMin, netMax]);
+  const scoped = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived) && matchesSearch(order, query) && matchesMargin(order, marginRange) && matchesNetProfit(order, netRange)), [orders, source, showArchived, query, marginRange, netRange]);
+  const netActive = netRange.min !== null || netRange.max !== null;
+  const marginActive = marginRange.min !== null || marginRange.max !== null || netActive;
   const counts = useMemo(() => filterCounts(scoped), [scoped]);
   const rows = scoped.filter((order) => matchesFilter(order, filter) && (filter !== "cancelled" || matchesReason(order, reason)));
   const shown = rows.slice(0, limit);
@@ -148,6 +158,15 @@ export function AllOrdersTab() {
             <label>لأقل من <input type="number" inputMode="numeric" value={marginMax} onChange={(event) => { setMarginMax(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
           </span>
         )}
+        <select value={netPreset} onChange={(event) => { setNetPreset(event.target.value); setLimit(PAGE_SIZE); }} aria-label="صافي المكسب">
+          {NET_PROFIT_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+        </select>
+        {netPreset === "custom" && (
+          <span className="admin-margin-range">
+            <label>صافي من <input type="number" inputMode="numeric" value={netMin} onChange={(event) => { setNetMin(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
+            <label>لأقل من <input type="number" inputMode="numeric" value={netMax} onChange={(event) => { setNetMax(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
+          </span>
+        )}
         {filter === "cancelled" && (
           <select value={reason} onChange={(event) => { setReason(event.target.value as ReasonFilter); setLimit(PAGE_SIZE); }} aria-label="سبب الإلغاء">
             <option value="">كل أسباب الإلغاء</option>
@@ -159,7 +178,7 @@ export function AllOrdersTab() {
       </div>
       {orders && marginActive && (
         <p className="admin-muted small" role="status">
-          {rows.length} أوردر · إجمالي هامش الربح {formatEGP(rows.reduce((sum, order) => sum + (order.money?.margin ?? 0), 0))} · الأوردرات الملغية والمرتجعة مش بتظهر مع الفلتر ده (مالهاش مكسب).
+          {rows.length} أوردر · إجمالي هامش الربح {formatEGP(rows.reduce((sum, order) => sum + (order.money?.margin ?? 0), 0))} · إجمالي صافي المكسب {formatEGP(Math.round(rows.reduce((sum, order) => sum + (order.money?.netProfit ?? 0), 0)))} · الأوردرات الملغية والمرتجعة مش بتظهر مع الفلتر ده (مالهاش مكسب).
         </p>
       )}
 

@@ -252,12 +252,32 @@ export const MARGIN_PRESETS: { id: string; label: string; range: MarginRange }[]
   { id: "custom", label: "هامش بأرقام من عندي…", range: { min: null, max: null } },
 ];
 
+export const NET_PROFIT_PRESETS: { id: string; label: string; range: MarginRange }[] = [
+  { id: "", label: "كل صافي المكسب", range: { min: null, max: null } },
+  { id: "loss", label: "صافي خسارة (أقل من صفر)", range: { min: null, max: 0 } },
+  { id: "lt50", label: "صافي أقل من 50", range: { min: null, max: 50 } },
+  { id: "lt100", label: "صافي أقل من 100", range: { min: null, max: 100 } },
+  { id: "100-200", label: "صافي من 100 لـ 200", range: { min: 100, max: 200 } },
+  { id: "gte100", label: "صافي 100 وأكتر", range: { min: 100, max: null } },
+  { id: "gte200", label: "صافي 200 وأكتر", range: { min: 200, max: null } },
+  { id: "custom", label: "صافي بأرقام من عندي…", range: { min: null, max: null } },
+];
+
+function inRange(order: UnifiedOrder, range: MarginRange, value: (money: NonNullable<UnifiedOrder["money"]>) => number) {
+  if (range.min === null && range.max === null) return true;
+  const amount = order.status === "cancelled" || order.status === "returned" || !order.money ? null : value(order.money);
+  if (amount === null) return false;
+  return (range.min === null || amount >= range.min) && (range.max === null || amount < range.max);
+}
+
 /** Orders without a margin (cancelled, returned) are left out as soon as a limit is set. */
 export function matchesMargin(order: UnifiedOrder, range: MarginRange) {
-  if (range.min === null && range.max === null) return true;
-  const margin = order.status === "cancelled" || order.status === "returned" ? null : order.money?.margin ?? null;
-  if (margin === null) return false;
-  return (range.min === null || margin >= range.min) && (range.max === null || margin < range.max);
+  return inRange(order, range, (money) => money.margin);
+}
+
+/** Net profit (margin − share of the month's expenses); same rules as the margin filter. */
+export function matchesNetProfit(order: UnifiedOrder, range: MarginRange) {
+  return inRange(order, range, (money) => money.netProfit);
 }
 
 /** Search over order number, customer, phone, place, address and products. */
