@@ -37,18 +37,21 @@ export function parseCancelReason(value: unknown): CancelReason | null | undefin
   return isCancelReason(value) ? value : undefined;
 }
 
-/** Shipping company steps (set from the admin): told about the order, then the parcel was handed to them. */
-export type Courier = { notifiedAt?: string; handedAt?: string };
-export type CourierStep = "notified" | "handed";
+/** Shipping steps (set from the admin): the parcel is packed and ready, the company was told, then it was handed to them. */
+export type Courier = { packedAt?: string; notifiedAt?: string; handedAt?: string };
+export type CourierStep = "packed" | "notified" | "handed";
 
 /**
  * Marks or unmarks a shipping step. Handing the parcel over means the company was told too;
- * unmarking "told" also unmarks "handed". Returns undefined when nothing is left.
+ * unmarking "told" also unmarks "handed". "Packed" is independent. Returns undefined when nothing is left.
  */
 export function applyCourierStep(current: Courier | undefined, step: CourierStep, done: boolean, now = new Date()): Courier | undefined {
   const at = now.toISOString();
   const next: Courier = { ...current };
-  if (step === "notified") {
+  if (step === "packed") {
+    if (done) next.packedAt ??= at;
+    else delete next.packedAt;
+  } else if (step === "notified") {
     if (done) next.notifiedAt ??= at;
     else {
       delete next.notifiedAt;
@@ -58,14 +61,14 @@ export function applyCourierStep(current: Courier | undefined, step: CourierStep
     next.handedAt ??= at;
     next.notifiedAt ??= at;
   } else delete next.handedAt;
-  return next.notifiedAt || next.handedAt ? next : undefined;
+  return next.packedAt || next.notifiedAt || next.handedAt ? next : undefined;
 }
 
 /** { step, done } from the admin; null when invalid. */
 export function parseCourierChange(value: unknown): { step: CourierStep; done: boolean } | null {
   if (typeof value !== "object" || value === null) return null;
   const { step, done } = value as Record<string, unknown>;
-  return (step === "notified" || step === "handed") && typeof done === "boolean" ? { step, done } : null;
+  return (step === "packed" || step === "notified" || step === "handed") && typeof done === "boolean" ? { step, done } : null;
 }
 
 /** Deposit amount from the admin: a number > 0 (EGP), or null to remove it. undefined = invalid. */

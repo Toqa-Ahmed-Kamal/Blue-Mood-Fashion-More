@@ -55,6 +55,7 @@ export const ORDER_FILTERS = [
   { id: "confirmed", label: "مؤكد" },
   { id: "deposit", label: "دفع ديبوزيت" },
   { id: "to-ship", label: "مؤكد ولسه مراحش للشحن" },
+  { id: "packed", label: "متجهز للشحن ولسه مراحش" },
   { id: "courier-notified", label: "اتبلغت شركة الشحن ولسه مجتش" },
   { id: "with-courier", label: "مع شركة الشحن" },
   { id: "delivered", label: "تم الاستلام" },
@@ -82,6 +83,8 @@ export function matchesFilter(order: Pick<UnifiedOrder, "status" | "deposit" | "
   // Customers to call: not received, not cancelled or returned, no deposit, the shipping company not told yet.
   if (filter === "to-call") return (order.status === "submitted" || order.status === "confirmed") && order.deposit === null && !order.courier?.notifiedAt;
   if (filter === "to-ship") return order.status === "confirmed" && !order.courier?.handedAt;
+  // Packed and ready for the shipping company, not picked up yet.
+  if (filter === "packed") return (order.status === "submitted" || order.status === "confirmed") && Boolean(order.courier?.packedAt) && !order.courier?.handedAt;
   // The shipping company was told but hasn't picked the order up yet.
   if (filter === "courier-notified") return (order.status === "submitted" || order.status === "confirmed") && Boolean(order.courier?.notifiedAt) && !order.courier?.handedAt;
   if (filter === "with-courier") return order.status === "confirmed" && Boolean(order.courier?.handedAt);

@@ -45,7 +45,7 @@ test("one list: every site order and every old order once; site status wins; Tel
 
 test("filters: pending, confirmed, deposit paid, delivered, returned, cancelled — with counts", () => {
   const rows = mergeAllOrders(live, oldOrders);
-  assert.deepEqual(filterCounts(rows), { all: 5, submitted: 1, "to-call": 1, confirmed: 1, deposit: 2, "to-ship": 1, "courier-notified": 0, "with-courier": 0, delivered: 1, returned: 1, cancelled: 1 });
+  assert.deepEqual(filterCounts(rows), { all: 5, submitted: 1, "to-call": 1, confirmed: 1, deposit: 2, "to-ship": 1, packed: 0, "courier-notified": 0, "with-courier": 0, delivered: 1, returned: 1, cancelled: 1 });
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "deposit")).map((row) => row.orderId).sort(), ["BM-AAAAAAAAAAAAAAAAAAA2", "BM-BBBBBBBBBBBBBBBBBBB2"]);
 });
 
@@ -105,6 +105,11 @@ test("shipping company steps: handed means told too; untelling clears both; filt
   assert.deepEqual(applyCourierStep(handed, "handed", false, now), { notifiedAt: now.toISOString() });
   assert.equal(applyCourierStep(handed, "notified", false, now), undefined);
   assert.deepEqual(applyCourierStep(told, "notified", true, new Date("2026-11-15T00:00:00Z")), told, "marking again keeps the first time");
+  const packed = applyCourierStep(undefined, "packed", true, now);
+  assert.deepEqual(packed, { packedAt: now.toISOString() });
+  assert.equal(applyCourierStep(packed, "packed", false, now), undefined);
+  assert.deepEqual(applyCourierStep(packed, "notified", true, now), { packedAt: now.toISOString(), notifiedAt: now.toISOString() });
+  assert.deepEqual(parseCourierChange({ step: "packed", done: true }), { step: "packed", done: true });
   assert.equal(parseCourierChange({ step: "handed", done: "yes" }), null);
   assert.deepEqual(parseCourierChange({ step: "handed", done: true }), { step: "handed", done: true });
 
@@ -114,10 +119,13 @@ test("shipping company steps: handed means told too; untelling clears both; filt
     { order: site("BM-DDDDDDDDDDDDDDDDDDD3", "delivered", { courier: handed }), details: null },
     { order: site("BM-DDDDDDDDDDDDDDDDDDD4", "confirmed", { courier: told }), details: null },
     { order: site("BM-DDDDDDDDDDDDDDDDDDD5", "cancelled", { courier: told }), details: null },
+    { order: site("BM-DDDDDDDDDDDDDDDDDDD6", "submitted", { courier: packed }), details: null },
+    { order: site("BM-DDDDDDDDDDDDDDDDDDD7", "confirmed", { courier: { ...handed, packedAt: now.toISOString() } }), details: null },
   ], []);
+  assert.deepEqual(rows.filter((row) => matchesFilter(row, "packed")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD6"], "packed, not picked up yet");
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "courier-notified")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD4"], "told, not picked up yet");
   assert.deepEqual(rows.filter((row) => matchesFilter(row, "to-ship")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD1", "BM-DDDDDDDDDDDDDDDDDDD4"]);
-  assert.deepEqual(rows.filter((row) => matchesFilter(row, "with-courier")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD2"]);
+  assert.deepEqual(rows.filter((row) => matchesFilter(row, "with-courier")).map((row) => row.orderId), ["BM-DDDDDDDDDDDDDDDDDDD2", "BM-DDDDDDDDDDDDDDDDDDD7"]);
   assert.deepEqual(rows.find((row) => row.orderId === "BM-DDDDDDDDDDDDDDDDDDD3").courier, handed);
 });
 

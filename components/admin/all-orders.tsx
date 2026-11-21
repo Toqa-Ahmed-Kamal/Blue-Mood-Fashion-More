@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Check, CheckCircle2, Copy, PackageCheck, Pencil, RefreshCw, RotateCcw, Send, Truck, Undo2, XCircle } from "lucide-react";
+import { BadgeCheck, Check, CheckCircle2, Copy, Package, PackageCheck, Pencil, RefreshCw, RotateCcw, Send, Truck, Undo2, XCircle } from "lucide-react";
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
@@ -128,6 +128,12 @@ export function AllOrdersTab() {
     void change(order, { deposit: digits ? Number(digits) : null });
   }
 
+  function removeDeposit(order: UnifiedOrder) {
+    if (!order.deposit) return;
+    if (!window.confirm(`تشيلي الديبوزيت (${formatEGP(order.deposit.amount)}) من ${order.orderId}؟`)) return;
+    void change(order, { deposit: null });
+  }
+
   return (
     <section className="admin-panel">
       <div className="admin-panel-head">
@@ -187,7 +193,7 @@ export function AllOrdersTab() {
       {orders && rows.length === 0 && <p className="admin-muted empty">مفيش أوردرات بالاختيار ده.</p>}
 
       <div className="admin-orders">
-        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onEdit={() => setEditingId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} onCancelReason={(cancelReason) => void change(order, { cancelReason })} />)}
+        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onRemoveDeposit={() => removeDeposit(order)} onEdit={() => setEditingId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} onCancelReason={(cancelReason) => void change(order, { cancelReason })} />)}
       </div>
       {rows.length > shown.length && (
         <button type="button" className="admin-more" onClick={() => setLimit((current) => current + PAGE_SIZE)}>اعرضي {Math.min(PAGE_SIZE, rows.length - shown.length)} أوردر كمان ({rows.length - shown.length} باقيين)</button>
@@ -246,10 +252,11 @@ function CourierCopyButton({ order }: { order: UnifiedOrder }) {
   );
 }
 
-function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier, onCancelReason }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onEdit: () => void; onCourier: (step: CourierStep, done: boolean) => void; onCancelReason: (reason: CancelReason | null) => void }) {
+function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, onEdit, onCourier, onCancelReason }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onRemoveDeposit: () => void; onEdit: () => void; onCourier: (step: CourierStep, done: boolean) => void; onCancelReason: (reason: CancelReason | null) => void }) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const chat = (text: string) => (order.phone ? whatsappChatUrl(order.phone, text) : null);
   const remaining = order.deposit && order.total !== null ? Math.max(0, order.total - order.deposit.amount) : null;
+  const packed = Boolean(order.courier?.packedAt);
   const notified = Boolean(order.courier?.notifiedAt);
   const handed = Boolean(order.courier?.handedAt);
   const shippingOpen = order.status === "submitted" || order.status === "confirmed";
@@ -262,7 +269,10 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier,
           <span className={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
           {order.deposit && <span className="admin-deposit"><BadgeCheck size={14} aria-hidden="true" /> ديبوزيت {formatEGP(order.deposit.amount)}</span>}
           {handed ? <span className="admin-courier handed" title={cairoTime(order.courier?.handedAt ?? "")}><Truck size={14} aria-hidden="true" /> راح لشركة الشحن</span>
-            : notified ? <span className="admin-courier" title={cairoTime(order.courier?.notifiedAt ?? "")}><Send size={14} aria-hidden="true" /> اتبلغت شركة الشحن</span> : null}
+            : <>
+              {packed && <span className="admin-courier packed" title={cairoTime(order.courier?.packedAt ?? "")}><Package size={14} aria-hidden="true" /> اتجهز للشحن</span>}
+              {notified && <span className="admin-courier" title={cairoTime(order.courier?.notifiedAt ?? "")}><Send size={14} aria-hidden="true" /> اتبلغت شركة الشحن</span>}
+            </>}
           {order.archived && <small className="admin-muted">مؤرشف</small>}
         </div>
         <div className="admin-order-source">
@@ -343,6 +353,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier,
       <footer className="admin-order-actions actions">
         <button type="button" disabled={busy || !order.editable} onClick={onEdit} title={order.editable ? "تبديل أو إضافة أو شيل منتجات، وتعديل البيانات والشحن" : "تفاصيل الأوردر مش متسجلة علشان يتعدل"}><Pencil size={15} /> تعديل الأوردر</button>
         <button type="button" disabled={busy} onClick={onDeposit} className={order.deposit ? "deposit-on" : undefined}><BadgeCheck size={15} /> {order.deposit ? "تعديل الديبوزيت" : "تأكيد بديبوزيت"}</button>
+        {order.deposit && <button type="button" disabled={busy} className="danger" onClick={onRemoveDeposit} title="لو اتحط بالغلط"><XCircle size={15} /> شيل الديبوزيت</button>}
         {order.status !== "confirmed" && order.status !== "delivered" && <button type="button" disabled={busy} onClick={() => onStatus("confirmed")} title="بيع مؤكد"><CheckCircle2 size={16} /> تأكيد</button>}
         {order.status === "confirmed" && <button type="button" disabled={busy} className="good" onClick={() => onStatus("delivered")} title="العميلة استلمت"><PackageCheck size={16} /> تم الاستلام</button>}
         {(order.status === "confirmed" || order.status === "delivered") && <button type="button" disabled={busy} className="danger" onClick={() => onStatus("returned")} title="الأوردر رجع"><Undo2 size={16} /> مرتجع</button>}
@@ -358,6 +369,9 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onEdit, onCourier,
         <CourierCopyButton order={order} />
         {shippingOpen && (
           <>
+            <button type="button" disabled={busy} className={packed ? "courier-on packed" : undefined} aria-pressed={packed} onClick={() => onCourier("packed", !packed)} title={packed ? `اتجهز ${cairoTime(order.courier?.packedAt ?? "")} — دوسي علشان تلغي` : "الأوردر اتجهز واتغلف لشركة الشحن"}>
+              <Package size={15} /> {packed ? "اتجهز للشحن ✓" : "اتجهز للشحن"}
+            </button>
             <button type="button" disabled={busy} className={notified ? "courier-on" : undefined} aria-pressed={notified} onClick={() => onCourier("notified", !notified)} title={notified ? `اتبلغت ${cairoTime(order.courier?.notifiedAt ?? "")} — دوسي علشان تلغي` : "بعتي البيانات لشركة الشحن"}>
               <Send size={15} /> {notified ? "اتبلغت شركة الشحن ✓" : "بلّغت شركة الشحن"}
             </button>
