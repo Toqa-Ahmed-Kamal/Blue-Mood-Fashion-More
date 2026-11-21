@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, ChevronDown, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -78,35 +78,43 @@ const TABS = [
 ] as const;
 
 type NavItem = { tab: TabId; label: string; icon: typeof Wallet; anchor?: string };
-/** The sidebar: sections in groups. Finance items open the finance section and go straight to that part. */
-const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
-  { title: "الأوردرات", items: [
+type NavGroup = { id: string; title: string; icon: typeof Wallet; items: NavItem[] };
+/**
+ * The sidebar: sections in groups that open and close. Finance items open the finance section and
+ * go straight to that part.
+ */
+const NAV_GROUPS: NavGroup[] = [
+  { id: "orders", title: "الأوردرات", icon: ShoppingCart, items: [
     { tab: "all", label: "كل الأوردرات", icon: ClipboardList },
     { tab: "orders", label: "أوردرات الموقع", icon: ShoppingBag },
     { tab: "old", label: "الأوردرات القديمة", icon: Archive },
   ] },
-  { title: "البضاعة", items: [
+  { id: "stock", title: "البضاعة", icon: Boxes, items: [
     { tab: "inventory", label: "المخزون", icon: Boxes },
-    { tab: "pieces", label: "تحليل القطع", icon: ChartPie },
     { tab: "quantities", label: "حصر كميات المصنع", icon: Package },
+    { tab: "pieces", label: "تحليل القطع", icon: ChartPie },
   ] },
-  { title: "الفلوس", items: [
+  { id: "money", title: "الفلوس", icon: Wallet, items: [
     { tab: "finance", label: "ملخص المكسب", icon: Wallet, anchor: "fin-summary" },
-    { tab: "finance", label: "المنتجات والأسعار", icon: Tags, anchor: "fin-products" },
-    { tab: "finance", label: "حاسبة التسعير", icon: Calculator, anchor: "fin-calculator" },
+    { tab: "finance", label: "مكسب كل أوردر", icon: TrendingUp, anchor: "fin-orders" },
     { tab: "finance", label: "المصروفات", icon: Receipt, anchor: "fin-expenses" },
     { tab: "finance", label: "بيع مباشر", icon: HandCoins, anchor: "fin-direct" },
     { tab: "finance", label: "خدتها لنفسي", icon: Gift, anchor: "fin-personal" },
-    { tab: "finance", label: "مكسب كل أوردر", icon: TrendingUp, anchor: "fin-orders" },
   ] },
-  { title: "الفريق", items: [
+  { id: "store", title: "المنتجات والعروض", icon: Store, items: [
+    { tab: "finance", label: "المنتجات والأسعار", icon: Tags, anchor: "fin-products" },
+    { tab: "finance", label: "حاسبة التسعير", icon: Calculator, anchor: "fin-calculator" },
     { tab: "team", label: "الفريق والعروض", icon: UsersRound },
   ] },
-  { title: "التسويق", items: [
+  { id: "marketing", title: "التسويق", icon: Megaphone, items: [
     { tab: "traffic", label: "الزيارات", icon: ChartColumn },
     { tab: "journey", label: "رحلة العميلة والمنتجات", icon: Users },
   ] },
 ];
+const NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
+/** Sections that show the date range and the visits / orders overview (the others have their own). */
+const REPORT_TABS: readonly TabId[] = ["orders", "traffic", "journey"];
+const NAV_GROUPS_KEY = "bm-admin-nav-groups";
 
 /** Scrolls to a part of a section once it is on the page (sections load their data first). */
 function scrollToAnchor(anchor: string) {
@@ -195,7 +203,39 @@ export function AnalyticsDashboard() {
 
   // Which sidebar item is lit: the tab, and for finance the part last chosen.
   const [anchor, setAnchor] = useState<string | null>(null);
+  const isActive = (item: NavItem) => tab === item.tab && (item.anchor ? (anchor ?? "fin-summary") === item.anchor : true);
+  const activeItem = NAV_ITEMS.find(isActive);
+
+  // Sidebar groups open and close; the open ones are remembered. The group of the open section stays open.
+  const [openGroups, setOpenGroups] = useState<string[]>(["orders"]);
+  useEffect(() => {
+    let saved: string[] | null = null;
+    try {
+      const raw = window.localStorage.getItem(NAV_GROUPS_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) saved = parsed.filter((id): id is string => typeof id === "string");
+    } catch {
+      saved = null;
+    }
+    // Reading the saved choice after mount keeps server and browser markup identical.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved) setOpenGroups(saved.includes("orders") ? saved : [...saved, "orders"]);
+  }, []);
+  function setGroups(next: string[]) {
+    setOpenGroups(next);
+    try {
+      window.localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(next));
+    } catch {
+      // Not remembered; still opens and closes.
+    }
+  }
+  function toggleGroup(id: string) {
+    setGroups(openGroups.includes(id) ? openGroups.filter((item) => item !== id) : [...openGroups, id]);
+  }
+
   function chooseTab(id: TabId, part?: string) {
+    const group = NAV_GROUPS.find((item) => item.items.some((navItem) => navItem.tab === id && (navItem.anchor ?? null) === (part ?? navItem.anchor ?? null)));
+    if (group && !openGroups.includes(group.id)) setGroups([...openGroups, group.id]);
     setTab(id);
     setAnchor(part ?? null);
     if (id === "old") setOldOpened(true);
@@ -263,32 +303,44 @@ export function AnalyticsDashboard() {
           <button type="button" className="admin-icon-btn small" onClick={toggleSidebar} aria-label="قفل القائمة"><PanelRightClose size={16} /></button>
         </div>
         <nav aria-label="أقسام الداشبورد">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.title} className="admin-nav-group" role="group" aria-label={group.title}>
-              <p className="admin-nav-title">{group.title}</p>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                // The first item of a section keeps the id used to open it (tab-finance, tab-inventory…).
-                const first = group.items.find((other) => other.tab === item.tab) === item;
-                const active = tab === item.tab && (item.anchor ? (anchor ?? "fin-summary") === item.anchor : true);
-                return (
-                  <button
-                    key={`${item.tab}-${item.anchor ?? ""}`}
-                    type="button"
-                    id={first ? `tab-${item.tab}` : undefined}
-                    aria-current={active ? "page" : undefined}
-                    className={`${active ? "active" : ""}${item.anchor && !first ? " sub" : ""}`}
-                    onClick={() => chooseTab(item.tab, item.anchor && first ? undefined : item.anchor)}
-                  >
-                    <Icon size={17} aria-hidden="true" />
-                    <span>{item.label}</span>
-                    {item.tab === "orders" && report && report.totals.pending > 0 && <span className="admin-badge">{report.totals.pending}</span>}
-                    {item.tab === "team" && teamPending > 0 && <span className="admin-badge">{teamPending}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          {NAV_GROUPS.map((group) => {
+            const GroupIcon = group.icon;
+            const open = openGroups.includes(group.id);
+            const hasActive = group.items.some(isActive);
+            const badge = (item: NavItem) => (item.tab === "orders" && report ? report.totals.pending : item.tab === "team" ? teamPending : 0);
+            const groupBadge = group.items.reduce((sum, item) => sum + badge(item), 0);
+            return (
+              <div key={group.id} className={`admin-nav-group${open ? " open" : ""}${hasActive ? " has-active" : ""}`}>
+                <button type="button" className="admin-nav-title" aria-expanded={open} aria-controls={`nav-${group.id}`} onClick={() => toggleGroup(group.id)}>
+                  <GroupIcon size={16} aria-hidden="true" />
+                  <span>{group.title}</span>
+                  {!open && groupBadge > 0 && <span className="admin-badge">{groupBadge}</span>}
+                  <ChevronDown size={16} className="admin-nav-chevron" aria-hidden="true" />
+                </button>
+                <div id={`nav-${group.id}`} className="admin-nav-items" role="group" aria-label={group.title} hidden={!open}>
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    // The first item of a section keeps the id used to open it (tab-finance, tab-inventory…).
+                    const first = NAV_ITEMS.find((other) => other.tab === item.tab) === item;
+                    return (
+                      <button
+                        key={`${item.tab}-${item.anchor ?? ""}`}
+                        type="button"
+                        id={first ? `tab-${item.tab}` : undefined}
+                        aria-current={isActive(item) ? "page" : undefined}
+                        className={isActive(item) ? "active" : ""}
+                        onClick={() => chooseTab(item.tab, item.anchor && first ? undefined : item.anchor)}
+                      >
+                        <Icon size={16} aria-hidden="true" />
+                        <span>{item.label}</span>
+                        {badge(item) > 0 && <span className="admin-badge">{badge(item)}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </nav>
         <button type="button" className="admin-sidebar-logout" onClick={logout}><LogOut size={16} aria-hidden="true" /> خروج</button>
       </aside>
@@ -308,8 +360,8 @@ export function AnalyticsDashboard() {
             <Menu size={18} />
           </button>
           <div>
-            <p className="admin-kicker">Blue Mood · Private · {TABS.find((item) => item.id === tab)?.label}</p>
-            <h1>Analytics</h1>
+            <p className="admin-kicker">Blue Mood · لوحة التحكم</p>
+            <h1>{activeItem?.label ?? TABS.find((item) => item.id === tab)?.label}</h1>
           </div>
         </div>
         <div className="admin-header-actions">
@@ -321,7 +373,7 @@ export function AnalyticsDashboard() {
         </div>
       </header>
 
-      <section className="admin-range" aria-label="الفترة">
+      {REPORT_TABS.includes(tab) && <section className="admin-range" aria-label="الفترة">
         <div className="admin-presets" role="group">
           {PRESETS.map((item) => (
             <button key={item.id} type="button" className={preset === item.id ? "active" : ""} onClick={() => choosePreset(item.id, item.days)}>{item.label}</button>
@@ -329,18 +381,18 @@ export function AnalyticsDashboard() {
         </div>
         <label>من <input type="date" value={range.from} max={range.to} onChange={(e) => { setPreset("custom"); if (e.target.value) setRange((r) => ({ ...r, from: e.target.value })); }} /></label>
         <label>لحد <input type="date" value={range.to} min={range.from} onChange={(e) => { setPreset("custom"); if (e.target.value) setRange((r) => ({ ...r, to: e.target.value })); }} /></label>
-      </section>
+      </section>}
 
-      {error && <p className="admin-error" role="alert">{error}</p>}
-      {!report && loading && <p className="admin-muted">جاري التحميل…</p>}
-      {report && (
+      {REPORT_TABS.includes(tab) && error && <p className="admin-error" role="alert">{error}</p>}
+      {REPORT_TABS.includes(tab) && !report && loading && <p className="admin-muted">جاري التحميل…</p>}
+      {REPORT_TABS.includes(tab) && report && <OverviewCards report={report} />}
+      {(
         <>
-          <OverviewCards report={report} />
           <div id={`panel-${tab}`} aria-label={TABS.find((item) => item.id === tab)?.label}>
             {tab === "all" && <AllOrdersTab />}
-            {tab === "traffic" && <TrafficTab report={report} />}
-            {tab === "journey" && <JourneyTab report={report} />}
-            {tab === "orders" && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} onEdited={() => void load(range.from, range.to)} />}
+            {tab === "traffic" && report && <TrafficTab report={report} />}
+            {tab === "journey" && report && <JourneyTab report={report} />}
+            {tab === "orders" && report && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} onEdited={() => void load(range.from, range.to)} />}
             {oldOpened && <div hidden={tab !== "old"}><OldOrdersTab active={tab === "old"} /></div>}
             {tab === "quantities" && <QuantitySummaryTab />}
             {tab === "inventory" && <InventoryTab />}
