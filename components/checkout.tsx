@@ -143,7 +143,7 @@ export function Checkout() {
     const fingerprint = JSON.stringify(requestBody);
     // Reuse the submission ID on retries of the same order so the server keeps the same order number.
     if (!attemptRef.current || attemptRef.current.fingerprint !== fingerprint) {
-      attemptRef.current = { submissionId: crypto.randomUUID(), fingerprint };
+      attemptRef.current = { submissionId: newSubmissionId(), fingerprint };
     }
 
     const cartSnapshot = resolved.cart;
@@ -224,10 +224,10 @@ export function Checkout() {
         <main className="container empty-cart">
           <h1>السلة فاضية</h1>
           {soldOutNotice && <p className="sold-out-notice" role="status">{soldOutNotice}</p>}
-          <p>ابدئي بعرض الشتاء أو اختاري عباية أو روب.</p>
+          <p>ابدئي بعرض الشتاء أو اختاري بيجاما أو بلانكيت أو روب.</p>
           <div className="hero-actions">
             <Link href="/#offer" className="btn btn-primary btn-lg">عرض الشتاء <ArrowLeft size={18} /></Link>
-            <Link href="/#abayas" className="btn btn-outline btn-lg">العبايات والأرواب</Link>
+            <Link href="/#pajamas" className="btn btn-outline btn-lg">كل المنتجات</Link>
           </div>
         </main>
       </div>
@@ -495,4 +495,16 @@ function OrderPlaced({ order }: { order: PlacedOrder }) {
       </main>
     </div>
   );
+}
+
+/** A UUID for the order attempt; works on older phones too (no crypto.randomUUID there). */
+function newSubmissionId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") crypto.getRandomValues(bytes);
+  else for (let index = 0; index < 16; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

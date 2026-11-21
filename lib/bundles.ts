@@ -136,5 +136,6 @@ export function findBundle(id: string) {
 
 /** Live bundles customers can order now, newest first. */
 export function availableBundles() {
-  return bundles.filter(isBundleAvailable).toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // slice().sort, not toSorted: this runs in customers' browsers, older phones included.
+  return bundles.filter(isBundleAvailable).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
