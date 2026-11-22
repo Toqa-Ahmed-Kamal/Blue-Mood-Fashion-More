@@ -56,12 +56,12 @@ test("direct sales join the finance totals; the month's expenses stay on online 
   const report = buildFinanceReport({ live: [order], old: [], costs: {}, expenses, direct: [sale, before], from: "2026-11-01", to: "2026-11-30" });
   // Online (no customer shipping): 500 − 240 − 100 = 160. Direct: 460 − 240 − 30 = 190.
   assert.deepEqual(report.direct, { count: 1, pieces: 2, sales: 460, productsCost: 240, extraCost: 30, profit: 190, missingCostLines: 0 }, "October sale outside the dates");
-  assert.deepEqual(report.totals, { sales: 960, productsCost: 480, expenses: 100, stockPurchases: 0, netProfit: 350 });
+  assert.deepEqual(report.totals, { sales: 960, productsCost: 480, expenses: 100, stockPurchases: 0, stockForSale: 0, netProfit: 350 });
   assert.equal(report.orders[0].expenseShare, 100, "ads carried by the online order only");
   assert.equal(report.stages.confirmed.netProfit + report.stages.delivered.netProfit + report.direct.profit, report.totals.netProfit);
 });
 
-test("personal take (خدتها لنفسي): no price needed; its factory cost comes off the net profit, not the sales", () => {
+test("personal take (خدتها لنفسي): no price needed; its factory cost comes off the stock purchases, not the net profit or the sales", () => {
   const take = sanitizeDirectSale({ kind: "personal", date: "2026-11-12", buyer: "x", extraCost: 50, lines: [{ productId: "bm-robe-003", quantity: 2 }] }, "p1", costs, NOW).sale;
   assert.equal(take.kind, "personal");
   assert.equal(take.buyer, "", "no buyer");
@@ -73,8 +73,12 @@ test("personal take (خدتها لنفسي): no price needed; its factory cost c
   const report = buildFinanceReport({ live: [], old: [], costs: {}, expenses: [], direct: [sale, take], from: "2026-11-01", to: "2026-11-30" });
   assert.equal(report.direct.count, 1, "the take is not a sale");
   assert.deepEqual(report.personal, { count: 1, pieces: 2, cost: 240, missingCostLines: 0 });
-  // Sale 230 − 120 = 110; minus the take 240 → −130.
-  assert.deepEqual(report.totals, { sales: 230, productsCost: 120, expenses: 0, stockPurchases: 0, netProfit: -130 });
+  // Sale 230 − 120 = 110; the take does not touch the profit.
+  assert.deepEqual(report.totals, { sales: 230, productsCost: 120, expenses: 0, stockPurchases: 0, stockForSale: -240, netProfit: 110 });
+  const bought = buildFinanceReport({ live: [], old: [], costs: {}, expenses: [{ id: "e1", date: "2026-11-05", category: "stock-purchase", amount: 5000, note: "", createdAt: NOW.toISOString() }], direct: [sale, take], from: "2026-11-01", to: "2026-11-30" });
+  assert.equal(bought.totals.stockPurchases, 5000);
+  assert.equal(bought.totals.stockForSale, 4760, "5000 paid − 240 taken for herself");
+  assert.equal(bought.totals.netProfit, 110);
   const outside = buildFinanceReport({ live: [], old: [], costs: {}, expenses: [], direct: [take], from: "2026-12-01", to: "2026-12-31" });
   assert.deepEqual(outside.personal, { count: 0, pieces: 0, cost: 0, missingCostLines: 0 });
 });

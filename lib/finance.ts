@@ -12,8 +12,9 @@
 // - Net profit = sales − products cost − expenses, all in EGP, for the chosen dates.
 // - Direct sales to friends and family (lib/direct-sales.ts) are sales too: their sale and factory cost join
 //   the totals and their own extra cost comes off the net profit. The month's expenses stay on online orders.
-// - Pieces the owner took for herself (direct kind "personal") are not sales: their factory cost comes off the
-//   net profit on its own line (personal.cost), not inside products cost.
+// - Pieces the owner took for herself (direct kind "personal") are not sales and not a loss: their factory cost
+//   (personal.cost) comes off what was paid for stock (totals.stockForSale = stockPurchases − personal.cost),
+//   not off the net profit.
 import { confirmedValueOf, isSaleStatus, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
 import { directSaleMoney, isPersonalTake, type DirectSale } from "./direct-sales.ts";
 import { type OldOrder } from "./old-orders.ts";
@@ -140,8 +141,11 @@ export type FinanceOrderRow = {
 
 export type FinanceReport = {
   range: { from: string | null; to: string | null };
-  /** expenses = deducted expenses only; stockPurchases = factory stock payments (recorded, not deducted). */
-  totals: { sales: number; productsCost: number; expenses: number; stockPurchases: number; netProfit: number };
+  /**
+   * expenses = deducted expenses only; stockPurchases = factory stock payments (recorded, not deducted);
+   * stockForSale = stockPurchases less what the owner took for herself (the goods actually bought to sell).
+   */
+  totals: { sales: number; productsCost: number; expenses: number; stockPurchases: number; stockForSale: number; netProfit: number };
   counts: { confirmedOrders: number; returnedOrders: number; estimatedOrders: number; missingCostOrders: number; expenses: number };
   /** Value of returned orders (information only, not deducted anywhere). */
   returnedValue: number;
@@ -153,7 +157,7 @@ export type FinanceReport = {
   stages: Record<"confirmed" | "delivered" | "pending", FinanceStage>;
   /** Direct sales to friends and family in the period (already inside totals.sales / productsCost / netProfit). */
   direct: { count: number; pieces: number; sales: number; productsCost: number; extraCost: number; profit: number; missingCostLines: number };
-  /** Pieces the owner took for herself in the period; cost (factory price) is already taken off totals.netProfit. */
+  /** Pieces the owner took for herself in the period; cost (factory price) comes off the stock purchases, not the net profit. */
   personal: { count: number; pieces: number; cost: number; missingCostLines: number };
   orders: FinanceOrderRow[];
 };
@@ -378,9 +382,9 @@ export function buildFinanceReport(input: {
   const allProductsCost = productsCost + direct.productsCost;
   return {
     range: { from, to },
-    // Direct sales are sales too; their extra cost (delivery, packaging) comes off the net profit, and so does
-    // the factory cost of the pieces the owner took for herself.
-    totals: { sales: round(allSales), productsCost: round(allProductsCost), expenses: expensesTotal, stockPurchases, netProfit: round(allSales - allProductsCost - expensesTotal - direct.extraCost - personal.cost) },
+    // Direct sales are sales too; their extra cost (delivery, packaging) comes off the net profit. Pieces the
+    // owner took for herself come off the stock purchases instead.
+    totals: { sales: round(allSales), productsCost: round(allProductsCost), expenses: expensesTotal, stockPurchases, stockForSale: round(stockPurchases - personal.cost), netProfit: round(allSales - allProductsCost - expensesTotal - direct.extraCost) },
     personal: { ...personal, cost: round(personal.cost) },
     direct: { ...direct, sales: round(direct.sales), productsCost: round(direct.productsCost), extraCost: round(direct.extraCost), profit: round(direct.profit) },
     counts: {

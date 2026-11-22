@@ -1993,3 +1993,4 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
 .admin-chart-table[open] summary { margin-bottom: 6px; }
 .admin-charts .admin-grid-2 { align-items: start; }
 .admin-charts .recharts-legend-item-text { color: #52514e !important; font-size: 12px; }
+.admin-fin-stock-rows { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 2px; }

@@ -120,7 +120,7 @@ export function FinanceTab() {
               <div className="admin-card"><span>Total Sales · المبيعات</span><strong>{money(report.totals.sales)}</strong><small>{report.counts.confirmedOrders} أوردر مؤكد (شامل شحن العميلة){report.direct.count > 0 && ` + ${report.direct.count} بيع مباشر`}</small></div>
               <div className="admin-card"><span>Total Products Cost · تكلفة المنتجات</span><strong>{money(report.totals.productsCost)}</strong><small>بسعر المصنع وقت التأكيد</small></div>
               <div className="admin-card"><span>Total Expenses · المصروفات</span><strong>{money(report.totals.expenses)}</strong><small>{report.counts.expenses} مصروف</small></div>
-              <div className={`admin-card${report.totals.netProfit >= 0 ? " good" : " bad"}`}><span>Net Profit · صافي المكسب</span><strong>{money(report.totals.netProfit)}</strong><small>المبيعات − التكلفة − المصروفات{report.personal.cost > 0 && " − اللي خدتيه لنفسك"}</small></div>
+              <div className={`admin-card${report.totals.netProfit >= 0 ? " good" : " bad"}`}><span>Net Profit · صافي المكسب</span><strong>{money(report.totals.netProfit)}</strong><small>المبيعات − التكلفة − المصروفات</small></div>
             </section>
             <PieceCards report={report} />
             <section className="admin-fin-stages" aria-label="المكسب حسب حالة الأوردر">
@@ -151,7 +151,7 @@ export function FinanceTab() {
                 <div className="admin-fin-stage personal">
                   <span className="admin-fin-stage-head">خدتيه لنفسك <small>· {report.personal.pieces} قطعة</small></span>
                   <span className="admin-fin-stage-row"><span>بسعر المصنع</span><strong className="admin-negative">− {money(report.personal.cost)}</strong></span>
-                  <small className="admin-muted">متشال من المخزون ومن صافي المكسب{report.personal.missingCostLines > 0 && " · فيه قطعة من غير سعر مصنع"}</small>
+                  <small className="admin-muted">متشال من المخزون ومن تمن البضاعة اللي اشتريتيها، مش من المكسب{report.personal.missingCostLines > 0 && " · فيه قطعة من غير سعر مصنع"}</small>
                 </div>
               )}
             </section>
@@ -162,10 +162,15 @@ export function FinanceTab() {
                 {report.counts.returnedOrders > 0 && <div><span className="admin-flag info">مرتجع</span> {report.counts.returnedOrders} أوردر مرتجع ({money(report.returnedValue)}) مش محسوب في المبيعات ولا التكلفة. شحن المرتجع يتسجل مصروف &quot;شحن المرتجعات&quot;.</div>}
               </div>
             )}
-            {report.totals.stockPurchases > 0 && (
-              <p className="admin-fin-stock">
-                شراء بضاعة من المصنع في الفترة: <strong>{money(report.totals.stockPurchases)}</strong> — متسجلة للمتابعة ومش مخصومة من صافي المكسب، لأن سعر المصنع لكل قطعة اتباعت مخصوم في &quot;تكلفة المنتجات&quot; (علشان نفس البضاعة ما تتخصمش مرتين).
-              </p>
+            {(report.totals.stockPurchases > 0 || report.personal.cost > 0) && (
+              <div className="admin-fin-stock">
+                <div className="admin-fin-stock-rows">
+                  <span>اشتريتي بضاعة من المصنع بـ <strong>{money(report.totals.stockPurchases)}</strong></span>
+                  {report.personal.cost > 0 && <span>منها خدتي لنفسك بـ <strong className="admin-negative">− {money(report.personal.cost)}</strong> <small className="admin-muted">({report.personal.pieces} قطعة)</small></span>}
+                  {report.personal.cost > 0 && <span>يعني جبتي بضاعة للبيع بـ <strong>{money(report.totals.stockForSale)}</strong></span>}
+                </div>
+                <small className="admin-muted">متسجلة للمتابعة ومش مخصومة من صافي المكسب، لأن سعر المصنع لكل قطعة اتباعت مخصوم في &quot;تكلفة المنتجات&quot; (علشان نفس البضاعة ما تتخصمش مرتين).{report.personal.missingCostLines > 0 && " فيه قطعة خدتيها لنفسك من غير سعر مصنع، فمش محسوبة هنا."}</small>
+              </div>
             )}
             <div className="admin-fin-categories">
               {report.expensesByCategory.filter((row) => row.amount > 0).map((row) => <span key={row.category}>{row.label}: <strong>{money(row.amount)}</strong></span>)}
@@ -830,7 +835,7 @@ function PersonalTakes({ takes, products, range, onChanged }: { takes: DirectSal
       <div className="admin-panel-head">
         <h2>حاجات خدتها لنفسي</h2>
       </div>
-      <p className="admin-muted small">القطع اللي خدتيها من البضاعة ليكي. بتتشال من المخزون، وتمنها بسعر المصنع بيتخصم من صافي المكسب (مش بيع، فمش داخلة في المبيعات).</p>
+      <p className="admin-muted small">القطع اللي خدتيها من البضاعة ليكي. بتتشال من المخزون، وتمنها بسعر المصنع بيتخصم من تمن البضاعة اللي اشتريتيها من المصنع، مش من صافي المكسب (ومش بيع، فمش داخلة في المبيعات).</p>
       <div className="admin-fin-form">
         <label className="admin-field"><span>التاريخ</span><input type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} /></label>
       </div>
