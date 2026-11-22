@@ -1,4 +1,4 @@
-import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { MAX_REPORT_DAYS, cairoDay, daysBetween, loadReport } from "@/lib/analytics-store";
 import { RedisUnavailableError, isRedisConfigured } from "@/lib/redis";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
@@ -9,7 +9,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Read-only: uses the Upstash read-only token. */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["orders", "marketing"]);
+  if (denied) return denied;
 
   const params = new URL(request.url).searchParams;
   const today = cairoDay(new Date());

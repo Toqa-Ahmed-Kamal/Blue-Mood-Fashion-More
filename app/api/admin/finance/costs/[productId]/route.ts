@@ -1,4 +1,5 @@
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { sanitizeProductCost } from "@/lib/finance";
 import { saveProductCost } from "@/lib/finance-store";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -11,7 +12,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Saves a catalog product's factory name and factory price per piece. Body: { factory, cost }. */
 export async function PUT(request: Request, context: { params: Promise<{ productId: string }> }) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   const { productId } = await context.params;
   await ensureCustomProducts();

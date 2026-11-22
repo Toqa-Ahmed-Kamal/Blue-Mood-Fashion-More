@@ -1,4 +1,5 @@
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { RedisUnavailableError } from "@/lib/redis";
 import { checkTeamPasswordRules, loadTeamPasswordHash, setTeamPassword } from "@/lib/team-auth";
 
@@ -12,7 +13,8 @@ const failed = (error: unknown) => {
 
 /** Is the team account ("ادمن اكونت") on? */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   try {
     return json(200, { success: true, enabled: (await loadTeamPasswordHash()) !== null });
   } catch (error) {
@@ -22,7 +24,8 @@ export async function GET(request: Request) {
 
 /** Sets (or changes) the team password. Body: { password }. Changing it signs the team out everywhere. */
 export async function PUT(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, "owner");
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   let password: unknown;
   try {
@@ -42,7 +45,8 @@ export async function PUT(request: Request) {
 
 /** Turns the team account off (signs it out everywhere). */
 export async function DELETE(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, "owner");
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   try {
     if (!(await setTeamPassword(null))) return json(502, { success: false, error: { code: "NOT_PERSISTED", message: "الحفظ ما اتأكدش. جربي تاني." } });

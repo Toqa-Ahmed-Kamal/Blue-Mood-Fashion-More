@@ -1,4 +1,4 @@
-import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
+import { can, requireAccess } from "@/lib/admin-users";
 import { loadAllOrdersForSummary } from "@/lib/analytics-store";
 import { DEFAULT_FACTORY, buildFinanceReport } from "@/lib/finance";
 import { loadDirectSales, loadExpenses, loadFactories, loadProductCosts } from "@/lib/finance-store";
@@ -17,7 +17,10 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
  * with factory costs, and all expenses. Read-only; no customer data in the response.
  */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const access = await requireAccess(request, ["money", "products"]);
+  if (access instanceof Response) return access;
+  // "المنتجات والعروض" without "الفلوس": the products and their prices only, no profit report or expenses.
+  const showMoney = can(access, "money");
   const params = new URL(request.url).searchParams;
   try {
     await ensureCustomProducts();
@@ -57,6 +60,7 @@ export async function GET(request: Request) {
       cost: costs[product.id]?.cost ?? null,
       costUpdatedAt: costs[product.id]?.updatedAt ?? null,
     }));
+    if (!showMoney) return json(200, { success: true, report: null, products, expenses: [], directSales: [], factories, vaultConfigured: vault, unreadableOldOrders: 0 });
     return json(200, { success: true, report, products, expenses, directSales, factories, vaultConfigured: vault, unreadableOldOrders: old.unreadable });
   } catch (error) {
     console.error("[admin] finance report failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });

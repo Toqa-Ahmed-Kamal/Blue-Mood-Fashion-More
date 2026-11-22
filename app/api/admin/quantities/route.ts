@@ -1,4 +1,4 @@
-import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { loadAllOrdersForSummary } from "@/lib/analytics-store";
 import { loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
@@ -18,7 +18,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
  * ?filter= (and ?reason= for cancelled) counts only the orders matching that order filter.
  */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["stock"]);
+  if (denied) return denied;
   const params = new URL(request.url).searchParams;
   const includeArchived = params.get("archived") === "include";
   // Optional order filter, the same as in "كل الأوردرات": ?filter=<id> and, for cancelled, ?reason=<id|none>.

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, ChartLine, ChevronDown, LayoutDashboard, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, Settings, ShieldCheck, ChartLine, ChevronDown, LayoutDashboard, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -31,6 +31,7 @@ import { InventoryTab } from "@/components/admin/inventory";
 import { PiecesTab } from "@/components/admin/pieces";
 import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
 import { TeamAdminTab } from "@/components/admin/team-admin";
+import { UsersAdminTab } from "@/components/admin/users-admin";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
@@ -77,6 +78,7 @@ const TABS = [
   { id: "pieces", label: "تحليل القطع", icon: ChartPie },
   { id: "finance", label: "الإدارة المالية", icon: Wallet },
   { id: "team", label: "الفريق والعروض", icon: UsersRound },
+  { id: "users", label: "المستخدمين والصلاحيات", icon: ShieldCheck },
 ] as const;
 
 type NavItem = { tab: TabId; label: string; icon: typeof Wallet; anchor?: string };
@@ -115,8 +117,31 @@ const NAV_GROUPS: NavGroup[] = [
     { tab: "traffic", label: "الزيارات", icon: ChartColumn },
     { tab: "journey", label: "رحلة العميلة والمنتجات", icon: Users },
   ] },
+  { id: "settings", title: "الإعدادات", icon: Settings, items: [
+    { tab: "users", label: "المستخدمين والصلاحيات", icon: ShieldCheck },
+  ] },
 ];
-const NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
+
+/** Who is signed in: the owner sees everything; a user only the sections ticked for them. */
+export type DashboardAccess = { owner: boolean; name: string; permissions: string[] };
+const OWNER: DashboardAccess = { owner: true, name: "", permissions: ["orders", "stock", "products", "money", "marketing"] };
+/** The sections a sidebar item needs (all of them). Kept in step with the checks in the admin APIs. */
+function itemNeeds(item: NavItem): string[] | "owner" {
+  if (item.tab === "users") return "owner";
+  if (item.tab === "charts") return ["money"];
+  if (item.tab === "all" || item.tab === "orders" || item.tab === "old") return ["orders"];
+  if (item.tab === "inventory" || item.tab === "quantities" || item.tab === "pieces") return ["stock"];
+  if (item.tab === "team") return ["products"];
+  if (item.tab === "traffic" || item.tab === "journey") return ["marketing"];
+  if (item.anchor === "fin-products") return ["products"];
+  if (item.anchor === "fin-calculator") return ["products", "money"];
+  return ["money"];
+}
+const canOpen = (access: DashboardAccess, item: NavItem) => {
+  const needs = itemNeeds(item);
+  if (access.owner) return true;
+  return needs !== "owner" && needs.every((need) => access.permissions.includes(need));
+};
 /** Sections that show the date range and the visits / orders overview (the others have their own). */
 const REPORT_TABS: readonly TabId[] = ["orders", "traffic", "journey"];
 const NAV_GROUPS_KEY = "bm-admin-nav-groups";
@@ -150,18 +175,27 @@ type Report = AnalyticsReport;
 type OrderUpdate = (id: string, status: OrderStatus, value: number | null, at: string | null) => void;
 type DepositUpdate = (id: string, deposit: OrderRow["deposit"]) => void;
 
-export function AnalyticsDashboard() {
+export function AnalyticsDashboard({ access = OWNER }: { access?: DashboardAccess }) {
   const router = useRouter();
+  const has = (permission: string) => access.owner || access.permissions.includes(permission);
+  // The sidebar shows only what this person may open; groups left empty are hidden.
+  const navGroups = useMemo(() => NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => canOpen(access, item)) })).filter((group) => group.items.length > 0), [access]);
+  const navItems = useMemo(() => navGroups.flatMap((group) => group.items), [navGroups]);
+  // The visits / orders report: for orders and marketing only.
+  const needsReport = has("orders") || has("marketing");
   const [preset, setPreset] = useState<string>("30");
   const [range, setRange] = useState({ from: daysAgo(29), to: daysAgo(0) });
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  // Opens on "كل الأوردرات": the section used every day.
-  const [tab, setTab] = useState<TabId>("all");
+  // Opens on "كل الأوردرات" (the section used every day), or the first section this person may open.
+  const [tab, setTab] = useState<TabId>(() => (has("orders") ? "all" : navItems[0]?.tab ?? "all"));
+  const [anchorAtStart] = useState<string | null>(() => (has("orders") ? null : navItems[0]?.anchor ?? null));
   // What the team account sent and is waiting for approval (badge on "الفريق والعروض").
   const [teamPending, setTeamPending] = useState(0);
+  const canProducts = has("products");
   useEffect(() => {
+    if (!canProducts) return;
     let alive = true;
     fetch("/api/admin/approvals", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
@@ -172,7 +206,7 @@ export function AnalyticsDashboard() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [canProducts]);
   // Old Orders stays mounted once opened, so an import preview is not lost when switching tabs.
   const [oldOpened, setOldOpened] = useState(false);
   // Sections sidebar: open by default on wide screens, closed on phones; the choice is remembered.
@@ -207,9 +241,9 @@ export function AnalyticsDashboard() {
   }
 
   // Which sidebar item is lit: the tab, and for finance the part last chosen.
-  const [anchor, setAnchor] = useState<string | null>(null);
-  const isActive = (item: NavItem) => tab === item.tab && (item.anchor ? (anchor ?? "fin-summary") === item.anchor : true);
-  const activeItem = NAV_ITEMS.find(isActive);
+  const [anchor, setAnchor] = useState<string | null>(anchorAtStart);
+  const isActive = (item: NavItem) => tab === item.tab && (item.anchor ? (anchor ?? navItems.find((other) => other.tab === item.tab)?.anchor ?? "fin-summary") === item.anchor : true);
+  const activeItem = navItems.find(isActive);
 
   // Sidebar groups open and close; the open ones are remembered. The group of the open section stays open.
   const [openGroups, setOpenGroups] = useState<string[]>(["overview", "orders"]);
@@ -239,7 +273,7 @@ export function AnalyticsDashboard() {
   }
 
   function chooseTab(id: TabId, part?: string) {
-    const group = NAV_GROUPS.find((item) => item.items.some((navItem) => navItem.tab === id && (navItem.anchor ?? null) === (part ?? navItem.anchor ?? null)));
+    const group = navGroups.find((item) => item.items.some((navItem) => navItem.tab === id && (navItem.anchor ?? null) === (part ?? navItem.anchor ?? null)));
     if (group && !openGroups.includes(group.id)) setGroups([...openGroups, group.id]);
     setTab(id);
     setAnchor(part ?? null);
@@ -272,10 +306,15 @@ export function AnalyticsDashboard() {
   }, [router]);
 
   useEffect(() => {
+    if (!needsReport) {
+      // Nothing to load for this person: the sections they see load their own data.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
     // Fetching on mount / range change is the intended side effect here.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load(range.from, range.to);
-  }, [load, range.from, range.to]);
+  }, [load, needsReport, range.from, range.to]);
 
   function choosePreset(id: string, days: number) {
     setPreset(id);
@@ -308,7 +347,7 @@ export function AnalyticsDashboard() {
           <button type="button" className="admin-icon-btn small" onClick={toggleSidebar} aria-label="قفل القائمة"><PanelRightClose size={16} /></button>
         </div>
         <nav aria-label="أقسام الداشبورد">
-          {NAV_GROUPS.map((group) => {
+          {navGroups.map((group) => {
             const GroupIcon = group.icon;
             const open = openGroups.includes(group.id);
             const hasActive = group.items.some(isActive);
@@ -326,7 +365,7 @@ export function AnalyticsDashboard() {
                   {group.items.map((item) => {
                     const Icon = item.icon;
                     // The first item of a section keeps the id used to open it (tab-finance, tab-inventory…).
-                    const first = NAV_ITEMS.find((other) => other.tab === item.tab) === item;
+                    const first = navItems.find((other) => other.tab === item.tab) === item;
                     return (
                       <button
                         key={`${item.tab}-${item.anchor ?? ""}`}
@@ -365,15 +404,15 @@ export function AnalyticsDashboard() {
             <Menu size={18} />
           </button>
           <div>
-            <p className="admin-kicker">Blue Mood · لوحة التحكم</p>
+            <p className="admin-kicker">Blue Mood · لوحة التحكم{!access.owner && access.name && ` · ${access.name}`}</p>
             <h1>{activeItem?.label ?? TABS.find((item) => item.id === tab)?.label}</h1>
           </div>
         </div>
         <div className="admin-header-actions">
           <WhatsAppTargetPicker />
-          <button type="button" className="admin-icon-btn" onClick={() => void load(range.from, range.to)} disabled={loading} aria-label="تحديث">
+          {needsReport && <button type="button" className="admin-icon-btn" onClick={() => void load(range.from, range.to)} disabled={loading} aria-label="تحديث">
             <RefreshCw size={17} className={loading ? "spin" : undefined} />
-          </button>
+          </button>}
           <button type="button" className="admin-icon-btn" onClick={logout} aria-label="خروج"><LogOut size={17} /></button>
         </div>
       </header>
@@ -394,8 +433,9 @@ export function AnalyticsDashboard() {
       {(
         <>
           <div id={`panel-${tab}`} aria-label={TABS.find((item) => item.id === tab)?.label}>
-            {tab === "charts" && <ChartsTab />}
-            {tab === "all" && <AllOrdersTab />}
+            {tab === "charts" && has("money") && <ChartsTab />}
+            {navItems.length === 0 && <p className="admin-note">مفيش أقسام مفتوحالك لسه. اطلبي من صاحبة المتجر تختارلك الأقسام.</p>}
+            {tab === "all" && has("orders") && <AllOrdersTab showMoney={has("money")} />}
             {tab === "traffic" && report && <TrafficTab report={report} />}
             {tab === "journey" && report && <JourneyTab report={report} />}
             {tab === "orders" && report && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} onEdited={() => void load(range.from, range.to)} />}
@@ -403,8 +443,9 @@ export function AnalyticsDashboard() {
             {tab === "quantities" && <QuantitySummaryTab />}
             {tab === "inventory" && <InventoryTab />}
             {tab === "pieces" && <PiecesTab />}
-            {tab === "finance" && <FinanceTab />}
-            {tab === "team" && <TeamAdminTab onPendingChange={setTeamPending} />}
+            {tab === "finance" && (has("money") || has("products")) && <FinanceTab showMoney={has("money")} showProducts={has("products")} />}
+            {tab === "team" && has("products") && <TeamAdminTab onPendingChange={setTeamPending} owner={access.owner} />}
+            {tab === "users" && access.owner && <UsersAdminTab />}
           </div>
         </>
       )}

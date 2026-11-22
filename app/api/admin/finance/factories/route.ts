@@ -1,4 +1,5 @@
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { addFactory } from "@/lib/finance-store";
 import { RedisUnavailableError } from "@/lib/redis";
 
@@ -8,7 +9,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Adds a factory name to the list. Body: { name }. */
 export async function POST(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   let name = "";
   try {

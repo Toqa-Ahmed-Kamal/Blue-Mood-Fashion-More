@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { BUNDLE_ID_PATTERN, bundleChoices } from "@/lib/bundles";
 import { deleteBundle, loadBundle, loadBundles, saveBundle } from "@/lib/bundles-store";
 import { CUSTOM_PRODUCT_ID_PATTERN, inputOf, toCatalogProduct } from "@/lib/custom-products";
@@ -14,7 +15,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Everything waiting for the owner, plus all bundles (to manage them). */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   try {
     await ensureCustomProducts(true);
     const bundles = await loadBundles();
@@ -48,7 +50,8 @@ export async function GET(request: Request) {
  * Bundle: approve → on the store; reject → deleted; stop → off the store (back to waiting).
  */
 export async function POST(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   let body: Record<string, unknown>;
   try {

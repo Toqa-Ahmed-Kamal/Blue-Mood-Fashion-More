@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { imagePath, imageTypeOf, newImageId, newProductId, sanitizeProductInput, toCatalogProduct } from "@/lib/custom-products";
 import { CUSTOM_PRODUCTS_TAG, ensureCustomProducts, saveCustomProduct } from "@/lib/custom-products-store";
 import { sanitizeProductCost } from "@/lib/finance";
@@ -17,7 +18,8 @@ const MAX_BODY_LENGTH = 1_000_000;
  * image: base64 JPEG/PNG/WebP (resized in the browser), factory, cost }.
  */
 export async function POST(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   let body: Record<string, unknown>;
   try {

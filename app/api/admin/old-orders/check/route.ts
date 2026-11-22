@@ -1,4 +1,5 @@
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { liveOrderStates } from "@/lib/analytics-store";
 import { OLD_ORDER_ID_PATTERN } from "@/lib/old-orders";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -10,7 +11,8 @@ const MAX_IDS = 500;
 
 /** Before an import: which order IDs are also dashboard orders, and whether they already have customer details. */
 export async function POST(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["orders"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
 
   let ids: unknown;

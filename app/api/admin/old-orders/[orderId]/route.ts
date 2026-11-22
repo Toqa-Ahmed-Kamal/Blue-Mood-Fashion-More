@@ -1,4 +1,5 @@
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { applyCourierStep, isSaleStatus, parseCancelReason, parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
 import { isOrderStatus } from "@/lib/analytics-store";
 import { OLD_ORDER_ID_PATTERN, sanitizeOldOrder } from "@/lib/old-orders";
@@ -26,7 +27,8 @@ function storageError(error: unknown, action: string) {
 }
 
 async function guard(request: Request, context: Context) {
-  if (!isAdminRequest(request)) return { response: unauthorized() };
+  const denied = await accessDenied(request, ["orders"]);
+  if (denied) return { response: denied };
   if (!isSameOrigin(request)) return { response: json(403, { success: false, error: { code: "FORBIDDEN" } }) };
   if (!isOrderVaultConfigured()) return { response: json(503, NO_KEY) };
   const { orderId } = await context.params;

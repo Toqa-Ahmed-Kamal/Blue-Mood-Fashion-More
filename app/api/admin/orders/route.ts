@@ -1,4 +1,4 @@
-import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { MAX_DETAILS_PER_REQUEST, loadOrdersDetails } from "@/lib/analytics-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -10,7 +10,8 @@ const ORDER_ID_PATTERN = /^BM-[A-F\d]{20}$/;
 
 /** Customer details + items for the orders shown in the list: GET /api/admin/orders?ids=BM-…,BM-… (read-only token). */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["orders"]);
+  if (denied) return denied;
   const ids = (new URL(request.url).searchParams.get("ids") ?? "").split(",").map((id) => id.trim()).filter(Boolean);
   if (ids.length > MAX_DETAILS_PER_REQUEST || ids.some((id) => !ORDER_ID_PATTERN.test(id))) {
     return json(400, { success: false, error: { code: "INVALID_IDS" } });

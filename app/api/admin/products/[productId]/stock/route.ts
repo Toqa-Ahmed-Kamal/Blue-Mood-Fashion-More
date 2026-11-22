@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { CUSTOM_PRODUCTS_TAG, ensureCustomProducts, setProductSoldOut } from "@/lib/custom-products-store";
 import { RedisUnavailableError } from "@/lib/redis";
 import { findProduct } from "@/lib/site-data";
@@ -11,7 +12,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Marks any catalog product (built-in or added) as sold out, or available again. Body: { soldOut: boolean }. */
 export async function PUT(request: Request, context: { params: Promise<{ productId: string }> }) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["stock", "products"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   const { productId } = await context.params;
   let soldOut: unknown;

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { sanitizeExpense } from "@/lib/finance";
 import { saveExpense } from "@/lib/finance-store";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -11,7 +12,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Adds an expense. Body: { name, category, amount, date, notes }. */
 export async function POST(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["money"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   let body: unknown;
   try {

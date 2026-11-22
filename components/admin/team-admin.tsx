@@ -25,8 +25,8 @@ function useAdminApi() {
   }, [router]);
 }
 
-/** Owner: the team account ("ادمن اكونت"), what it sent for approval, and all bundles. */
-export function TeamAdminTab({ onPendingChange }: { onPendingChange?: (count: number) => void }) {
+/** The team account ("ادمن اكونت", password: owner only), what it sent for approval, and all bundles. */
+export function TeamAdminTab({ onPendingChange, owner = true }: { onPendingChange?: (count: number) => void; owner?: boolean }) {
   const api = useAdminApi();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [products, setProducts] = useState<PendingProduct[]>([]);
@@ -97,7 +97,7 @@ export function TeamAdminTab({ onPendingChange }: { onPendingChange?: (count: nu
       {error && <p className="admin-error" role="alert">{error}</p>}
       {note && <p className="admin-ok" role="status">{note}</p>}
 
-      <div className="team-card">
+      {owner && <div className="team-card">
         <h3><KeyRound size={17} aria-hidden="true" /> ادمن اكونت</h3>
         <p className="admin-muted small">حساب تاني يدخل من لينك لوحده. يقدر يضيف منتجات (صورة، اسم، وصف، سعر، مقاس) ويعمل عروض، ويعدّل ويمسح اللي هو ضافه بس. مش بيشوف الأوردرات ولا الفلوس ولا العميلات، وكل اللي بيضيفه بيستناكي توافقي عليه هنا قبل ما يظهر على الموقع.</p>
         <p>الحالة: <strong>{enabled === null ? "…" : enabled ? "شغال" : "مقفول"}</strong></p>
@@ -114,7 +114,7 @@ export function TeamAdminTab({ onPendingChange }: { onPendingChange?: (count: nu
           {enabled && <button type="button" className="admin-chip danger" disabled={busy === "off"} onClick={() => { if (window.confirm("تقفلي ادمن اكونت؟ هيتقفل عنده فورًا.")) void act("off", () => api("/api/admin/team", { method: "DELETE" }), "الحساب اتقفل."); }}>قفل الحساب</button>}
         </form>
         <p className="admin-muted small">تغيير الباسورد بيطلّعه من الحساب فورًا، ولازم يدخل بالباسورد الجديد.</p>
-      </div>
+      </div>}
 
       <h3 className="team-admin-sub">منتجات مستنية موافقتك ({products.length})</h3>
       {products.length === 0 ? <p className="admin-muted">مفيش حاجة مستنياكي.</p> : (

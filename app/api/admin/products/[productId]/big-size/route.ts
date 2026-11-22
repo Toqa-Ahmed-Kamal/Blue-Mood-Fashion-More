@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { CUSTOM_PRODUCTS_TAG, ensureCustomProducts, setProductBigSize } from "@/lib/custom-products-store";
 import { RedisUnavailableError } from "@/lib/redis";
 import { findProduct } from "@/lib/site-data";
@@ -11,7 +12,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Adds a product to the store's "بيج سايز" section, or removes it. Body: { bigSize: boolean }. */
 export async function PUT(request: Request, context: { params: Promise<{ productId: string }> }) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   const { productId } = await context.params;
   let bigSize: unknown;

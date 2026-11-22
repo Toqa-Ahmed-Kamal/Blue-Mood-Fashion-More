@@ -17,7 +17,8 @@ const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأ
 const PAGE_SIZE = 30;
 const cairoTime = (iso: string) => (iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" }) : "—");
 
-export function AllOrdersTab() {
+/** `showMoney`: the profit filters (the API leaves out each order's profit for users without "الفلوس"). */
+export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const router = useRouter();
   const [orders, setOrders] = useState<UnifiedOrder[] | null>(null);
   const [error, setError] = useState("");
@@ -155,6 +156,8 @@ export function AllOrdersTab() {
           <option value="site">أوردرات الموقع بس</option>
           <option value="telegram">أوردرات تيليجرام القديمة بس</option>
         </select>
+        {showMoney && (
+          <>
         <select value={marginPreset} onChange={(event) => { setMarginPreset(event.target.value); setLimit(PAGE_SIZE); }} aria-label="هامش الربح">
           {MARGIN_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
         </select>
@@ -172,6 +175,8 @@ export function AllOrdersTab() {
             <label>صافي من <input type="number" inputMode="numeric" value={netMin} onChange={(event) => { setNetMin(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
             <label>لأقل من <input type="number" inputMode="numeric" value={netMax} onChange={(event) => { setNetMax(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
           </span>
+        )}
+          </>
         )}
         {filter === "cancelled" && (
           <select value={reason} onChange={(event) => { setReason(event.target.value as ReasonFilter); setLimit(PAGE_SIZE); }} aria-label="سبب الإلغاء">

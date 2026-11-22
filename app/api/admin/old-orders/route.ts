@@ -1,4 +1,5 @@
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { MAX_OLD_ORDERS_PER_REQUEST, sanitizeOldOrder } from "@/lib/old-orders";
 import { OldOrdersNotPersistedError, VaultNotConfiguredError, importOldOrders, loadOldOrders } from "@/lib/old-orders-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
@@ -13,7 +14,8 @@ const NO_KEY = { success: false, error: { code: "ORDER_DATA_KEY_MISSING", messag
 
 /** All saved old orders (decrypted on the server). */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["orders"]);
+  if (denied) return denied;
   if (!isOrderVaultConfigured()) return json(503, NO_KEY);
   try {
     const { orders, unreadable } = await loadOldOrders();
@@ -26,7 +28,8 @@ export async function GET(request: Request) {
 
 /** Imports orders read from a Telegram export. Order IDs already saved are skipped. No message is sent to anyone. */
 export async function POST(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["orders"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   if (!isOrderVaultConfigured()) return json(503, NO_KEY);
 

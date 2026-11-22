@@ -1,4 +1,4 @@
-import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
+import { can, requireAccess } from "@/lib/admin-users";
 import { mergeAllOrders } from "@/lib/all-orders";
 import { MAX_DETAILS_PER_REQUEST, loadAllOrdersForSummary, loadOrdersDetails } from "@/lib/analytics-store";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
@@ -14,7 +14,10 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Every order — site and imported Telegram — in one list, with customer details (admin only, decrypted on the server). */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const access = await requireAccess(request, ["orders", "money"]);
+  if (access instanceof Response) return access;
+  // Profit per order only for who may see the money.
+  const showMoney = can(access, "money");
   try {
     await ensureCustomProducts();
     const vault = isOrderVaultConfigured();
@@ -32,7 +35,7 @@ export async function GET(request: Request) {
     // Each order's cost, margin, share of its month's expenses and net profit (same rules as الإدارة المالية).
     const money = orderFinance({ live: live.map(({ order }) => order), old: old.orders, costs, expenses });
     const orders = mergeAllOrders(live.map(({ order }) => ({ order, details: details[order.orderId] ?? null })), old.orders)
-      .map((order) => ({ ...order, money: money[order.orderId] ?? null }));
+      .map((order) => ({ ...order, money: showMoney ? money[order.orderId] ?? null : null }));
     return json(200, { success: true, orders, vaultConfigured: vault, unreadableOldOrders: old.unreadable });
   } catch (error) {
     console.error("[admin] all orders read failed", { reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });

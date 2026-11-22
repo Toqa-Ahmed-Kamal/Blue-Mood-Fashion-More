@@ -1,4 +1,5 @@
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { sanitizeExpense } from "@/lib/finance";
 import { deleteExpense, loadExpense, saveExpense } from "@/lib/finance-store";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -12,7 +13,8 @@ const ID_PATTERN = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const NOT_FOUND = { success: false, error: { code: "NOT_FOUND", message: "المصروف مش موجود." } };
 
 async function guard(request: Request, context: Context) {
-  if (!isAdminRequest(request)) return { response: unauthorized() };
+  const denied = await accessDenied(request, ["money"]);
+  if (denied) return { response: denied };
   if (!isSameOrigin(request)) return { response: json(403, { success: false, error: { code: "FORBIDDEN" } }) };
   const { expenseId } = await context.params;
   if (!ID_PATTERN.test(expenseId)) return { response: json(400, { success: false, error: { code: "INVALID_ID" } }) };

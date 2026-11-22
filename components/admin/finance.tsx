@@ -40,7 +40,7 @@ type ProductRow = {
   price: number | null;
   maxWeightKg: number | null;
 };
-type Data = { report: FinanceReport; products: ProductRow[]; expenses: Expense[]; directSales: DirectSale[]; factories: string[]; vaultConfigured: boolean; unreadableOldOrders: number };
+type Data = { report: FinanceReport | null; products: ProductRow[]; expenses: Expense[]; directSales: DirectSale[]; factories: string[]; vaultConfigured: boolean; unreadableOldOrders: number };
 
 const cairoDay = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(date);
 const today = () => cairoDay(new Date());
@@ -67,7 +67,11 @@ function useFinanceApi() {
   }, [router]);
 }
 
-export function FinanceTab() {
+/**
+ * `showMoney` ("الفلوس"): the profit report, expenses, direct sales, pieces taken. `showProducts` ("المنتجات والعروض"):
+ * products, prices and the pricing calculator. The API sends no money figures to a user without "الفلوس".
+ */
+export function FinanceTab({ showMoney = true, showProducts = true }: { showMoney?: boolean; showProducts?: boolean }) {
   const api = useFinanceApi();
   const [preset, setPreset] = useState<string>("all");
   const [range, setRange] = useState({ from: "", to: "" });
@@ -97,7 +101,12 @@ export function FinanceTab() {
   const report = data?.report;
   return (
     <>
-      <section className="admin-panel" id="fin-summary">
+      {!showMoney && (error || !data) && (
+        <section className="admin-panel">
+          {error ? <p className="admin-error" role="alert">{error}</p> : <p className="admin-muted">جاري التحميل…</p>}
+        </section>
+      )}
+      {showMoney && <section className="admin-panel" id="fin-summary">
         <div className="admin-panel-head">
           <h2>الإدارة المالية · Financial Management</h2>
           <button type="button" className="admin-icon-btn" onClick={() => void load()} disabled={loading} aria-label="تحديث"><RefreshCw size={16} className={loading ? "spin" : undefined} /></button>
@@ -177,16 +186,20 @@ export function FinanceTab() {
             </div>
           </>
         )}
-      </section>
+      </section>}
 
       {data && (
         <>
-          <ProductsPricing products={data.products} factories={data.factories} onSaved={load} />
-          {report && <PricingCalculator key={`${report.range.from}|${report.range.to}|${report.totals.expenses}`} products={data.products} report={report} />}
-          <Expenses expenses={data.expenses} range={range} onChanged={load} />
-          <DirectSales sales={(data.directSales ?? []).filter((sale) => !isPersonalTake(sale))} products={data.products} range={range} onChanged={load} />
-          <PersonalTakes takes={(data.directSales ?? []).filter(isPersonalTake)} products={data.products} range={range} onChanged={load} />
-          {report && <OrdersProfit report={report} />}
+          {showProducts && <ProductsPricing products={data.products} factories={data.factories} onSaved={load} />}
+          {showProducts && report && <PricingCalculator key={`${report.range.from}|${report.range.to}|${report.totals.expenses}`} products={data.products} report={report} />}
+          {showMoney && (
+            <>
+              <Expenses expenses={data.expenses} range={range} onChanged={load} />
+              <DirectSales sales={(data.directSales ?? []).filter((sale) => !isPersonalTake(sale))} products={data.products} range={range} onChanged={load} />
+              <PersonalTakes takes={(data.directSales ?? []).filter(isPersonalTake)} products={data.products} range={range} onChanged={load} />
+              {report && <OrdersProfit report={report} />}
+            </>
+          )}
         </>
       )}
     </>

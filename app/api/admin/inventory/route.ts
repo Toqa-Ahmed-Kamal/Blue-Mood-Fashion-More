@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { sanitizeStockMove, sanitizeStockTarget, targetProgress } from "@/lib/inventory";
 import { loadStockTarget, saveStockMove, saveStockTarget } from "@/lib/inventory-store";
@@ -14,7 +15,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Stock of every store product and the recent moves. No customer data in the response. */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["stock", "money"]);
+  if (denied) return denied;
   try {
     const [stock, target] = await Promise.all([computeStock(), loadStockTarget()]);
     const { rows, moves, vault, input } = stock;
@@ -44,7 +46,8 @@ export async function GET(request: Request) {
 
 /** Records a count, an arrival or an adjustment. Body: { productId, kind, quantity, note }. */
 export async function POST(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["stock"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   let body: unknown;
   try {
@@ -67,7 +70,8 @@ export async function POST(request: Request) {
 
 /** Sets "عندي كذا قطعة" (counted from now on). Body: { total } or { total: null } to remove it. */
 export async function PUT(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["stock"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   let body: unknown;
   try {

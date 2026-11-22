@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { CUSTOM_PRODUCT_ID_PATTERN, imagePath, imageTypeOf, newImageId, sanitizeProductEdit, sanitizeProductInput, toCatalogProduct } from "@/lib/custom-products";
 import { CUSTOM_PRODUCTS_TAG, ensureCustomProducts, loadCustomProduct, saveCustomProduct, saveProductEdit } from "@/lib/custom-products-store";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -17,7 +18,8 @@ const MAX_BODY_LENGTH = 1_000_000;
  * the price has its own route). The product ID never changes, so past orders stay linked.
  */
 export async function PATCH(request: Request, context: { params: Promise<{ productId: string }> }) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   const { productId } = await context.params;
   const original = originalProduct(productId);

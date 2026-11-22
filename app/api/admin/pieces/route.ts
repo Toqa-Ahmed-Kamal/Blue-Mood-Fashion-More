@@ -1,4 +1,4 @@
-import { isAdminRequest, unauthorized } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { buildPiecesReport, goodsTotal } from "@/lib/piece-analytics";
 import { RedisUnavailableError } from "@/lib/redis";
 import { computeStock, writeStoreStock } from "@/lib/stock-sync";
@@ -9,7 +9,8 @@ const json = (status: number, body: object) => Response.json(body, { status, hea
 
 /** Pieces analysis (?from=YYYY-MM-DD&to=YYYY-MM-DD). Products and counts only — no customer data. */
 export async function GET(request: Request) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["stock"]);
+  if (denied) return denied;
   const params = new URL(request.url).searchParams;
   try {
     const stock = await computeStock();

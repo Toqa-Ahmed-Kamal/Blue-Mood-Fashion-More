@@ -1,4 +1,5 @@
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { parseCancelReason, parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
 import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderCancelReason, setOrderCourier, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
@@ -14,7 +15,8 @@ const ORDER_ID_PATTERN = /^BM-[A-F\d]{20}$/;
 
 /** Full order for review: customer details (decrypted on the server), items, totals, source and journey. Read-only token. */
 export async function GET(request: Request, context: { params: Promise<{ orderId: string }> }) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["orders"]);
+  if (denied) return denied;
   const { orderId } = await context.params;
   if (!ORDER_ID_PATTERN.test(orderId)) return json(400, { success: false, error: { code: "INVALID_ORDER_ID" } });
 
@@ -30,7 +32,8 @@ export async function GET(request: Request, context: { params: Promise<{ orderId
 
 /** Marks an order as confirmed sale / cancelled / back to submitted. Uses the write token. */
 export async function PATCH(request: Request, context: { params: Promise<{ orderId: string }> }) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["orders"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
 
   const { orderId } = await context.params;

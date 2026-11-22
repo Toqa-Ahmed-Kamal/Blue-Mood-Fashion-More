@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 
-import { isAdminRequest, isSameOrigin, unauthorized } from "@/lib/admin-auth";
+import { isSameOrigin } from "@/lib/admin-auth";
+import { accessDenied } from "@/lib/admin-users";
 import { CUSTOM_PRODUCTS_TAG, ensureCustomProducts, loadCustomProduct, saveCustomProduct, setProductPrice, setProductWasPrice } from "@/lib/custom-products-store";
 import { RedisUnavailableError } from "@/lib/redis";
 import { basePriceOf, findProduct, isBuiltInProduct, listPriceOf, wasPriceOf } from "@/lib/site-data";
@@ -16,7 +17,8 @@ const MAX_PRICE = 100_000;
  * Orders already placed keep the price they were placed with.
  */
 export async function PUT(request: Request, context: { params: Promise<{ productId: string }> }) {
-  if (!isAdminRequest(request)) return unauthorized();
+  const denied = await accessDenied(request, ["products"]);
+  if (denied) return denied;
   if (!isSameOrigin(request)) return json(403, { success: false, error: { code: "FORBIDDEN" } });
   const { productId } = await context.params;
   let body: Record<string, unknown>;

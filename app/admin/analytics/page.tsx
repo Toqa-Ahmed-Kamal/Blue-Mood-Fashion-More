@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { AnalyticsDashboard } from "@/components/admin/analytics-dashboard";
 import { CatalogSync } from "@/components/catalog-sync";
 import { loadAutoSoldOut, loadBigSize, loadCustomProducts, loadPrices, loadProductEdits, loadSoldOut, loadWasPrices } from "@/lib/custom-products-store";
-import { ADMIN_COOKIE, isValidAdminSessionToken } from "@/lib/admin-auth";
+import { ADMIN_COOKIE } from "@/lib/admin-auth";
+import { USER_COOKIE, accessFromTokens } from "@/lib/admin-users";
 
 export const metadata: Metadata = {
   title: "Analytics | Blue Mood Admin",
@@ -14,7 +15,9 @@ export const metadata: Metadata = {
 
 export default async function AdminAnalyticsPage() {
   // Checked here too, not only in proxy.ts.
-  if (!isValidAdminSessionToken((await cookies()).get(ADMIN_COOKIE)?.value)) redirect("/admin/login");
+  const jar = await cookies();
+  const access = await accessFromTokens(jar.get(ADMIN_COOKIE)?.value, jar.get(USER_COOKIE)?.value).catch(() => null);
+  if (!access) redirect("/admin/login");
   // Fresh read: the admin must see a product right after adding it.
   const [products, manualOut, autoOut, bigSize, prices, wasPrices, edits] = await Promise.all([
     loadCustomProducts().catch(() => []),
@@ -28,7 +31,7 @@ export default async function AdminAnalyticsPage() {
   const soldOut = [...new Set([...manualOut, ...autoOut])];
   return (
     <CatalogSync products={products} soldOut={soldOut} prices={prices} wasPrices={wasPrices} bigSize={bigSize} edits={edits}>
-      <AnalyticsDashboard />
+      <AnalyticsDashboard access={{ owner: access.owner, name: access.name, permissions: access.permissions }} />
     </CatalogSync>
   );
 }
