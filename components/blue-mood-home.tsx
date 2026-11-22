@@ -126,10 +126,10 @@ export function BlueMoodHome() {
 
             <Link href={`/offer/${landingPromotion.options[0].id}`} className="offer-poster" aria-label="ابدئي عرض الشتاء">
               <Image
-                src="/images/شتوية دافئة بلمسة وردية.png"
-                alt="عرض واحد يكفي تكملي جهازك أو تجددي دولابك: ٤ بيجامات شتوي، أو ٣ بيجامات شتوي + بلانكيت واحدة. العرض لمدة ٣ أيام فقط."
-                width={1672}
-                height={941}
+                src="/images/winter-offer-2-1300.jpg"
+                alt="عرض الشتا 2: عرض واحد يكفي تكملي جهازك أو تجددي دولابك — ٤ بيجامات، أو ٣ بيجامات + بلانكيت شتوي، بـ 1300 جنيه فقط."
+                width={1363}
+                height={768}
                 sizes="(max-width: 1240px) 100vw, 1180px"
               />
             </Link>
