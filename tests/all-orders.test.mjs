@@ -5,7 +5,7 @@ import { setPriceClock } from "../lib/site-data.ts";
 // Prices go up after the offer countdown: tests use a fixed time before it.
 setPriceClock(() => Date.parse("2026-11-20T12:00:00+02:00"));
 
-import { courierCollection, courierText, filterCounts, matchesFilter, matchesSearch, mergeAllOrders } from "../lib/all-orders.ts";
+import { areaOptions, courierCollection, courierText, filterCounts, governorateOptions, matchesFilter, matchesPlace, matchesSearch, mergeAllOrders, placeKey } from "../lib/all-orders.ts";
 import { applyCourierStep, isSaleStatus, parseCourierChange } from "../lib/analytics-report.ts";
 import { buildFinanceReport } from "../lib/finance.ts";
 import { sanitizeOldOrder } from "../lib/old-orders.ts";
@@ -205,4 +205,28 @@ test("net profit filter: works on the net profit (not the margin); cancelled and
   assert.ok(!matchesNetProfit(order("cancelled", 400, 300), range("gte200")));
   assert.ok(matchesNetProfit(order("cancelled", 400, 300), range("")), "no filter → everything");
   assert.ok(matchesNetProfit(order("delivered", 300, 150), { min: 140, max: 160 }), "custom");
+});
+
+test("place filter: governorate and area, spellings merged", () => {
+  assert.equal(placeKey(" مدينه  نصر "), placeKey("مدينة نصر"));
+  assert.equal(placeKey("محافظة الإسكندرية"), placeKey("الاسكندريه"));
+  assert.equal(placeKey("شبرا الخيمى"), placeKey("شبرا الخيمي"));
+  const orders = [
+    { governorate: "القاهرة", area: "مدينة نصر" },
+    { governorate: "القاهره", area: "مدينه نصر" },
+    { governorate: "القاهرة", area: "المعادي" },
+    { governorate: "القاهرة", area: "" },
+    { governorate: "الجيزة", area: "الهرم" },
+  ];
+  const governorates = governorateOptions(orders);
+  assert.deepEqual(governorates.map((item) => [item.label, item.count]), [["القاهرة", 4], ["الجيزة", 1]]);
+  const cairo = governorates[0].key;
+  assert.deepEqual(areaOptions(orders, cairo).map((item) => [item.label, item.count]), [["مدينة نصر", 2], ["المعادي", 1]]);
+  assert.equal(orders.filter((order) => matchesPlace(order, cairo, "")).length, 4);
+  assert.equal(orders.filter((order) => matchesPlace(order, cairo, placeKey("مدينة نصر"))).length, 2);
+  assert.equal(orders.filter((order) => matchesPlace(order, cairo, "none")).length, 1);
+  assert.equal(orders.filter((order) => matchesPlace(order, "", "")).length, 5);
+  // Area alone, without a governorate: every area, named with its governorate.
+  assert.deepEqual(areaOptions(orders, "").map((item) => [item.label, item.count]), [["مدينة نصر · القاهرة", 2], ["المعادي · القاهرة", 1], ["الهرم · الجيزة", 1]]);
+  assert.equal(orders.filter((order) => matchesPlace(order, "", placeKey("الهرم"))).length, 1);
 });

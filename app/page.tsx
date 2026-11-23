@@ -7,9 +7,9 @@ import { loadReviewsForPage } from "@/lib/reviews-store";
 export const revalidate = 60;
 
 export default async function Home() {
-  const [{ products, soldOut, prices, wasPrices, stats, bigSize, edits, offerLimited, offerExcluded, bundles }, reviews] = await Promise.all([loadCustomProductsForPage(), loadReviewsForPage()]);
+  const [{ products, soldOut, prices, wasPrices, stats, bigSize, edits, offerLimited, christmasLimited, offerExcluded, bundles }, reviews] = await Promise.all([loadCustomProductsForPage(), loadReviewsForPage()]);
   return (
-    <CatalogSync products={products} soldOut={soldOut} prices={prices} wasPrices={wasPrices} stats={stats} bigSize={bigSize} edits={edits} offerLimited={offerLimited} offerExcluded={offerExcluded} bundles={bundles}>
+    <CatalogSync products={products} soldOut={soldOut} prices={prices} wasPrices={wasPrices} stats={stats} bigSize={bigSize} edits={edits} offerLimited={offerLimited} christmasLimited={christmasLimited} offerExcluded={offerExcluded} bundles={bundles}>
       <BlueMoodHome reviews={reviews} />
     </CatalogSync>
   );

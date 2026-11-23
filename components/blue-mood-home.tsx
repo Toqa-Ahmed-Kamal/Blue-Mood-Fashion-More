@@ -13,19 +13,24 @@ import { AnnouncementBar, CartBar, SiteFooter, SiteHeader } from "@/components/s
 import { formatEGP } from "@/lib/format";
 import type { PublicReview } from "@/lib/reviews";
 import {
+  availableFirst,
   categoryInfo,
   categoryOrder,
   findProduct,
   isBigSize,
   landingPromotion,
   offerCategories,
+  offerOptions,
   offerPrice,
+  optionPrice,
   productsIn,
   startingPriceOf,
   visibleCatalog,
   type CatalogCategory,
   type CatalogProduct,
 } from "@/lib/site-data";
+
+const christmasOption = offerOptions("christmas")[0];
 
 const heroImages = ["bm-robe-002", "bm-abaya-012", "bm-winter-pajama-005"]
   .map(findProduct)
@@ -41,7 +46,8 @@ const FAQ = [
   { q: "لو قطعة طلعت مش مناسبة؟", a: "بترجعيها مع المندوب وقت الاستلام على طول." },
   { q: "الصور حقيقية؟", a: "بنصورلك القطع على الطبيعة قبل ما نبعتها، علشان تبقي شايفة بالظبط اللي جايلك." },
   { q: "المقاسات إزاي؟", a: "البيجامات One Size، ومكتوب على كل بيجاما لحد كام كيلو بتلبس. لو محتارة ابعتيلنا على واتساب ونساعدك." },
-  { q: `عرض الشتاء إيه؟`, a: `٤ قطع بـ ${offerPrice()} جنيه: ${landingPromotion.options.map((option) => option.label).join("، أو ")}. وانتي اللي بتختاري الموديلات.` },
+  { q: `عرض الشتاء إيه؟`, a: `٤ قطع بـ ${offerPrice()} جنيه: ${offerOptions("winter").map((option) => option.label).join("، أو ")}. وانتي اللي بتختاري الموديلات.` },
+  { q: "عرض الكريسماس إيه؟", a: `٣ بيجامات بـ ${optionPrice(christmasOption)} جنيه، وانتي اللي بتختاري الموديلات.` },
 ];
 
 /** Photo on each category card (a category without one shows its first product). */
@@ -55,7 +61,7 @@ const categoryCovers: Partial<Record<CatalogCategory, string>> = {
 
 export function BlueMoodHome({ reviews = [] }: { reviews?: PublicReview[] }) {
   const [quickView, setQuickView] = useState<CatalogProduct | null>(null);
-  const bigSizeItems = visibleCatalog.filter((product) => isBigSize(product.id));
+  const bigSizeItems = availableFirst(visibleCatalog.filter((product) => isBigSize(product.id)));
   // A category without products (e.g. a new one) is not shown until its first product is added.
   const shownCategories = categoryOrder.filter((category) => productsIn(category).length > 0);
 
@@ -137,7 +143,7 @@ export function BlueMoodHome({ reviews = [] }: { reviews?: PublicReview[] }) {
             </Link>
 
             <div className="offer-options">
-              {landingPromotion.options.map((option) => (
+              {offerOptions("winter").map((option) => (
                 <Link href={`/offer/${option.id}`} className="offer-option" key={option.id}>
                   <span className="offer-option-copy">
                     <strong>{option.label}</strong>
@@ -147,6 +153,38 @@ export function BlueMoodHome({ reviews = [] }: { reviews?: PublicReview[] }) {
                   <span className="btn btn-pink">اختاري القطع <ArrowLeft size={16} /></span>
                 </Link>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="offer-section christmas-section" id="christmas" aria-labelledby="christmas-title">
+          <div className="christmas-snow" aria-hidden="true">{Array.from({ length: 14 }, (_, index) => <span key={index}>❄</span>)}</div>
+          <div className="container">
+            <div className="offer-head">
+              <span className="christmas-badge">🎄 عرض جديد</span>
+              <h2 id="christmas-title">عرض الكريسماس</h2>
+              <p>٣ بيجامات بـ <strong>{formatEGP(optionPrice(christmasOption))}</strong> بس. اختاري الموديلات بنفسك.</p>
+            </div>
+
+            <Link href={`/offer/${christmasOption.id}`} className="offer-poster" aria-label="ابدئي عرض الكريسماس">
+              <Image
+                src="/images/christmas-offer-1000.jpg"
+                alt="عرض الكريسماس: ٣ بيجامات بـ 1000 جنيه فقط."
+                width={1672}
+                height={941}
+                sizes="(max-width: 1240px) 100vw, 1180px"
+              />
+            </Link>
+
+            <div className="offer-options single">
+              <Link href={`/offer/${christmasOption.id}`} className="offer-option">
+                <span className="offer-option-copy">
+                  <strong>{christmasOption.label}</strong>
+                  <small>{christmasOption.description}</small>
+                </span>
+                <span className="offer-option-price">{formatEGP(optionPrice(christmasOption))}</span>
+                <span className="btn btn-pink">اختاري البيجامات <ArrowLeft size={16} /></span>
+              </Link>
             </div>
           </div>
         </section>

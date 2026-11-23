@@ -404,8 +404,13 @@ export function startingPriceOf(category: CatalogCategory) {
   return prices.length > 0 ? Math.min(...prices) : null;
 }
 
+/** Available pieces first, sold-out ones at the end (each group keeps the catalog order). */
+export function availableFirst<T extends { id: string }>(products: T[]): T[] {
+  return [...products.filter((product) => !isSoldOut(product.id)), ...products.filter((product) => isSoldOut(product.id))];
+}
+
 export function productsIn(category: CatalogCategory) {
-  return visibleCatalog.filter((product) => product.category === category);
+  return availableFirst(visibleCatalog.filter((product) => product.category === category));
 }
 
 export const landingPromotion = {
@@ -420,9 +425,14 @@ export const landingPromotion = {
     { until: "2026-11-21T00:00:00+02:00", offer: 1200, pieceRise: 20 },
     { until: null, offer: 1300, pieceRise: 20 },
   ] satisfies PriceStep[] as PriceStep[],
+  /**
+   * Every offer package. `offer` groups them: "winter" (عرض الشتاء, price from priceSteps) and "christmas"
+   * (عرض الكريسماس, its own fixed `price`). Labels must not contain one another (orders are matched by label).
+   */
   options: [
     {
       id: "four-pajamas",
+      offer: "winter",
       label: "٤ بيجامات شتوية",
       description: "اختاري ٤ موديلات مختلفة من البيجامات",
       pajamaCount: 4,
@@ -430,17 +440,48 @@ export const landingPromotion = {
     },
     {
       id: "three-pajamas-and-blanket",
+      offer: "winter",
       label: "٣ بيجامات + بلانكيت",
       description: "٣ بيجامات شتوية + بلانكيت يُلبس",
       pajamaCount: 3,
       wearableBlanketCount: 1,
     },
+    {
+      id: "christmas-three-pajamas",
+      offer: "christmas",
+      label: "٣ بيجامات كريسماس",
+      description: "اختاري ٣ موديلات مختلفة من البيجامات",
+      pajamaCount: 3,
+      wearableBlanketCount: 0,
+      price: 1000,
+    },
   ] as const,
 };
 
-export type LandingPromotionOptionId = (typeof landingPromotion.options)[number]["id"];
+export type LandingPromotionOption = (typeof landingPromotion.options)[number];
+export type LandingPromotionOptionId = LandingPromotionOption["id"];
+export type OfferKind = LandingPromotionOption["offer"];
 
-/** Pieces in an order's winter offer, from the offer name it carries (both options are 4 pieces). */
+export const OFFER_TITLES: Record<OfferKind, string> = { winter: "عرض الشتاء", christmas: "عرض الكريسماس" };
+/** Where each offer sits on the home page. */
+export const OFFER_ANCHORS: Record<OfferKind, string> = { winter: "offer", christmas: "christmas" };
+
+/** The packages of one offer (e.g. the two winter packages). */
+export function offerOptions(kind: OfferKind): LandingPromotionOption[] {
+  return landingPromotion.options.filter((option) => option.offer === kind);
+}
+
+/** What a package costs now: its own fixed price, else the winter offer price of the moment. */
+export function optionPrice(option: LandingPromotionOption, now = priceClock()) {
+  return "price" in option ? option.price : offerPrice(now);
+}
+
+/** "عرض الكريسماس: ٣ بيجامات كريسماس" — how the package is named in orders and messages. */
+export function optionName(option: LandingPromotionOption) {
+  return `${OFFER_TITLES[option.offer]}: ${option.label}`;
+}
+
+/** Pieces in an order's offer, from the offer name it carries (winter: 4, christmas: 3). */
 export function offerPieceCount(offerName: string) {
   const option = landingPromotion.options.find((item) => offerName.includes(item.label)) ?? landingPromotion.options[0];
   return option.pajamaCount + option.wearableBlanketCount;
@@ -486,6 +527,27 @@ export function isOfferExcluded(product: CatalogProduct | undefined) {
 /** Product IDs whose factory price is 270 or more. */
 export function offerExcludedFromCosts(costs: readonly { productId?: unknown; cost?: unknown }[]) {
   return costs.filter((item) => typeof item.productId === "string" && typeof item.cost === "number" && item.cost >= OFFER_EXCLUDED_MIN_COST).map((item) => item.productId as string).toSorted();
+}
+
+// ── Offer rule for عرض الكريسماس (never shown to customers): at most one pajama whose factory price is above
+// 190; the others must be 190 or less. IDs from the factory prices, like the rules above. ──
+export const CHRISTMAS_LIMITED_ABOVE_COST = 190;
+const christmasLimitedIds = new Set<string>();
+
+export function setChristmasLimited(ids: readonly string[]) {
+  christmasLimitedIds.clear();
+  for (const id of ids) christmasLimitedIds.add(id);
+}
+
+/** Product IDs whose factory price is above 190. */
+export function christmasLimitedFromCosts(costs: readonly { productId?: unknown; cost?: unknown }[]) {
+  return costs.filter((item) => typeof item.productId === "string" && typeof item.cost === "number" && item.cost > CHRISTMAS_LIMITED_ABOVE_COST).map((item) => item.productId as string).toSorted();
+}
+
+/** A pajama of the "one per offer" group of this package's offer. */
+export function isLimitedIn(option: LandingPromotionOption, product: CatalogProduct | undefined) {
+  if (option.offer === "christmas") return product !== undefined && product.category === "winter-pajamas" && christmasLimitedIds.has(product.id);
+  return isOfferLimited(product);
 }
 
 export function findOffer(id: string) {

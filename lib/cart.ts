@@ -2,12 +2,12 @@ import {
   findOffer,
   findProduct,
   isOfferExcluded,
+  isLimitedIn,
   isOnStore,
-  isOfferLimited,
   isSoldOut,
   landingPromotion,
   OFFER_LIMITED_MAX,
-  offerPrice,
+  optionPrice,
   priceOf,
   type CatalogProduct,
   type LandingPromotionOptionId,
@@ -82,10 +82,11 @@ function resolveOffer(value: unknown): { offer: ResolvedCart["offer"] } | { erro
   if (pajamas !== option.pajamaCount || blankets !== option.wearableBlanketCount || pajamas + blankets !== products.length) {
     return { error: "INVALID_BUNDLE" };
   }
-  if (products.filter(isOfferLimited).length > OFFER_LIMITED_MAX) return { error: "INVALID_BUNDLE" };
+  // At most one pajama of the offer's "one per offer" group (winter: factory price 220; christmas: above 190).
+  if (products.filter((product) => isLimitedIn(option, product)).length > OFFER_LIMITED_MAX) return { error: "INVALID_BUNDLE" };
   if (products.some(isOfferExcluded)) return { error: "INVALID_BUNDLE" };
 
-  return { offer: { option, products, price: offerPrice() } };
+  return { offer: { option, products, price: optionPrice(option) } };
 }
 
 function resolveItems(value: unknown): { items: ResolvedCartLine[] } | { error: CartError } {

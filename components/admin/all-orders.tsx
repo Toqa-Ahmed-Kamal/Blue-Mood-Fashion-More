@@ -6,7 +6,7 @@ import { BadgeCheck, Check, CheckCircle2, Copy, Package, PackageCheck, Pencil, R
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
-import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FILTERS, courierCollection, courierText, filterCounts, matchesFilter, matchesMargin, matchesNetProfit, matchesReason, matchesSearch, withEdit, type MarginRange, type OrderFilter, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
+import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FILTERS, areaOptions, governorateOptions, matchesPlace, courierCollection, courierText, filterCounts, matchesFilter, matchesMargin, matchesNetProfit, matchesReason, matchesSearch, withEdit, type MarginRange, type OrderFilter, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
 import { CANCEL_REASONS, isCancelReason, type CancelReason, type CourierStep, type OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
@@ -27,6 +27,9 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const [reason, setReason] = useState<ReasonFilter>("");
   const [source, setSource] = useState<"" | "site" | "telegram">("");
   const [query, setQuery] = useState("");
+  // Place filter: governorate key, then an area inside it ("" = any).
+  const [governorate, setGovernorate] = useState("");
+  const [area, setArea] = useState("");
   // هامش الربح filter: a preset, or "custom" with the owner's own numbers.
   const [marginPreset, setMarginPreset] = useState("");
   const [marginMin, setMarginMin] = useState("");
@@ -78,7 +81,13 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
     const number = (text: string) => (text.trim() === "" || !Number.isFinite(Number(text)) ? null : Number(text));
     return { min: number(netMin), max: number(netMax) };
   }, [netPreset, netMin, netMax]);
-  const scoped = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived) && matchesSearch(order, query) && matchesMargin(order, marginRange) && matchesNetProfit(order, netRange)), [orders, source, showArchived, query, marginRange, netRange]);
+  // Places to choose from: counted over the orders shown by source and archive, before the other filters.
+  const placeBase = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived)), [orders, source, showArchived]);
+  const governorates = useMemo(() => governorateOptions(placeBase), [placeBase]);
+  // Areas work alone too: without a governorate every area is listed (with its governorate).
+  const areas = useMemo(() => areaOptions(placeBase, governorate), [placeBase, governorate]);
+  const areaMissing = placeBase.filter((order) => matchesPlace(order, governorate, "none")).length;
+  const scoped = useMemo(() => placeBase.filter((order) => matchesPlace(order, governorate, area) && matchesSearch(order, query) && matchesMargin(order, marginRange) && matchesNetProfit(order, netRange)), [placeBase, governorate, area, query, marginRange, netRange]);
   const netActive = netRange.min !== null || netRange.max !== null;
   const marginActive = marginRange.min !== null || marginRange.max !== null || netActive;
   const counts = useMemo(() => filterCounts(scoped), [scoped]);
@@ -155,6 +164,15 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
           <option value="">أوردرات الموقع وتيليجرام</option>
           <option value="site">أوردرات الموقع بس</option>
           <option value="telegram">أوردرات تيليجرام القديمة بس</option>
+        </select>
+        <select value={governorate} onChange={(event) => { setGovernorate(event.target.value); setArea(""); setLimit(PAGE_SIZE); }} aria-label="المحافظة">
+          <option value="">كل المحافظات</option>
+          {governorates.map((item) => <option key={item.key} value={item.key}>{item.label} ({item.count})</option>)}
+        </select>
+        <select value={area} onChange={(event) => { setArea(event.target.value); setLimit(PAGE_SIZE); }} aria-label="المنطقة">
+          <option value="">كل المناطق</option>
+          {areas.map((item) => <option key={item.key} value={item.key}>{item.label} ({item.count})</option>)}
+          {areaMissing > 0 && <option value="none">من غير منطقة ({areaMissing})</option>}
         </select>
         {showMoney && (
           <>

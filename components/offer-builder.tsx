@@ -16,13 +16,16 @@ import { formatEGP } from "@/lib/format";
 import {
   findOffer,
   findProduct,
+  isLimitedIn,
   isOfferExcluded,
-  isOfferLimited,
   isSoldOut,
-  landingPromotion,
-  offerPrice,
+  OFFER_ANCHORS,
+  OFFER_TITLES,
+  offerOptions,
+  optionPrice,
   productsIn,
   type CatalogProduct,
+  type LandingPromotionOption,
   type LandingPromotionOptionId,
 } from "@/lib/site-data";
 
@@ -50,10 +53,10 @@ function fitSelectionToOffer(ids: string[], offerId: LandingPromotionOptionId) {
   });
 }
 
-/** Only one pajama of the "one per offer" group: later ones are dropped (not explained to the customer). */
-function keepOneLimited(ids: string[]) {
+/** Only one pajama of the package's "one per offer" group: later ones are dropped (not explained to the customer). */
+function keepOneLimited(ids: string[], option: LandingPromotionOption) {
   let limited = 0;
-  return ids.filter((id) => !isOfferLimited(findProduct(id)) || ++limited <= 1);
+  return ids.filter((id) => !isLimitedIn(option, findProduct(id)) || ++limited <= 1);
 }
 
 export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromotionOptionId }) {
@@ -69,11 +72,15 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
   const offer = findOffer(offerId)!;
   const savedIds = cart.offer?.offerId === offerId ? cart.offer.productIds : [];
   // A piece that sold out meanwhile is dropped from the selection (it can no longer be ordered).
-  const selectedIds = keepOneLimited((draft ?? savedIds).filter((id) => !isSoldOut(id) && !isOfferExcluded(findProduct(id))));
+  const selectedIds = keepOneLimited((draft ?? savedIds).filter((id) => !isSoldOut(id) && !isOfferExcluded(findProduct(id))), offer);
+  const isLimited = (product: CatalogProduct | undefined) => isLimitedIn(offer, product);
+  // Only the packages of the same offer are offered to switch between (winter ↔ winter).
+  const packages = offerOptions(offer.offer);
+  const price = optionPrice(offer);
   const selected = selectedIds.map(findProduct).filter((product): product is CatalogProduct => product !== undefined);
   const neededTotal = offer.pajamaCount + offer.wearableBlanketCount;
   const countOf = (category: OfferCategory) => selected.filter((product) => product.category === category).length;
-  const limitedPicked = selected.some(isOfferLimited);
+  const limitedPicked = selected.some(isLimited);
   const isComplete = countOf("winter-pajamas") === offer.pajamaCount && countOf("wearable-blankets") === offer.wearableBlanketCount;
   const tabs: OfferCategory[] = offer.wearableBlanketCount > 0 ? ["winter-pajamas", "wearable-blankets"] : ["winter-pajamas"];
   const activeTab = tabs.includes(tab) ? tab : "winter-pajamas";
@@ -98,7 +105,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
       setNotice(`${product.name}: نفدت الكمية. اختاري موديل تاني.`);
       return;
     }
-    if (limitedPicked && isOfferLimited(product)) return;
+    if (limitedPicked && isLimited(product)) return;
     const limit = limitFor(offerId, product.category);
     if (countOf(product.category) >= limit) {
       setNotice(`اخترتي ${limit} ${tabLabels[product.category]} خلاص. شيلي واحدة الأول عشان تبدليها.`);
@@ -124,7 +131,7 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
 
   // After one "one per offer" pajama is picked, the others are simply not offered.
   // Pieces kept out of the offer (factory price 270+) are never offered.
-  const visibleProducts = productsIn(activeTab).filter((product) => !isOfferExcluded(product) && (!limitedPicked || !isOfferLimited(product) || selectedIds.includes(product.id)));
+  const visibleProducts = productsIn(activeTab).filter((product) => !isOfferExcluded(product) && (!limitedPicked || !isLimited(product) || selectedIds.includes(product.id)));
   const tabFull = countOf(activeTab) >= limitFor(offerId, activeTab);
 
   return (
@@ -132,17 +139,17 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
       <SiteHeader />
 
       <main className="container builder">
-        <Link href="/#offer" className="back-link"><ChevronRight size={18} /> رجوع للمتجر</Link>
+        <Link href={`/#${OFFER_ANCHORS[offer.offer]}`} className="back-link"><ChevronRight size={18} /> رجوع للمتجر</Link>
 
-        <header className="builder-head">
-          <span className="eyebrow">عرض الشتاء · {formatEGP(offerPrice())}</span>
+        <header className={`builder-head${offer.offer === "christmas" ? " christmas" : ""}`}>
+          <span className="eyebrow">{OFFER_TITLES[offer.offer]} · {formatEGP(price)}</span>
           <h1>كوّني عرضك</h1>
-          <p>اختاري الباقة، وبعدين دوسي على القطع اللي عاجباكي. كل موديل مرة واحدة بس.</p>
-          <OfferCountdown />
+          <p>{packages.length > 1 ? "اختاري الباقة، وبعدين دوسي على القطع اللي عاجباكي." : `${offer.description} ودوسي على القطع اللي عاجباكي.`} كل موديل مرة واحدة بس.</p>
+          {offer.offer === "winter" && <OfferCountdown />}
         </header>
 
-        <div className="segmented" role="radiogroup" aria-label="نوع الباقة">
-          {landingPromotion.options.map((option) => (
+        {packages.length > 1 && <div className="segmented" role="radiogroup" aria-label="نوع الباقة">
+          {packages.map((option) => (
             <button
               type="button"
               role="radio"
@@ -152,10 +159,10 @@ export function OfferBuilder({ initialOfferId }: { initialOfferId: LandingPromot
               key={option.id}
             >
               <strong>{option.label}</strong>
-              <small>{formatEGP(offerPrice())}</small>
+              <small>{formatEGP(optionPrice(option))}</small>
             </button>
           ))}
-        </div>
+        </div>}
 
         {tabs.length > 1 && (
           <div className="tabs" role="tablist" aria-label="نوع القطع">

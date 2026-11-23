@@ -25,6 +25,7 @@ import {
   sendTelegramMessage,
 } from "@/lib/telegram";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
+import { optionName } from "@/lib/site-data";
 
 export const runtime = "nodejs";
 
@@ -223,7 +224,7 @@ export async function POST(request: Request) {
     governorate: customer.governorate,
     area: customer.area,
     address: customer.address,
-    offerName: cart.offer ? `عرض الشتاء: ${cart.offer.option.label}` : "بدون عرض — قطع منفردة",
+    offerName: cart.offer ? optionName(cart.offer.option) : "بدون عرض — قطع منفردة",
     products: productRows,
     offerPrice: cart.offerTotal,
     itemsTotal: cart.itemsTotal + cart.bundlesTotal,

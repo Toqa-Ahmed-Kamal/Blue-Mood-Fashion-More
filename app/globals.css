@@ -2111,3 +2111,35 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
 .reviews-admin-fields input { width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: .85rem; }
 .reviews-admin-fields .admin-primary { justify-self: start; }
 .reviews-admin-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* عرض الكريسماس: the same offer layout in festive red and green, with slow falling snow. */
+.christmas-section { margin-top: 0; position: relative; overflow: hidden; background: radial-gradient(120% 80% at 50% 0%, #fff4f2 0%, #fde7e7 45%, #eaf5ee 100%); }
+.christmas-section .container { position: relative; z-index: 1; }
+.christmas-section .offer-head h2 { color: #b3122e; }
+.christmas-section .offer-head strong { color: #b3122e; }
+.christmas-section .offer-poster { box-shadow: 0 26px 50px -26px rgba(179, 18, 46, .55); }
+.christmas-section .btn-pink { background: #b3122e; border-color: #b3122e; }
+.christmas-section .btn-pink:hover { background: #8f0e25; border-color: #8f0e25; }
+.christmas-section .offer-option-price { color: #b3122e; }
+.christmas-badge { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 4px 14px; border-radius: 999px; background: #1f7a45; color: #fff; font-weight: 700; font-size: .85rem; box-shadow: 0 8px 18px -10px rgba(31, 122, 69, .8); }
+.offer-options.single { grid-template-columns: minmax(0, 560px); justify-content: center; }
+.christmas-snow { position: absolute; inset: 0; pointer-events: none; }
+.christmas-snow span { position: absolute; top: -24px; color: rgba(179, 18, 46, .25); font-size: 14px; animation: christmas-fall linear infinite; }
+.christmas-snow span:nth-child(odd) { color: rgba(31, 122, 69, .25); font-size: 18px; }
+.christmas-snow span:nth-child(1) { left: 4%; animation-duration: 13s; animation-delay: -2s; }
+.christmas-snow span:nth-child(2) { left: 11%; animation-duration: 17s; animation-delay: -9s; }
+.christmas-snow span:nth-child(3) { left: 19%; animation-duration: 12s; animation-delay: -5s; }
+.christmas-snow span:nth-child(4) { left: 27%; animation-duration: 19s; animation-delay: -12s; }
+.christmas-snow span:nth-child(5) { left: 35%; animation-duration: 14s; animation-delay: -1s; }
+.christmas-snow span:nth-child(6) { left: 43%; animation-duration: 18s; animation-delay: -7s; }
+.christmas-snow span:nth-child(7) { left: 51%; animation-duration: 13s; animation-delay: -11s; }
+.christmas-snow span:nth-child(8) { left: 59%; animation-duration: 16s; animation-delay: -4s; }
+.christmas-snow span:nth-child(9) { left: 67%; animation-duration: 20s; animation-delay: -14s; }
+.christmas-snow span:nth-child(10) { left: 74%; animation-duration: 12s; animation-delay: -6s; }
+.christmas-snow span:nth-child(11) { left: 81%; animation-duration: 17s; animation-delay: -10s; }
+.christmas-snow span:nth-child(12) { left: 88%; animation-duration: 15s; animation-delay: -3s; }
+.christmas-snow span:nth-child(13) { left: 94%; animation-duration: 19s; animation-delay: -8s; }
+.christmas-snow span:nth-child(14) { left: 98%; animation-duration: 14s; animation-delay: -13s; }
+@keyframes christmas-fall { from { transform: translateY(0) rotate(0deg); } to { transform: translateY(1400px) rotate(360deg); } }
+.builder-head.christmas .eyebrow { background: #fde7e7; color: #b3122e; }
+@media (prefers-reduced-motion: reduce) { .christmas-snow { display: none; } }

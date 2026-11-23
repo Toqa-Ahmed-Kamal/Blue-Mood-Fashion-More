@@ -5,13 +5,13 @@ import { useEffect, type ReactNode } from "react";
 
 import { setBundles, type Bundle } from "@/lib/bundles";
 
-import { nextPriceChange, setBigSize, setCustomProducts, setOfferExcluded, setOfferLimited, setPriceOverrides, setProductEdits, setProductStats, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit, type StoreStat } from "@/lib/site-data";
+import { nextPriceChange, setBigSize, setChristmasLimited, setCustomProducts, setOfferExcluded, setOfferLimited, setPriceOverrides, setProductEdits, setProductStats, setSoldOut, setWasPrices, type CatalogProduct, type ProductEdit, type StoreStat } from "@/lib/site-data";
 
 /**
  * Adds the products created in the admin to the catalog before the page renders (server render
  * and browser alike), so every component that reads the catalog sees them. Renders its children.
  */
-export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, stats = {}, bigSize = [], edits = {}, offerLimited = [], offerExcluded = [], bundles = [], children }: {
+export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, stats = {}, bigSize = [], edits = {}, offerLimited = [], christmasLimited = [], offerExcluded = [], bundles = [], children }: {
   products: CatalogProduct[];
   soldOut: string[];
   prices?: Record<string, number>;
@@ -24,6 +24,8 @@ export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, st
   edits?: Record<string, ProductEdit>;
   /** Pajamas of the "one per offer" group (IDs only). */
   offerLimited?: string[];
+  /** Pajamas allowed only once in عرض الكريسماس (IDs only). */
+  christmasLimited?: string[];
   offerExcluded?: string[];
   /** Live bundles (عروض). */
   bundles?: Bundle[];
@@ -37,6 +39,7 @@ export function CatalogSync({ products, soldOut, prices = {}, wasPrices = {}, st
   setProductStats(stats);
   setBigSize(bigSize);
   setOfferLimited(offerLimited);
+  setChristmasLimited(christmasLimited);
   setOfferExcluded(offerExcluded);
   setBundles(bundles);
   usePriceRiseRefresh();

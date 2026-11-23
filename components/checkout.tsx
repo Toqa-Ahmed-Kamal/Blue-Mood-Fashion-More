@@ -19,7 +19,7 @@ import {
   productLink,
 } from "@/lib/order-flow";
 import { UNSERVED_AREA_NOTE, findShippingRate, governorateShippingFee, isValidShippingArea, shippingAreasFor, shippingGovernorates, unservedAreasIn } from "@/lib/shipping-rates";
-import { findProduct, isSoldOut, offerPrice, priceOf, visibleCatalog } from "@/lib/site-data";
+import { findProduct, isSoldOut, offerPrice, optionName, priceOf, visibleCatalog } from "@/lib/site-data";
 import { SiteHeader } from "@/components/store-chrome";
 
 type CustomerDetails = {
@@ -153,7 +153,7 @@ export function Checkout() {
           ...order,
           customer: snapshot,
           offer: cartSnapshot.offer && {
-            label: cartSnapshot.offer.option.label,
+            label: optionName(cartSnapshot.offer.option),
             price: cartSnapshot.offer.price,
             items: cartSnapshot.offer.products.map((product) => ({ name: product.name, category: product.category, maxWeightKg: product.maxWeightKg, link: productLink(window.location.origin, product.image) })),
           },
@@ -382,7 +382,7 @@ function CartLines({ cart, disabled }: { cart: ResolvedCart; disabled: boolean }
         <div className="cart-offer">
           <div className="cart-offer-head">
             <div>
-              <strong>عرض الشتاء: {cart.offer.option.label}</strong>
+              <strong>{optionName(cart.offer.option)}</strong>
               <span>{formatEGP(cart.offer.price)}</span>
             </div>
             <div className="cart-offer-actions">

@@ -294,3 +294,64 @@ export function matchesSearch(order: UnifiedOrder, query: string) {
     .toLowerCase();
   return words.every((word) => haystack.includes(word));
 }
+
+/**
+ * Governorate and area are typed by customers, so the same place comes in several spellings ("مدينة نصر",
+ * "مدينه نصر ", "مدينة  نصر"). The key ignores spaces, hamza forms, ة/ه and ى/ي so they count as one place.
+ */
+export function placeKey(text: string) {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[ً-ْـ]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/^(محافظه|محافظة)\s+/, "")
+    .replace(/\s+/g, " ");
+}
+
+export type PlaceOption = { key: string; label: string; count: number };
+
+/** Places with how many orders each, most orders first; the label is the most used spelling. */
+function placeOptions(values: string[]): PlaceOption[] {
+  const groups = new Map<string, { count: number; spellings: Map<string, number> }>();
+  for (const value of values) {
+    const key = placeKey(value);
+    if (!key) continue;
+    const group = groups.get(key) ?? { count: 0, spellings: new Map() };
+    group.count += 1;
+    const spelling = value.trim().replace(/\s+/g, " ");
+    group.spellings.set(spelling, (group.spellings.get(spelling) ?? 0) + 1);
+    groups.set(key, group);
+  }
+  return [...groups].map(([key, group]) => ({
+    key,
+    label: [...group.spellings].toSorted((a, b) => b[1] - a[1])[0][0],
+    count: group.count,
+  })).toSorted((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ar"));
+}
+
+export const governorateOptions = (orders: Pick<UnifiedOrder, "governorate">[]) => placeOptions(orders.map((order) => order.governorate));
+
+/**
+ * Areas inside one governorate (by its key), or every area when no governorate is chosen — then each label
+ * also names the governorate it is in most often ("مدينة نصر · القاهرة").
+ */
+export function areaOptions(orders: Pick<UnifiedOrder, "governorate" | "area">[], governorate: string): PlaceOption[] {
+  const inScope = governorate ? orders.filter((order) => placeKey(order.governorate) === governorate) : orders;
+  const options = placeOptions(inScope.map((order) => order.area));
+  if (governorate) return options;
+  return options.map((option) => {
+    const where = governorateOptions(inScope.filter((order) => placeKey(order.area) === option.key))[0];
+    return where ? { ...option, label: `${option.label} · ${where.label}` } : option;
+  });
+}
+
+/** "" = any. "none" for the area = orders of that governorate without an area. */
+export function matchesPlace(order: Pick<UnifiedOrder, "governorate" | "area">, governorate: string, area: string) {
+  if (governorate && placeKey(order.governorate) !== governorate) return false;
+  if (area === "none") return !placeKey(order.area);
+  if (area && placeKey(order.area) !== area) return false;
+  return true;
+}

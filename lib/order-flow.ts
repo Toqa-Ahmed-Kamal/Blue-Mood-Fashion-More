@@ -118,6 +118,7 @@ export type WhatsAppOrderMessage = {
     address: string;
     notes: string;
   };
+  /** `label` is the full package name, e.g. "عرض الشتاء: ٤ بيجامات شتوية". */
   offer: { label: string; price: number; items: { name: string; category: CatalogCategory; maxWeightKg?: number; link?: string | null }[] } | null;
   items: { name: string; quantity: number; unitPrice: number; link?: string | null }[];
   subtotal: number;
@@ -144,7 +145,7 @@ const linkLine = (link?: string | null) => (link ? `\n  🔗 ${link}` : "");
 export function buildWhatsAppOrderText(order: WhatsAppOrderMessage) {
   const offerLines = order.offer
     ? [
-        `عرض الشتاء: ${order.offer.label} — ${order.offer.price} جنيه`,
+        `${order.offer.label} — ${order.offer.price} جنيه`,
         ...order.offer.items.map((item) => `• ${item.name}\n  ${categoryDetailLabel(item.category, item.maxWeightKg)}${linkLine(item.link)}`),
         "",
       ]

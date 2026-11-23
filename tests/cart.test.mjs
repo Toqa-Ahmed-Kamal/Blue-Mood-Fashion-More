@@ -224,3 +224,33 @@ test("prices by time: 1,100 until 5 PM; then the offer 1,200 and every piece +20
     clock(() => Date.parse("2026-11-20T12:00:00+02:00"));
   }
 });
+
+test("عرض الكريسماس: 3 pajamas for 1000; at most one above 190 at the factory; its own name in orders", async () => {
+  const { christmasLimitedFromCosts, setChristmasLimited, setOfferLimited, offerPieceCount, optionName, findOffer } = await import("../lib/site-data.ts");
+  const ids = christmasLimitedFromCosts([
+    { productId: pajamas[0], cost: 220 },
+    { productId: pajamas[1], cost: 191 },
+    { productId: pajamas[2], cost: 190 },
+    { productId: pajamas[3], cost: 175 },
+    { productId: pajamas[4], cost: null },
+  ]);
+  assert.deepEqual(ids, [pajamas[0], pajamas[1]].toSorted(), "above 190 only (190 itself is fine)");
+  setChristmasLimited(ids);
+  const offer = (productIds) => resolveCart({ offer: { offerId: "christmas-three-pajamas", productIds } });
+  const ok = offer([pajamas[0], pajamas[2], pajamas[3]]);
+  assert.ok("cart" in ok, "one above 190 is fine");
+  assert.equal(ok.cart.offer.price, 1000);
+  assert.equal(ok.cart.offerTotal, 1000);
+  assert.equal(offer([pajamas[0], pajamas[1], pajamas[2]]).error, "INVALID_BUNDLE", "two above 190 are refused");
+  assert.equal(offer(pajamas.slice(2, 6)).error, "INVALID_BUNDLE", "exactly 3 pieces");
+  assert.equal(offer([pajamas[2], pajamas[3], blankets[0]]).error, "INVALID_BUNDLE", "pajamas only");
+  // The winter rule (one at 220) is separate: the christmas group does not limit the winter offer.
+  setOfferLimited([]);
+  assert.ok("cart" in resolveCart({ offer: { offerId: "four-pajamas", productIds: [pajamas[0], pajamas[1], pajamas[2], pajamas[3]] } }));
+  setChristmasLimited([]);
+  assert.ok("cart" in offer([pajamas[0], pajamas[1], pajamas[2]]));
+  assert.equal(optionName(findOffer("christmas-three-pajamas")), "عرض الكريسماس: ٣ بيجامات كريسماس");
+  assert.equal(offerPieceCount("عرض الكريسماس: ٣ بيجامات كريسماس"), 3);
+  assert.equal(offerPieceCount("عرض الشتاء: ٣ بيجامات + بلانكيت"), 4);
+  assert.equal(offerPieceCount("عرض الشتاء: ٤ بيجامات شتوية"), 4);
+});

@@ -1,5 +1,5 @@
 // Browser-only helpers for Meta Pixel events; imported by client components.
-import { landingPromotion, offerPrice, priceOf, type CatalogProduct } from "@/lib/site-data";
+import { landingPromotion, offerPrice, optionPrice, priceOf, type CatalogProduct } from "@/lib/site-data";
 import type { ResolvedCart } from "@/lib/cart";
 import { trackCheckoutStep, trackProductAdd } from "@/lib/journey-tracker";
 
@@ -59,7 +59,7 @@ export function trackAddOfferToCart(offerId: string, productIds: string[]) {
     content_category: "offer",
     content_type: "product",
     contents: productIds.map((id) => ({ id, quantity: 1 })),
-    value: offerPrice(),
+    value: offer ? optionPrice(offer) : offerPrice(),
     currency: CURRENCY,
   });
 }

@@ -108,3 +108,17 @@ test("order confirmation message: delivery fee, two days, InstaPay transfer to c
   assert.ok(weight.endsWith("ممكن تقوليلنا وزنك كام؟ 🤍"));
   assert.ok(weightMessage({ name: "منى", orderId: "BM-AAAA" }).includes("حابين نتأكد من المقاس"));
 });
+
+test("store lists: available pieces first, sold-out ones at the end, each group in catalog order", async () => {
+  const { productsIn } = await import("../lib/site-data.ts");
+  const before = productsIn("robes").map((product) => product.id);
+  assert.ok(before.length >= 3);
+  try {
+    setSoldOut([before[0]], [before[1]]);
+    const after = productsIn("robes").map((product) => product.id);
+    assert.deepEqual(after.slice(-2), [before[0], before[1]], "manual and automatic sold-out both go last");
+    assert.deepEqual(after.slice(0, -2), before.slice(2), "the rest keep their order");
+  } finally {
+    setSoldOut([]);
+  }
+});
