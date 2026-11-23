@@ -230,3 +230,28 @@ test("place filter: governorate and area, spellings merged", () => {
   assert.deepEqual(areaOptions(orders, "").map((item) => [item.label, item.count]), [["مدينة نصر · القاهرة", 2], ["المعادي · القاهرة", 1], ["الهرم · الجيزة", 1]]);
   assert.equal(orders.filter((order) => matchesPlace(order, "", placeKey("الهرم"))).length, 1);
 });
+
+test("filters together: several statuses, each step has / has not, dates and offer", async () => {
+  const { matchesChoice, ORDER_SHORTCUTS, matchesDates, offerKindOf, countValues } = await import("../lib/all-orders.ts");
+  const told = { notifiedAt: "2026-11-20T10:00:00Z" };
+  const orders = [
+    { id: 1, status: "confirmed", deposit: null, courier: null },
+    { id: 2, status: "confirmed", deposit: null, courier: told },
+    { id: 3, status: "submitted", deposit: { amount: 50, at: "x" }, courier: null },
+    { id: 4, status: "delivered", deposit: null, courier: { ...told, handedAt: "2026-11-21T10:00:00Z" } },
+  ];
+  const ids = (statuses, facts) => orders.filter((order) => matchesChoice(order, statuses, facts)).map((order) => order.id);
+  assert.deepEqual(ids(["confirmed"], { notified: false }), [1], "confirmed and the company not told yet");
+  assert.deepEqual(ids(["confirmed", "submitted"], {}), [1, 2, 3], "any of the statuses");
+  assert.deepEqual(ids([], { deposit: true }), [3]);
+  assert.deepEqual(ids([], { deposit: false, handed: false }), [1, 2]);
+  assert.deepEqual(ids([], {}), [1, 2, 3, 4]);
+  const shortcut = ORDER_SHORTCUTS.find((item) => item.id === "confirmed-not-notified");
+  assert.deepEqual(ids(shortcut.statuses, shortcut.facts), [1]);
+  assert.equal(matchesDates({ createdAt: "2026-11-22T23:30:00Z" }, "2026-11-23", "2026-11-23"), true, "Cairo day (01:30 on the 23rd)");
+  assert.equal(matchesDates({ createdAt: "2026-11-22T20:00:00Z" }, "2026-11-23", ""), false);
+  assert.equal(offerKindOf({ offerName: "عرض الكريسماس: ٣ بيجامات كريسماس" }), "christmas");
+  assert.equal(offerKindOf({ offerName: "عرض الشتاء: ٤ بيجامات شتوية" }), "winter");
+  assert.equal(offerKindOf({ offerName: "بدون عرض — قطع منفردة" }), "none");
+  assert.deepEqual(countValues(["a", "", "b", "a"]), [{ value: "a", count: 2 }, { value: "b", count: 1 }]);
+});

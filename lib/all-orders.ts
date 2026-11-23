@@ -44,6 +44,9 @@ export type UnifiedOrder = {
   value: number;
   /** Where the visit came from (site orders), e.g. "Facebook Ads · winter_2026". */
   origin: string;
+  /** The visit's source alone ("Facebook Ads"…) and its campaign (utm_campaign); "" when unknown. */
+  trafficSource: string;
+  campaign: string;
   /** Cost, margin, share of expenses and net profit (added by the API; none for cancelled/returned). */
   money?: OrderMoney | null;
 };
@@ -182,6 +185,8 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       total: order.total,
       value: order.confirmedValue ?? order.total ?? order.subtotal,
       origin: [order.source, order.campaign].filter(Boolean).join(" · "),
+      trafficSource: order.source ?? "",
+      campaign: order.campaign ?? "",
     });
   }
 
@@ -213,6 +218,8 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       total: order.total,
       value: order.total ?? order.offerPrice + order.itemsTotal + (order.shippingCost ?? 0),
       origin: order.source,
+      trafficSource: order.source ?? "",
+      campaign: "",
     });
   }
 
@@ -354,4 +361,71 @@ export function matchesPlace(order: Pick<UnifiedOrder, "governorate" | "area">, 
   if (area === "none") return !placeKey(order.area);
   if (area && placeKey(order.area) !== area) return false;
   return true;
+}
+
+// ── "كل الأوردرات" filters: several at once, each one can be turned around ("مش …") ──────────────
+
+/** Statuses: any of the ticked ones (none ticked = all). */
+export const STATUS_CHOICES: { id: OrderStatus; label: string }[] = [
+  { id: "submitted", label: "مستني تأكيد" },
+  { id: "confirmed", label: "مؤكد" },
+  { id: "delivered", label: "تم الاستلام" },
+  { id: "returned", label: "مرتجع" },
+  { id: "cancelled", label: "اتلغى" },
+];
+
+/** Steps an order has or not. Each one: true = must have it, false = must not, missing = either. */
+export const ORDER_FACTS = [
+  { id: "deposit", yes: "دفع ديبوزيت", no: "من غير ديبوزيت" },
+  { id: "packed", yes: "اتجهز للشحن", no: "لسه ما اتجهزش" },
+  { id: "notified", yes: "اتبلغت شركة الشحن", no: "لسه ما اتبلغتش شركة الشحن" },
+  { id: "handed", yes: "راح لشركة الشحن", no: "لسه مراحش لشركة الشحن" },
+] as const;
+export type OrderFact = (typeof ORDER_FACTS)[number]["id"];
+export type FactChoice = Partial<Record<OrderFact, boolean>>;
+
+export function hasFact(order: Pick<UnifiedOrder, "deposit" | "courier">, fact: OrderFact) {
+  if (fact === "deposit") return order.deposit !== null;
+  if (fact === "packed") return Boolean(order.courier?.packedAt);
+  if (fact === "notified") return Boolean(order.courier?.notifiedAt);
+  return Boolean(order.courier?.handedAt);
+}
+
+/** Ticked statuses (any of them) and every chosen step (has / has not) together. */
+export function matchesChoice(order: Pick<UnifiedOrder, "status" | "deposit" | "courier">, statuses: readonly OrderStatus[], facts: FactChoice) {
+  if (statuses.length > 0 && !statuses.includes(order.status)) return false;
+  return (Object.entries(facts) as [OrderFact, boolean | undefined][]).every(([fact, wanted]) => wanted === undefined || hasFact(order, fact) === wanted);
+}
+
+/** Ready-made combinations (the old one-click filters), set into the choices above. */
+export const ORDER_SHORTCUTS: { id: string; label: string; statuses: OrderStatus[]; facts: FactChoice }[] = [
+  { id: "to-call", label: "مستني تأكيد العميل (لسه ما اتبلغش الشحن ومن غير ديبوزيت)", statuses: ["submitted", "confirmed"], facts: { deposit: false, notified: false } },
+  { id: "to-ship", label: "مؤكد ولسه مراحش للشحن", statuses: ["confirmed"], facts: { handed: false } },
+  { id: "confirmed-not-notified", label: "مؤكد ولسه ما اتبلغتش شركة الشحن", statuses: ["confirmed"], facts: { notified: false } },
+  { id: "packed", label: "متجهز للشحن ولسه مراحش", statuses: ["submitted", "confirmed"], facts: { packed: true, handed: false } },
+  { id: "courier-notified", label: "اتبلغت شركة الشحن ولسه مجتش", statuses: ["submitted", "confirmed"], facts: { notified: true, handed: false } },
+  { id: "with-courier", label: "مع شركة الشحن", statuses: ["confirmed"], facts: { handed: true } },
+];
+
+const cairoDayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(iso));
+
+/** The order's day (Cairo) within from..to (YYYY-MM-DD, either may be ""). */
+export function matchesDates(order: Pick<UnifiedOrder, "createdAt">, from: string, to: string) {
+  if (!from && !to) return true;
+  const day = cairoDayOf(order.createdAt);
+  return (!from || day >= from) && (!to || day <= to);
+}
+
+/** Which offer the order has: "winter", "christmas", "none" (or "" = any). */
+export function offerKindOf(order: Pick<UnifiedOrder, "offerName">) {
+  if (order.offerName.includes("الكريسماس")) return "christmas";
+  if (order.offerName.includes("عرض الشتاء")) return "winter";
+  return "none";
+}
+
+/** Distinct non-empty values with how many times each appears, most first. */
+export function countValues(values: string[]) {
+  const counts = new Map<string, number>();
+  for (const value of values) if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts].map(([value, count]) => ({ value, count })).toSorted((a, b) => b.count - a.count || a.value.localeCompare(b.value));
 }

@@ -2143,3 +2143,36 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
 @keyframes christmas-fall { from { transform: translateY(0) rotate(0deg); } to { transform: translateY(1400px) rotate(360deg); } }
 .builder-head.christmas .eyebrow { background: #fde7e7; color: #b3122e; }
 @media (prefers-reduced-motion: reduce) { .christmas-snow { display: none; } }
+
+/* كل الأوردرات: filter panel (status chips, has / has-not steps, labeled fields). */
+.orders-filterbar { display: grid; gap: 14px; margin: 4px 0 16px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: linear-gradient(180deg, #fff, #fcf8f5); }
+.orders-search { width: 100%; max-width: none; }
+.orders-filter-row { display: grid; gap: 8px; }
+.orders-filter-title { font-weight: 800; font-size: .9rem; color: var(--navy); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.orders-filter-title small { font-weight: 500; color: var(--muted); font-size: .78rem; }
+.orders-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.orders-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: #fff; color: var(--navy); font: inherit; font-weight: 700; font-size: .88rem; cursor: pointer; transition: background .15s ease, border-color .15s ease, color .15s ease; }
+.orders-chip:hover { border-color: #c9b8ad; }
+.orders-chip:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.orders-chip-count { min-width: 26px; padding: 1px 8px; border-radius: 999px; background: #f1ebe6; color: var(--navy); font-size: .78rem; text-align: center; }
+.orders-chip.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.orders-chip.on .orders-chip-count { background: rgba(255, 255, 255, .2); color: #fff; }
+.orders-chip.fact.on { background: #e2f5ea; border-color: #7cc79c; color: #157a3e; }
+.orders-chip.fact.on .orders-chip-count { background: #c4ebd3; color: #157a3e; }
+.orders-chip.fact.off { background: #fdecee; border-color: #eba3ad; color: #b42335; }
+.orders-chip.fact.off .orders-chip-count { background: #f9d3d8; color: #b42335; }
+.orders-filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 12px; }
+.orders-field { display: grid; gap: 4px; min-width: 0; }
+.orders-field > span, .orders-pair label > span { font-size: .78rem; font-weight: 700; color: var(--muted); }
+.orders-field select, .orders-field input { width: 100%; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-size: .88rem; color: var(--navy); }
+.orders-field select:focus, .orders-field input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+.orders-pair { grid-template-columns: 1fr 1fr; gap: 8px; }
+.orders-pair label { display: grid; gap: 4px; min-width: 0; }
+.orders-filter-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.orders-filter-foot strong { font-size: 1rem; color: var(--navy); }
+@media (max-width: 640px) {
+  .orders-filterbar { padding: 12px; }
+  .orders-filter-grid { grid-template-columns: 1fr 1fr; }
+  .orders-chip { font-size: .82rem; padding: 6px 10px; }
+}
+@media (max-width: 380px) { .orders-filter-grid { grid-template-columns: 1fr; } }

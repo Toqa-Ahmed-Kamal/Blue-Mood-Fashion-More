@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BadgeCheck, Check, CheckCircle2, Copy, Package, PackageCheck, Pencil, RefreshCw, RotateCcw, Send, Truck, Undo2, XCircle } from "lucide-react";
+import { BadgeCheck, Check, CheckCircle2, Copy, Package, PackageCheck, Pencil, RefreshCw, RotateCcw, Send, Truck, Undo2, X, XCircle } from "lucide-react";
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
-import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FILTERS, areaOptions, governorateOptions, matchesPlace, courierCollection, courierText, filterCounts, matchesFilter, matchesMargin, matchesNetProfit, matchesReason, matchesSearch, withEdit, type MarginRange, type OrderFilter, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
+import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FACTS, ORDER_SHORTCUTS, STATUS_CHOICES, areaOptions, countValues, courierCollection, courierText, governorateOptions, matchesChoice, matchesDates, matchesMargin, matchesNetProfit, matchesPlace, matchesReason, matchesSearch, offerKindOf, withEdit, type FactChoice, type MarginRange, type OrderFact, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
 import { CANCEL_REASONS, isCancelReason, type CancelReason, type CourierStep, type OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
@@ -17,17 +17,42 @@ const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأ
 const PAGE_SIZE = 30;
 const cairoTime = (iso: string) => (iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" }) : "—");
 
+/** Cairo day (YYYY-MM-DD) a number of days ago. */
+const cairoDay = (daysAgo = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(Date.now() - daysAgo * 86_400_000));
+const DATE_PRESETS = [
+  { id: "", label: "كل الأيام", range: () => ({ from: "", to: "" }) },
+  { id: "today", label: "النهارده", range: () => ({ from: cairoDay(), to: cairoDay() }) },
+  { id: "yesterday", label: "امبارح", range: () => ({ from: cairoDay(1), to: cairoDay(1) }) },
+  { id: "7", label: "آخر ٧ أيام", range: () => ({ from: cairoDay(6), to: cairoDay() }) },
+  { id: "30", label: "آخر ٣٠ يوم", range: () => ({ from: cairoDay(29), to: cairoDay() }) },
+  { id: "month", label: "الشهر ده", range: () => ({ from: `${cairoDay().slice(0, 8)}01`, to: cairoDay() }) },
+] as const;
+const OFFER_KINDS = [
+  { id: "", label: "كل العروض" },
+  { id: "winter", label: "عرض الشتاء" },
+  { id: "christmas", label: "عرض الكريسماس" },
+  { id: "none", label: "من غير عرض (قطع منفردة)" },
+] as const;
+
 /** `showMoney`: the profit filters (the API leaves out each order's profit for users without "الفلوس"). */
 export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const router = useRouter();
   const [orders, setOrders] = useState<UnifiedOrder[] | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<OrderFilter>("all");
+  // Status: any of the ticked ones. Steps: each "has" / "has not" / either. All filters work together.
+  const [statuses, setStatuses] = useState<OrderStatus[]>([]);
+  const [facts, setFacts] = useState<FactChoice>({});
   const [reason, setReason] = useState<ReasonFilter>("");
   const [source, setSource] = useState<"" | "site" | "telegram">("");
   const [query, setQuery] = useState("");
-  // Place filter: governorate key, then an area inside it ("" = any).
+  const [datePreset, setDatePreset] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [trafficSource, setTrafficSource] = useState("");
+  const [campaign, setCampaign] = useState("");
+  const [offerKind, setOfferKind] = useState("");
+  // Place filter: governorate key, then an area ("" = any).
   const [governorate, setGovernorate] = useState("");
   const [area, setArea] = useState("");
   // هامش الربح filter: a preset, or "custom" with the owner's own numbers.
@@ -42,6 +67,7 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busyId, setBusyId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const resetPage = () => setLimit(PAGE_SIZE);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,19 +107,71 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
     const number = (text: string) => (text.trim() === "" || !Number.isFinite(Number(text)) ? null : Number(text));
     return { min: number(netMin), max: number(netMax) };
   }, [netPreset, netMin, netMax]);
-  // Places to choose from: counted over the orders shown by source and archive, before the other filters.
-  const placeBase = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived)), [orders, source, showArchived]);
-  const governorates = useMemo(() => governorateOptions(placeBase), [placeBase]);
+  // Lists to choose from: counted over the orders shown by source and archive, before the other filters.
+  const base = useMemo(() => (orders ?? []).filter((order) => (!source || order.source === source) && (showArchived || !order.archived)), [orders, source, showArchived]);
+  const governorates = useMemo(() => governorateOptions(base), [base]);
   // Areas work alone too: without a governorate every area is listed (with its governorate).
-  const areas = useMemo(() => areaOptions(placeBase, governorate), [placeBase, governorate]);
-  const areaMissing = placeBase.filter((order) => matchesPlace(order, governorate, "none")).length;
-  const scoped = useMemo(() => placeBase.filter((order) => matchesPlace(order, governorate, area) && matchesSearch(order, query) && matchesMargin(order, marginRange) && matchesNetProfit(order, netRange)), [placeBase, governorate, area, query, marginRange, netRange]);
+  const areas = useMemo(() => areaOptions(base, governorate), [base, governorate]);
+  const areaMissing = base.filter((order) => matchesPlace(order, governorate, "none")).length;
+  const trafficSources = useMemo(() => countValues(base.map((order) => order.trafficSource)), [base]);
+  const campaigns = useMemo(() => countValues(base.map((order) => order.campaign)), [base]);
+  // Every filter except status and steps (those show their own counts on the chips).
+  const scoped = useMemo(() => base.filter((order) =>
+    matchesPlace(order, governorate, area)
+    && matchesDates(order, dateFrom, dateTo)
+    && (!trafficSource || order.trafficSource === trafficSource)
+    && (!campaign || order.campaign === campaign)
+    && (!offerKind || offerKindOf(order) === offerKind)
+    && matchesSearch(order, query)
+    && matchesMargin(order, marginRange)
+    && matchesNetProfit(order, netRange)), [base, governorate, area, dateFrom, dateTo, trafficSource, campaign, offerKind, query, marginRange, netRange]);
   const netActive = netRange.min !== null || netRange.max !== null;
   const marginActive = marginRange.min !== null || marginRange.max !== null || netActive;
-  const counts = useMemo(() => filterCounts(scoped), [scoped]);
-  const rows = scoped.filter((order) => matchesFilter(order, filter) && (filter !== "cancelled" || matchesReason(order, reason)));
+  const cancelledOnly = statuses.length > 0 && statuses.every((status) => status === "cancelled");
+  const rows = scoped.filter((order) => matchesChoice(order, statuses, facts) && (!cancelledOnly || matchesReason(order, reason)));
   const shown = rows.slice(0, limit);
   const editing = editingId ? orders?.find((order) => order.orderId === editingId) ?? null : null;
+  const statusCount = (status: OrderStatus) => scoped.filter((order) => order.status === status && matchesChoice(order, [], facts)).length;
+  const factCount = (fact: OrderFact, wanted: boolean) => scoped.filter((order) => matchesChoice(order, statuses, { ...facts, [fact]: wanted })).length;
+  const activeCount = statuses.length + Object.values(facts).filter((value) => value !== undefined).length
+    + [query.trim(), dateFrom || dateTo, trafficSource, campaign, offerKind, governorate, area, source, marginPreset, netPreset, cancelledOnly ? reason : ""].filter(Boolean).length;
+
+  function toggleStatus(status: OrderStatus) {
+    setStatuses((current) => (current.includes(status) ? current.filter((item) => item !== status) : [...current, status]));
+    resetPage();
+  }
+  /** Either → has → has not → either. */
+  function cycleFact(fact: OrderFact) {
+    setFacts((current) => {
+      const next = { ...current };
+      if (current[fact] === undefined) next[fact] = true;
+      else if (current[fact] === true) next[fact] = false;
+      else delete next[fact];
+      return next;
+    });
+    resetPage();
+  }
+  function applyShortcut(id: string) {
+    const shortcut = ORDER_SHORTCUTS.find((item) => item.id === id);
+    if (!shortcut) return;
+    setStatuses(shortcut.statuses);
+    setFacts(shortcut.facts);
+    resetPage();
+  }
+  function chooseDates(id: string) {
+    const preset = DATE_PRESETS.find((item) => item.id === id) ?? DATE_PRESETS[0];
+    const range = preset.range();
+    setDatePreset(preset.id);
+    setDateFrom(range.from);
+    setDateTo(range.to);
+    resetPage();
+  }
+  function clearAll() {
+    setStatuses([]); setFacts({}); setReason(""); setSource(""); setQuery("");
+    setDatePreset(""); setDateFrom(""); setDateTo(""); setTrafficSource(""); setCampaign(""); setOfferKind("");
+    setGovernorate(""); setArea(""); setMarginPreset(""); setMarginMin(""); setMarginMax(""); setNetPreset(""); setNetMin(""); setNetMax("");
+    resetPage();
+  }
 
   /** Sends a status or deposit change to the right API (site order or imported Telegram order), then updates the row. */
   async function change(order: UnifiedOrder, body: { status?: OrderStatus; deposit?: number | null; courier?: { step: CourierStep; done: boolean }; cancelReason?: CancelReason | null }) {
@@ -147,63 +225,142 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   return (
     <section className="admin-panel">
       <div className="admin-panel-head">
-        <h2>كل الأوردرات {orders && `(${scoped.length})`}</h2>
+        <h2>كل الأوردرات {orders && `(${base.length})`}</h2>
         <button type="button" className="admin-icon-btn" onClick={() => void load()} disabled={loading} aria-label="تحديث"><RefreshCw size={16} className={loading ? "spin" : undefined} /></button>
       </div>
 
-      <div className="admin-order-filters" role="group" aria-label="فلتر الحالة">
-        {ORDER_FILTERS.map((item) => (
-          <button key={item.id} type="button" className={`admin-filter-chip filter-${item.id}${filter === item.id ? " active" : ""}`} aria-pressed={filter === item.id} onClick={() => { setFilter(item.id); setLimit(PAGE_SIZE); }}>
-            {item.label} <span>{counts[item.id] ?? 0}</span>
-          </button>
-        ))}
-      </div>
-      <div className="admin-filters">
-        <input type="search" className="admin-search" placeholder="بحث: رقم الطلب، الاسم، الموبايل، العنوان، المنتج" value={query} onChange={(event) => { setQuery(event.target.value); setLimit(PAGE_SIZE); }} aria-label="بحث" />
-        <select value={source} onChange={(event) => setSource(event.target.value as typeof source)} aria-label="المصدر">
-          <option value="">أوردرات الموقع وتيليجرام</option>
-          <option value="site">أوردرات الموقع بس</option>
-          <option value="telegram">أوردرات تيليجرام القديمة بس</option>
-        </select>
-        <select value={governorate} onChange={(event) => { setGovernorate(event.target.value); setArea(""); setLimit(PAGE_SIZE); }} aria-label="المحافظة">
-          <option value="">كل المحافظات</option>
-          {governorates.map((item) => <option key={item.key} value={item.key}>{item.label} ({item.count})</option>)}
-        </select>
-        <select value={area} onChange={(event) => { setArea(event.target.value); setLimit(PAGE_SIZE); }} aria-label="المنطقة">
-          <option value="">كل المناطق</option>
-          {areas.map((item) => <option key={item.key} value={item.key}>{item.label} ({item.count})</option>)}
-          {areaMissing > 0 && <option value="none">من غير منطقة ({areaMissing})</option>}
-        </select>
-        {showMoney && (
-          <>
-        <select value={marginPreset} onChange={(event) => { setMarginPreset(event.target.value); setLimit(PAGE_SIZE); }} aria-label="هامش الربح">
-          {MARGIN_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
-        </select>
-        {marginPreset === "custom" && (
-          <span className="admin-margin-range">
-            <label>هامش من <input type="number" inputMode="numeric" value={marginMin} onChange={(event) => { setMarginMin(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
-            <label>لأقل من <input type="number" inputMode="numeric" value={marginMax} onChange={(event) => { setMarginMax(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
-          </span>
-        )}
-        <select value={netPreset} onChange={(event) => { setNetPreset(event.target.value); setLimit(PAGE_SIZE); }} aria-label="صافي المكسب">
-          {NET_PROFIT_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
-        </select>
-        {netPreset === "custom" && (
-          <span className="admin-margin-range">
-            <label>صافي من <input type="number" inputMode="numeric" value={netMin} onChange={(event) => { setNetMin(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
-            <label>لأقل من <input type="number" inputMode="numeric" value={netMax} onChange={(event) => { setNetMax(event.target.value); setLimit(PAGE_SIZE); }} placeholder="أي رقم" /></label>
-          </span>
-        )}
-          </>
-        )}
-        {filter === "cancelled" && (
-          <select value={reason} onChange={(event) => { setReason(event.target.value as ReasonFilter); setLimit(PAGE_SIZE); }} aria-label="سبب الإلغاء">
-            <option value="">كل أسباب الإلغاء</option>
-            {CANCEL_REASONS.map((item) => <option key={item.id} value={item.id}>{item.label} ({scoped.filter((order) => matchesReason(order, item.id)).length})</option>)}
-            <option value="none">من غير سبب ({scoped.filter((order) => matchesReason(order, "none")).length})</option>
-          </select>
-        )}
-        <label className="admin-check"><input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} /> اعرضي المؤرشف</label>
+      <div className="orders-filterbar">
+        <input type="search" className="admin-search orders-search" placeholder="بحث: رقم الطلب، الاسم، الموبايل، العنوان، المنتج" value={query} onChange={(event) => { setQuery(event.target.value); resetPage(); }} aria-label="بحث" />
+
+        <div className="orders-filter-row">
+          <span className="orders-filter-title">الحالة <small>اختاري واحدة أو أكتر</small></span>
+          <div className="orders-chips" role="group" aria-label="الحالة">
+            {STATUS_CHOICES.map((item) => (
+              <button key={item.id} type="button" className={`orders-chip status-${item.id}${statuses.includes(item.id) ? " on" : ""}`} aria-pressed={statuses.includes(item.id)} onClick={() => toggleStatus(item.id)}>
+                {statuses.includes(item.id) && <Check size={14} aria-hidden="true" />}
+                <span className="orders-chip-label">{item.label}</span>
+                <span className="orders-chip-count">{statusCount(item.id)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="orders-filter-row">
+          <span className="orders-filter-title">الشحن والدفع <small>دوسة: حصل · دوستين: لسه ما حصلش · تالت دوسة: تتشال</small></span>
+          <div className="orders-chips" role="group" aria-label="الشحن والدفع">
+            {ORDER_FACTS.map((item) => {
+              const state = facts[item.id];
+              return (
+                <button key={item.id} type="button" className={`orders-chip fact${state === true ? " on" : state === false ? " off" : ""}`} aria-pressed={state !== undefined} onClick={() => cycleFact(item.id)}>
+                  {state === true && <Check size={14} aria-hidden="true" />}
+                  {state === false && <X size={14} aria-hidden="true" />}
+                  <span className="orders-chip-label">{state === false ? item.no : item.yes}</span>
+                  <span className="orders-chip-count">{factCount(item.id, state !== false)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="orders-filter-grid">
+          <label className="orders-field"><span>اختصارات جاهزة</span>
+            <select value="" onChange={(event) => applyShortcut(event.target.value)} aria-label="اختصارات جاهزة">
+              <option value="">اختاري…</option>
+              {ORDER_SHORTCUTS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </label>
+          <label className="orders-field"><span>التاريخ</span>
+            <select value={datePreset} onChange={(event) => (event.target.value === "custom" ? setDatePreset("custom") : chooseDates(event.target.value))} aria-label="التاريخ">
+              {DATE_PRESETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              <option value="custom">من يوم لحد يوم…</option>
+            </select>
+          </label>
+          {datePreset === "custom" && (
+            <div className="orders-field orders-pair">
+              <label><span>من</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); resetPage(); }} /></label>
+              <label><span>لحد</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); resetPage(); }} /></label>
+            </div>
+          )}
+          <label className="orders-field"><span>المحافظة</span>
+            <select value={governorate} onChange={(event) => { setGovernorate(event.target.value); setArea(""); resetPage(); }} aria-label="المحافظة">
+              <option value="">كل المحافظات</option>
+              {governorates.map((item) => <option key={item.key} value={item.key}>{item.label} ({item.count})</option>)}
+            </select>
+          </label>
+          <label className="orders-field"><span>المنطقة</span>
+            <select value={area} onChange={(event) => { setArea(event.target.value); resetPage(); }} aria-label="المنطقة">
+              <option value="">كل المناطق</option>
+              {areas.map((item) => <option key={item.key} value={item.key}>{item.label} ({item.count})</option>)}
+              {areaMissing > 0 && <option value="none">من غير منطقة ({areaMissing})</option>}
+            </select>
+          </label>
+          <label className="orders-field"><span>العرض</span>
+            <select value={offerKind} onChange={(event) => { setOfferKind(event.target.value); resetPage(); }} aria-label="العرض">
+              {OFFER_KINDS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </label>
+          <label className="orders-field"><span>مصدر الزيارة</span>
+            <select value={trafficSource} onChange={(event) => { setTrafficSource(event.target.value); resetPage(); }} aria-label="مصدر الزيارة">
+              <option value="">كل المصادر</option>
+              {trafficSources.map((item) => <option key={item.value} value={item.value}>{item.value} ({item.count})</option>)}
+            </select>
+          </label>
+          <label className="orders-field"><span>الحملة</span>
+            <select value={campaign} onChange={(event) => { setCampaign(event.target.value); resetPage(); }} aria-label="الحملة">
+              <option value="">كل الحملات</option>
+              {campaigns.map((item) => <option key={item.value} value={item.value}>{item.value} ({item.count})</option>)}
+            </select>
+          </label>
+          <label className="orders-field"><span>جاي منين</span>
+            <select value={source} onChange={(event) => { setSource(event.target.value as typeof source); resetPage(); }} aria-label="المصدر">
+              <option value="">الموقع وتيليجرام</option>
+              <option value="site">أوردرات الموقع بس</option>
+              <option value="telegram">تيليجرام القديمة بس</option>
+            </select>
+          </label>
+          {cancelledOnly && (
+            <label className="orders-field"><span>سبب الإلغاء</span>
+              <select value={reason} onChange={(event) => { setReason(event.target.value as ReasonFilter); resetPage(); }} aria-label="سبب الإلغاء">
+                <option value="">كل الأسباب</option>
+                {CANCEL_REASONS.map((item) => <option key={item.id} value={item.id}>{item.label} ({scoped.filter((order) => order.status === "cancelled" && matchesReason(order, item.id)).length})</option>)}
+                <option value="none">من غير سبب ({scoped.filter((order) => order.status === "cancelled" && matchesReason(order, "none")).length})</option>
+              </select>
+            </label>
+          )}
+          {showMoney && (
+            <label className="orders-field"><span>هامش الربح</span>
+              <select value={marginPreset} onChange={(event) => { setMarginPreset(event.target.value); resetPage(); }} aria-label="هامش الربح">
+                {MARGIN_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+              </select>
+            </label>
+          )}
+          {showMoney && marginPreset === "custom" && (
+            <div className="orders-field orders-pair">
+              <label><span>هامش من</span><input type="number" inputMode="numeric" value={marginMin} onChange={(event) => { setMarginMin(event.target.value); resetPage(); }} placeholder="أي رقم" /></label>
+              <label><span>لأقل من</span><input type="number" inputMode="numeric" value={marginMax} onChange={(event) => { setMarginMax(event.target.value); resetPage(); }} placeholder="أي رقم" /></label>
+            </div>
+          )}
+          {showMoney && (
+            <label className="orders-field"><span>صافي المكسب</span>
+              <select value={netPreset} onChange={(event) => { setNetPreset(event.target.value); resetPage(); }} aria-label="صافي المكسب">
+                {NET_PROFIT_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+              </select>
+            </label>
+          )}
+          {showMoney && netPreset === "custom" && (
+            <div className="orders-field orders-pair">
+              <label><span>صافي من</span><input type="number" inputMode="numeric" value={netMin} onChange={(event) => { setNetMin(event.target.value); resetPage(); }} placeholder="أي رقم" /></label>
+              <label><span>لأقل من</span><input type="number" inputMode="numeric" value={netMax} onChange={(event) => { setNetMax(event.target.value); resetPage(); }} placeholder="أي رقم" /></label>
+            </div>
+          )}
+        </div>
+
+        <div className="orders-filter-foot">
+          <strong role="status">{orders ? `${rows.length} أوردر` : "…"}</strong>
+          {activeCount > 0 && <span className="admin-muted">{activeCount} فلتر شغال</span>}
+          <label className="admin-check"><input type="checkbox" checked={showArchived} onChange={(event) => { setShowArchived(event.target.checked); resetPage(); }} /> اعرضي المؤرشف</label>
+          {activeCount > 0 && <button type="button" className="admin-chip" onClick={clearAll}><X size={14} /> امسحي كل الفلاتر</button>}
+        </div>
       </div>
       {orders && marginActive && (
         <p className="admin-muted small" role="status">
