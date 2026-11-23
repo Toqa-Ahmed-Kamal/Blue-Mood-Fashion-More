@@ -8,8 +8,10 @@ import { ArrowLeft, Camera, Eye, HeartHandshake, MessageCircle, RotateCcw, Shopp
 import { BundlesSection } from "@/components/bundles";
 import { ProductCard, QuickView } from "@/components/product-card";
 import { OfferCountdown } from "@/components/promo";
+import { ReviewsSection } from "@/components/reviews-section";
 import { AnnouncementBar, CartBar, SiteFooter, SiteHeader } from "@/components/store-chrome";
 import { formatEGP } from "@/lib/format";
+import type { PublicReview } from "@/lib/reviews";
 import {
   categoryInfo,
   categoryOrder,
@@ -51,7 +53,7 @@ const categoryCovers: Partial<Record<CatalogCategory, string>> = {
   onesies: "bm-onesie-001",
 };
 
-export function BlueMoodHome() {
+export function BlueMoodHome({ reviews = [] }: { reviews?: PublicReview[] }) {
   const [quickView, setQuickView] = useState<CatalogProduct | null>(null);
   const bigSizeItems = visibleCatalog.filter((product) => isBigSize(product.id));
   // A category without products (e.g. a new one) is not shown until its first product is added.
@@ -148,6 +150,8 @@ export function BlueMoodHome() {
             </div>
           </div>
         </section>
+
+        <ReviewsSection reviews={reviews} />
 
         <BundlesSection />
 

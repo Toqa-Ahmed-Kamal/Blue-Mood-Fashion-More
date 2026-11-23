@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, Settings, ShieldCheck, ChartLine, ChevronDown, LayoutDashboard, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, MessageSquareHeart, Settings, ShieldCheck, ChartLine, ChevronDown, LayoutDashboard, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -32,6 +32,7 @@ import { PiecesTab } from "@/components/admin/pieces";
 import { QuantitySummaryTab } from "@/components/admin/quantity-summary";
 import { TeamAdminTab } from "@/components/admin/team-admin";
 import { UsersAdminTab } from "@/components/admin/users-admin";
+import { ReviewsAdminTab } from "@/components/admin/reviews-admin";
 import type { Touch } from "@/lib/attribution";
 import type { AnalyticsOrder, AnalyticsReport, OrderRow, OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
@@ -79,6 +80,7 @@ const TABS = [
   { id: "finance", label: "الإدارة المالية", icon: Wallet },
   { id: "team", label: "الفريق والعروض", icon: UsersRound },
   { id: "users", label: "المستخدمين والصلاحيات", icon: ShieldCheck },
+  { id: "reviews", label: "ريفيوهات العملاء", icon: MessageSquareHeart },
 ] as const;
 
 type NavItem = { tab: TabId; label: string; icon: typeof Wallet; anchor?: string };
@@ -112,6 +114,7 @@ const NAV_GROUPS: NavGroup[] = [
     { tab: "finance", label: "المنتجات والأسعار", icon: Tags, anchor: "fin-products" },
     { tab: "finance", label: "حاسبة التسعير", icon: Calculator, anchor: "fin-calculator" },
     { tab: "team", label: "الفريق والعروض", icon: UsersRound },
+    { tab: "reviews", label: "ريفيوهات العملاء", icon: MessageSquareHeart },
   ] },
   { id: "marketing", title: "التسويق", icon: Megaphone, items: [
     { tab: "traffic", label: "الزيارات", icon: ChartColumn },
@@ -131,7 +134,7 @@ function itemNeeds(item: NavItem): string[] | "owner" {
   if (item.tab === "charts") return ["money"];
   if (item.tab === "all" || item.tab === "orders" || item.tab === "old") return ["orders"];
   if (item.tab === "inventory" || item.tab === "quantities" || item.tab === "pieces") return ["stock"];
-  if (item.tab === "team") return ["products"];
+  if (item.tab === "team" || item.tab === "reviews") return ["products"];
   if (item.tab === "traffic" || item.tab === "journey") return ["marketing"];
   if (item.anchor === "fin-products") return ["products"];
   if (item.anchor === "fin-calculator") return ["products", "money"];
@@ -446,6 +449,7 @@ export function AnalyticsDashboard({ access = OWNER }: { access?: DashboardAcces
             {tab === "finance" && (has("money") || has("products")) && <FinanceTab showMoney={has("money")} showProducts={has("products")} />}
             {tab === "team" && has("products") && <TeamAdminTab onPendingChange={setTeamPending} owner={access.owner} />}
             {tab === "users" && access.owner && <UsersAdminTab />}
+            {tab === "reviews" && has("products") && <ReviewsAdminTab />}
           </div>
         </>
       )}

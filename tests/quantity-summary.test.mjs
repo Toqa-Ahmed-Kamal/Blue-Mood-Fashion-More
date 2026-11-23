@@ -6,7 +6,7 @@ import { setPriceClock } from "../lib/site-data.ts";
 setPriceClock(() => Date.parse("2026-11-20T12:00:00+02:00"));
 
 import { aggregateQuantities, sanitizeOldOrder } from "../lib/old-orders.ts";
-import { NO_SIZE, SIZE_NOT_RECORDED, active, buildQuantitySummary, oldOrderLines, productImage, shortSize, siteOrderLines } from "../lib/quantity-summary.ts";
+import { NO_SIZE, SIZE_NOT_RECORDED, active, buildQuantitySummary, oldOrderLines, parseOrderIds, pickerOrders, productImage, shortSize, siteOrderLines } from "../lib/quantity-summary.ts";
 import { findProduct } from "../lib/site-data.ts";
 import { buildXlsx } from "../lib/xlsx.ts";
 
@@ -194,4 +194,27 @@ test("filtered summary: only orders matching the order filter (courier told, can
   assert.deepEqual(ids(cancelled("no-answer")), ["bm-winter-pajama-006"], "Telegram orders keep their reason too");
   assert.deepEqual(ids(cancelled("none")), ["bm-winter-pajama-005"]);
   assert.equal(buildQuantitySummary({ live: liveOrders, old }).products.length, 5, "no filter: everything as before");
+});
+
+test("picked orders: only the ticked orders count (archived ones too); the list shows each order once", () => {
+  const liveOrders = [
+    { order: siteOrder("BM-AAAAAAAAAAAAAAAAAA01", "confirmed", [{ modelId: "bm-winter-pajama-002", category: "winter-pajamas", quantity: 2 }]), fits: [null] },
+    { order: siteOrder("BM-AAAAAAAAAAAAAAAAAA02", "submitted", [{ modelId: "bm-winter-pajama-003", category: "winter-pajamas", quantity: 1 }]), fits: [null] },
+  ];
+  const old = [
+    oldOrder("BM-AAAAAAAAAAAAAAAAAA02", "confirmed", [line("bm-winter-pajama-003", 1)]),
+    oldOrder("BM-AAAAAAAAAAAAAAAAAA03", "confirmed", [line("bm-winter-pajama-004", 3)], { archived: true }),
+  ];
+  const picked = new Set(["BM-AAAAAAAAAAAAAAAAAA01", "BM-AAAAAAAAAAAAAAAAAA03"]);
+  const summary = buildQuantitySummary({ live: liveOrders, old, includeArchived: true, keep: (order) => picked.has(order.orderId) });
+  assert.deepEqual(summary.products.map((product) => [product.productId, active(product.pieces)]).toSorted(), [["bm-winter-pajama-002", 2], ["bm-winter-pajama-004", 3]]);
+  const list = pickerOrders({ live: liveOrders, old });
+  assert.deepEqual(list.map((order) => order.orderId).toSorted(), ["BM-AAAAAAAAAAAAAAAAAA01", "BM-AAAAAAAAAAAAAAAAAA02", "BM-AAAAAAAAAAAAAAAAAA03"], "site copy wins, each once");
+  const archived = list.find((order) => order.orderId === "BM-AAAAAAAAAAAAAAAAAA03");
+  assert.equal(archived.archived, true);
+  assert.equal(archived.pieces, 3);
+  assert.equal(list.find((order) => order.orderId === "BM-AAAAAAAAAAAAAAAAAA02").source, "site");
+  assert.ok(!("customer" in archived), "no customer data from the summary itself");
+  assert.deepEqual(parseOrderIds(" bm-aaaaaaaaaaaaaaaaaa01,BM-AAAAAAAAAAAAAAAAAA01,nope,,BM-AAAAAAAAAAAAAAAAAA03 "), ["BM-AAAAAAAAAAAAAAAAAA01", "BM-AAAAAAAAAAAAAAAAAA03"]);
+  assert.deepEqual(parseOrderIds(null), []);
 });

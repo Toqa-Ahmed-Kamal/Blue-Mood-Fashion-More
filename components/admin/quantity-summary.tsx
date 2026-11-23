@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { Download, ImageOff, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckSquare, Download, ImageOff, RefreshCw, Square, X } from "lucide-react";
 
 import { CANCEL_REASONS, type OrderStatus } from "@/lib/analytics-report";
-import { ORDER_FILTERS } from "@/lib/all-orders";
-import type { ProductSummary, QuantitySummary } from "@/lib/quantity-summary";
+import { ORDER_FILTERS, isOrderFilter, matchesFilter, type OrderFilter } from "@/lib/all-orders";
+import type { PickerOrder, ProductSummary, QuantitySummary } from "@/lib/quantity-summary";
 import { categoryInfo } from "@/lib/site-data";
 import { buildXlsx, type XlsxCell, type XlsxImage } from "@/lib/xlsx";
 
@@ -30,7 +30,13 @@ const integer = new Intl.NumberFormat("en-US");
 const cairoTime = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" });
 const sum = (counts: Record<OrderStatus, number>, statuses: readonly OrderStatus[]) => statuses.reduce((total, status) => total + counts[status], 0);
 
-type Response = { summary: QuantitySummary; generatedAt: string; unreadableOldOrders: number; vaultConfigured: boolean };
+type Response = { summary: QuantitySummary; orders?: PickerOrder[]; generatedAt: string; unreadableOldOrders: number; vaultConfigured: boolean };
+
+/** "أوردرات بختارها": the orders picked by hand (remembered in this browser). */
+const PICK = "pick";
+const PICKED_KEY = "bm-qty-picked";
+const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأكيد", confirmed: "مؤكد", delivered: "اتسلم", cancelled: "اتلغى", returned: "مرتجع" };
+const PICKER_PAGE = 150;
 
 export function QuantitySummaryTab() {
   const router = useRouter();
@@ -43,12 +49,46 @@ export function QuantitySummaryTab() {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [query, setQuery] = useState("");
   const [exporting, setExporting] = useState(false);
+  const picking = orderChoice === PICK;
+  const [picked, setPicked] = useState<string[]>([]);
+  const [pickerOrders, setPickerOrders] = useState<PickerOrder[] | null>(null);
+  useEffect(() => {
+    try {
+      const saved: unknown = JSON.parse(window.localStorage.getItem(PICKED_KEY) ?? "[]");
+      // Restoring the last pick after mount keeps server and browser markup identical.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (Array.isArray(saved)) setPicked(saved.filter((id): id is string => typeof id === "string").slice(0, 500));
+    } catch {
+      // Starts empty.
+    }
+  }, []);
+  function savePicked(next: string[]) {
+    setPicked(next);
+    try {
+      window.localStorage.setItem(PICKED_KEY, JSON.stringify(next));
+    } catch {
+      // Not remembered; still works.
+    }
+  }
+  // Counted again shortly after the ticks stop, not on every tick.
+  const currentKey = picked.toSorted().join(",");
+  const [pickedKey, setPickedKey] = useState(currentKey);
+  useEffect(() => {
+    const timer = setTimeout(() => setPickedKey(currentKey), 500);
+    return () => clearTimeout(timer);
+  }, [currentKey]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [filter, reason] = orderChoice.split(":");
-      const params = new URLSearchParams({ archived: includeArchived ? "include" : "exclude", ...(filter ? { filter } : {}), ...(reason ? { reason } : {}) });
+      const [filter, reason] = picking ? [] : orderChoice.split(":");
+      const params = new URLSearchParams({
+        archived: includeArchived ? "include" : "exclude",
+        ...(filter ? { filter } : {}),
+        ...(reason ? { reason } : {}),
+        // Picking: only the chosen orders count (none chosen = nothing), plus the list to choose from.
+        ...(picking ? { orders: pickedKey, list: "1" } : {}),
+      });
       const response = await fetch(`/api/admin/quantities?${params}`, { cache: "no-store" });
       if (response.status === 401) {
         router.replace("/admin/login");
@@ -61,12 +101,13 @@ export function QuantitySummaryTab() {
       }
       setError("");
       setData(result);
+      if (result.orders) setPickerOrders(result.orders);
     } catch {
       setError("مفيش اتصال. جربي تاني.");
     } finally {
       setLoading(false);
     }
-  }, [includeArchived, orderChoice, router]);
+  }, [includeArchived, orderChoice, picking, pickedKey, router]);
 
   useEffect(() => {
     // Loading when the tab opens, and again every minute so new orders and status changes show up.
@@ -76,7 +117,7 @@ export function QuantitySummaryTab() {
     return () => clearInterval(timer);
   }, [load]);
 
-  const choiceLabel = ORDER_CHOICES.find((item) => item.value === orderChoice)?.label;
+  const choiceLabel = picking ? `أوردرات مختارة (${picked.length})` : ORDER_CHOICES.find((item) => item.value === orderChoice)?.label;
   const statuses: readonly OrderStatus[] = orderChoice ? ALL_STATUSES : VIEWS.find((item) => item.id === view)!.statuses;
   const viewLabel = choiceLabel ?? VIEWS.find((item) => item.id === view)!.label;
   const words = query.trim().toLowerCase();
@@ -148,6 +189,7 @@ export function QuantitySummaryTab() {
       <div className="admin-filters">
         <select value={orderChoice} onChange={(event) => setOrderChoice(event.target.value)} aria-label="حالة الأوردرات">
           <option value="">كل الأوردرات (حسب الاختيار جنبه)</option>
+          <option value={PICK}>أوردرات بختارها بنفسي…</option>
           {ORDER_CHOICES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </select>
         {!orderChoice && (
@@ -156,8 +198,10 @@ export function QuantitySummaryTab() {
           </div>
         )}
         <input type="search" className="admin-search" placeholder="بحث باسم المنتج أو الكود" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="بحث" />
-        <label className="admin-check"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> احسبي الأوردرات القديمة المؤرشفة</label>
+        {!picking && <label className="admin-check"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /> احسبي الأوردرات القديمة المؤرشفة</label>}
       </div>
+
+      {picking && <OrderPicker orders={pickerOrders} picked={picked} onChange={savePicked} />}
 
       {error && <p className="admin-error" role="alert">{error}</p>}
       {data && !data.vaultConfigured && <p className="admin-note">الأوردرات القديمة مش محسوبة لأن ORDER_DATA_KEY مش متضاف. أوردرات الموقع محسوبة عادي.</p>}
@@ -173,9 +217,9 @@ export function QuantitySummaryTab() {
             {!orderChoice && <div className="admin-card"><span>الملغي (مش محسوب)</span><strong>{integer.format(totals.pieces.cancelled)}</strong><small>قطعة في {integer.format(totals.orders.cancelled)} أوردر</small></div>}
           </section>
 
-          <SourcesBox summary={data.summary} statuses={statuses} includeArchived={includeArchived} />
+          {!picking && <SourcesBox summary={data.summary} statuses={statuses} includeArchived={includeArchived} />}
 
-          {products.length === 0 ? <p className="admin-muted empty">مفيش قطع مطلوبة بالاختيار ده.</p> : (
+          {products.length === 0 ? <p className="admin-muted empty">{picking && picked.length === 0 ? "علّمي على الأوردرات اللي عايزة تحصريها من القايمة فوق." : "مفيش قطع مطلوبة بالاختيار ده."}</p> : (
             <div className="admin-qty-grid">
               {products.map((product) => <ProductCard key={product.productId || product.name} product={product} statuses={statuses} />)}
             </div>
@@ -187,6 +231,69 @@ export function QuantitySummaryTab() {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Choose orders by hand: search, narrow by the usual order filters, tick. The summary below counts only the
+ * ticked orders (archived old orders too, once ticked).
+ */
+function OrderPicker({ orders, picked, onChange }: { orders: PickerOrder[] | null; picked: string[]; onChange: (next: string[]) => void }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<OrderFilter>("all");
+  const [onlyPicked, setOnlyPicked] = useState(false);
+  const [limit, setLimit] = useState(PICKER_PAGE);
+  const chosen = useMemo(() => new Set(picked), [picked]);
+  const words = query.trim().toLowerCase();
+  const shown = (orders ?? [])
+    .filter((order) => !onlyPicked || chosen.has(order.orderId))
+    .filter((order) => matchesFilter(order, filter))
+    .filter((order) => !words || `${order.orderId} ${order.customer ?? ""} ${order.items}`.toLowerCase().includes(words));
+  const toggle = (id: string) => onChange(chosen.has(id) ? picked.filter((item) => item !== id) : [...picked, id]);
+  const allShownPicked = shown.length > 0 && shown.every((order) => chosen.has(order.orderId));
+  const pickedPieces = (orders ?? []).filter((order) => chosen.has(order.orderId)).reduce((sum, order) => sum + order.pieces, 0);
+  return (
+    <div className="qty-picker">
+      <div className="qty-picker-head">
+        <strong>اختاري الأوردرات</strong>
+        <span className="qty-picker-count">{integer.format(picked.length)} أوردر مختار · {integer.format(pickedPieces)} قطعة</span>
+        {picked.length > 0 && <button type="button" className="admin-chip" onClick={() => onChange([])}><X size={14} /> شيلي الاختيار</button>}
+      </div>
+      <div className="admin-filters">
+        <input type="search" className="admin-search" placeholder="بحث: رقم الطلب، الاسم، المنتج" value={query} onChange={(event) => { setQuery(event.target.value); setLimit(PICKER_PAGE); }} aria-label="بحث في الأوردرات" />
+        <select value={filter} onChange={(event) => { if (isOrderFilter(event.target.value)) setFilter(event.target.value); setLimit(PICKER_PAGE); }} aria-label="فلتر الأوردرات">
+          {ORDER_FILTERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select>
+        <label className="admin-check"><input type="checkbox" checked={onlyPicked} onChange={(event) => setOnlyPicked(event.target.checked)} /> المختار بس</label>
+        <button type="button" className="admin-chip" disabled={shown.length === 0} onClick={() => {
+          const ids = shown.map((order) => order.orderId);
+          onChange(allShownPicked ? picked.filter((id) => !ids.includes(id)) : [...new Set([...picked, ...ids])].slice(0, 500));
+        }}>{allShownPicked ? <><Square size={14} /> شيلي اللي ظاهر</> : <><CheckSquare size={14} /> اختاري كل اللي ظاهر ({shown.length})</>}</button>
+      </div>
+      {orders === null ? <p className="admin-muted">جاري تحميل الأوردرات…</p> : shown.length === 0 ? <p className="admin-muted">مفيش أوردرات بالبحث ده.</p> : (
+        <ul className="qty-picker-list">
+          {shown.slice(0, limit).map((order) => (
+            <li key={order.orderId}>
+              <label className={chosen.has(order.orderId) ? "picked" : undefined}>
+                <input type="checkbox" checked={chosen.has(order.orderId)} onChange={() => toggle(order.orderId)} />
+                <span className="qty-picker-main">
+                  <span className="qty-picker-line">
+                    <strong dir="ltr" className="mono">{order.orderId}</strong>
+                    <span className={`status ${order.status}`}>{STATUS_LABELS[order.status]}</span>
+                    {order.customer && <span>{order.customer}</span>}
+                    <small className="admin-muted" dir="ltr">{cairoTime(order.createdAt)}</small>
+                    {order.source === "telegram" && <small className="admin-muted">تيليجرام{order.archived ? " · مؤرشف" : ""}</small>}
+                  </span>
+                  <small className="qty-picker-items">{order.items || "—"}</small>
+                </span>
+                <span className="qty-picker-pieces">{order.pieces} قطعة</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      {shown.length > limit && <button type="button" className="admin-chip" onClick={() => setLimit(limit + PICKER_PAGE)}>اعرضي أكتر ({shown.length - limit})</button>}
+    </div>
   );
 }
 

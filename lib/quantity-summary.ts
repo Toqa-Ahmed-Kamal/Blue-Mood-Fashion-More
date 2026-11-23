@@ -128,9 +128,9 @@ export function oldOrderLines(order: OldOrder): FactoryLine[] {
 }
 
 /** What an order filter looks at (status, deposit, shipping steps, cancel reason) — same for both sources. */
-export type OrderFacts = { status: OrderStatus; deposit: Deposit | null; courier: Courier | null; cancelReason: CancelReason | null };
-const factsOf = (order: { status: OrderStatus; deposit?: Deposit; courier?: Courier; cancelReason?: CancelReason }): OrderFacts =>
-  ({ status: order.status, deposit: order.deposit ?? null, courier: order.courier ?? null, cancelReason: order.cancelReason ?? null });
+export type OrderFacts = { orderId: string; status: OrderStatus; deposit: Deposit | null; courier: Courier | null; cancelReason: CancelReason | null };
+const factsOf = (order: { orderId: string; status: OrderStatus; deposit?: Deposit; courier?: Courier; cancelReason?: CancelReason }): OrderFacts =>
+  ({ orderId: order.orderId, status: order.status, deposit: order.deposit ?? null, courier: order.courier ?? null, cancelReason: order.cancelReason ?? null });
 
 /**
  * `keep` (optional) limits the summary to orders matching a filter (e.g. "the shipping company was told").
@@ -215,4 +215,46 @@ export function buildQuantitySummary(input: { live: LiveOrderForSummary[]; old: 
 /** Pieces ordered: pending + confirmed + delivered (cancelled and returned never count). */
 export function active(counts: Counts) {
   return counts.submitted + counts.confirmed + counts.delivered;
+}
+
+/** One order in the "choose orders" list of the summary: no customer data unless `customer` is filled by the API. */
+export type PickerOrder = {
+  orderId: string;
+  createdAt: string;
+  status: OrderStatus;
+  source: OrderSource;
+  archived: boolean;
+  pieces: number;
+  /** "name ×2 · name ×1" from the catalog. */
+  items: string;
+  courier: Courier | null;
+  deposit: Deposit | null;
+  customer?: string;
+};
+
+/**
+ * Every order once (a site order wins over its Telegram copy), newest first, for picking orders to count.
+ * Archived old orders are listed too (marked), since picking one by hand means it should count.
+ */
+export function pickerOrders(input: { live: LiveOrderForSummary[]; old: OldOrder[] }): PickerOrder[] {
+  const describe = (lines: FactoryLine[]) => lines.map((item) => `${item.name} ×${item.quantity}`).join(" · ");
+  const siteIds = new Set(input.live.map(({ order }) => order.orderId));
+  const rows: PickerOrder[] = input.live.map((entry) => {
+    const lines = siteOrderLines(entry);
+    return { orderId: entry.order.orderId, createdAt: entry.order.createdAt, status: entry.order.status, source: "site", archived: false, pieces: lines.reduce((sum, item) => sum + item.quantity, 0), items: describe(lines), courier: entry.order.courier ?? null, deposit: entry.order.deposit ?? null };
+  });
+  const seen = new Set<string>();
+  for (const order of input.old) {
+    if (siteIds.has(order.orderId) || seen.has(order.orderId)) continue;
+    seen.add(order.orderId);
+    const lines = oldOrderLines(order);
+    rows.push({ orderId: order.orderId, createdAt: order.createdAt, status: order.status, source: "telegram", archived: Boolean(order.archived), pieces: lines.reduce((sum, item) => sum + item.quantity, 0), items: describe(lines), courier: order.courier ?? null, deposit: order.deposit ?? null });
+  }
+  return rows.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Order IDs from ?orders=BM-…,BM-… (valid, once each, at most 500). */
+export function parseOrderIds(value: string | null): string[] {
+  const ids = (value ?? "").split(",").map((id) => id.trim().toUpperCase()).filter((id) => /^BM-[A-F\d]{20}$/.test(id));
+  return [...new Set(ids)].slice(0, 500);
 }
