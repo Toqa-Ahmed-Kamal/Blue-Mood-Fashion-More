@@ -9,6 +9,7 @@ import { isSaleStatus, type AnalyticsOrder, type OrderStatus } from "./analytics
 import { isPersonalTake, type DirectSale } from "./direct-sales.ts";
 import type { StockMove, StockRow } from "./inventory.ts";
 import type { OldOrder } from "./old-orders.ts";
+import { keptLines, type PieceReturn } from "./order-returns.ts";
 import { categoryInfo, categoryOrder, findProduct, type CatalogCategory } from "./site-data.ts";
 
 export type PieceProductRow = {
@@ -42,6 +43,8 @@ export type PiecesReport = {
     delivered: number;
     /** Confirmed, handed to the shipping company, not delivered yet. */
     withCourier: number;
+    /** Pieces she gave back that have not reached the stock yet (with her or the shipping company). */
+    returning: number;
     personal: number;
     returned: number;
     waiting: number;
@@ -59,18 +62,21 @@ export type PiecesReport = {
 };
 
 type Line = { productId: string; quantity: number };
-type Order = { orderId: string; day: string; status: OrderStatus; handed: boolean; lines: Line[] };
+/** `back`: pieces she gave back from a sold order (`home`: already back in the stock). */
+type Order = { orderId: string; day: string; status: OrderStatus; handed: boolean; lines: Line[]; back: (Line & { home: boolean })[] };
+const backOf = (status: OrderStatus, returns: PieceReturn[] | undefined) =>
+  isSaleStatus(status) ? (returns ?? []).map((item) => ({ productId: item.modelId, quantity: item.quantity, home: item.state === "in_stock" })) : [];
 
 const isDay = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 const cairoDay = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(iso));
 
 function ordersOnce(live: AnalyticsOrder[], old: OldOrder[]): Order[] {
-  const orders: Order[] = live.map((order) => ({ orderId: order.orderId, day: order.day, status: order.status, handed: Boolean(order.courier?.handedAt), lines: order.products.map((line) => ({ productId: line.modelId, quantity: line.quantity })) }));
+  const orders: Order[] = live.map((order) => ({ orderId: order.orderId, day: order.day, status: order.status, handed: Boolean(order.courier?.handedAt), lines: keptLines(order.products, order.returns).map((line) => ({ productId: line.modelId, quantity: line.quantity })), back: backOf(order.status, order.returns) }));
   const seen = new Set(orders.map((order) => order.orderId));
   for (const order of old) {
     if (seen.has(order.orderId)) continue;
     seen.add(order.orderId);
-    orders.push({ orderId: order.orderId, day: cairoDay(order.createdAt), status: order.status, handed: Boolean(order.courier?.handedAt), lines: order.products.map((line) => ({ productId: line.modelId, quantity: line.quantity })) });
+    orders.push({ orderId: order.orderId, day: cairoDay(order.createdAt), status: order.status, handed: Boolean(order.courier?.handedAt), lines: keptLines(order.products, order.returns).map((line) => ({ productId: line.modelId, quantity: line.quantity })), back: backOf(order.status, order.returns) });
   }
   return orders;
 }
@@ -101,6 +107,7 @@ export function buildPiecesReport(input: {
   const months = new Map<string, number>();
   let delivered = 0;
   let withCourier = 0;
+  let returning = 0;
 
   for (const order of ordersOnce(input.live, input.old)) {
     if (!inRange(order.day)) continue;
@@ -118,6 +125,12 @@ export function buildPiecesReport(input: {
         months.set(order.day.slice(0, 7), (months.get(order.day.slice(0, 7)) ?? 0) + line.quantity);
       } else if (order.status === "returned") target.returned += line.quantity;
       else if (order.status === "submitted") target.waiting += line.quantity;
+    }
+    // Pieces she gave back from a received order: returned, and on their way until they reach the stock.
+    for (const item of order.back) {
+      if (!item.productId) continue;
+      row(item.productId).returned += item.quantity;
+      if (!item.home) returning += item.quantity;
     }
   }
   for (const sale of input.direct) {
@@ -169,6 +182,7 @@ export function buildPiecesReport(input: {
       soldDirect: sum((item) => item.soldDirect),
       delivered,
       withCourier,
+      returning,
       personal: sum((item) => item.personal),
       returned: sum((item) => item.returned),
       waiting: sum((item) => item.waiting),
@@ -209,7 +223,7 @@ export function productStats(report: PiecesReport, stock: StockRow[], soldBefore
 
 /**
  * "اشتريت كام قطعة": every piece of goods she has had, wherever it is now (all dates, not the chosen ones):
- * in the stock now + delivered + with the shipping company + confirmed not shipped yet + direct sales +
+ * in the stock now + delivered + with the shipping company + confirmed not shipped yet + given back and still on the way + direct sales +
  * taken for herself. Only what is recorded on the system: "sold before the system" is left out (it is for the
  * store's display only). Each piece is in one place only, so nothing is counted twice.
  */
@@ -219,6 +233,8 @@ export type GoodsTotal = {
   delivered: number;
   withCourier: number;
   confirmedNotShipped: number;
+  /** Given back by a customer, not back in the stock yet. */
+  returning: number;
   direct: number;
   personal: number;
 };
@@ -230,6 +246,7 @@ export function goodsTotal(allTime: PiecesReport): GoodsTotal {
     delivered: t.delivered,
     withCourier: t.withCourier,
     confirmedNotShipped: t.soldOnline - t.delivered - t.withCourier,
+    returning: t.returning ?? 0,
     direct: t.soldDirect,
     personal: t.personal,
   };

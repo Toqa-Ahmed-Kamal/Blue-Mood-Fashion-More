@@ -6,6 +6,7 @@ import type { AnalyticsOrder, CancelReason, Courier, Deposit, OrderStatus } from
 import type { OrderMoney } from "./finance.ts";
 import { SHIPPING_SYSTEM_NOTES, type OldOrder } from "./old-orders.ts";
 import { editRecordProducts, editTotals, type OrderEdit } from "./order-edit.ts";
+import { returnedAmount, type PieceReturn } from "./order-returns.ts";
 import type { OrderDetails } from "./order-vault.ts";
 import { governorateShippingFee } from "./shipping-rates.ts";
 import { findProduct } from "./site-data.ts";
@@ -47,6 +48,8 @@ export type UnifiedOrder = {
   /** The visit's source alone ("Facebook Ads"…) and its campaign (utm_campaign); "" when unknown. */
   trafficSource: string;
   campaign: string;
+  /** Pieces she gave back after receiving the order (they stay in `products`, the order's history). */
+  returns: PieceReturn[];
   /** Cost, margin, share of expenses and net profit (added by the API; none for cancelled/returned). */
   money?: OrderMoney | null;
 };
@@ -98,9 +101,10 @@ export function matchesFilter(order: Pick<UnifiedOrder, "status" | "deposit" | "
  * What the courier collects from the customer, shipping included: the total, less any deposit.
  * When the shipping is not set yet, the governorate's rate is used (`shippingGuessed`); unknown → `amount` null.
  */
-export function courierCollection(order: Pick<UnifiedOrder, "total" | "value" | "shippingCost" | "governorate" | "deposit">) {
+export function courierCollection(order: Pick<UnifiedOrder, "total" | "value" | "shippingCost" | "governorate" | "deposit"> & { returns?: PieceReturn[] }) {
   const fee = order.shippingCost === null ? governorateShippingFee(order.governorate) : null;
-  const total = order.total ?? (fee !== null ? order.value + fee : null);
+  // Pieces she gave back come off (value already leaves them out).
+  const total = order.total !== null ? order.total - returnedAmount(order.returns) : fee !== null ? order.value + fee : null;
   return {
     amount: total === null ? null : Math.max(0, Math.round((total - (order.deposit?.amount ?? 0)) * 100) / 100),
     shippingGuessed: order.shippingCost === null && fee !== null,
@@ -183,10 +187,11 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       products,
       shippingCost: order.shippingCost,
       total: order.total,
-      value: order.confirmedValue ?? order.total ?? order.subtotal,
+      value: Math.max(0, (order.confirmedValue ?? order.total ?? order.subtotal) - returnedAmount(order.returns)),
       origin: [order.source, order.campaign].filter(Boolean).join(" · "),
       trafficSource: order.source ?? "",
       campaign: order.campaign ?? "",
+      returns: order.returns ?? [],
     });
   }
 
@@ -216,10 +221,11 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       products: order.products.map((product) => ({ modelId: product.modelId, name: product.name, quantity: product.quantity, size: product.size, unitPrice: product.unitPrice })),
       shippingCost: order.shippingCost,
       total: order.total,
-      value: order.total ?? order.offerPrice + order.itemsTotal + (order.shippingCost ?? 0),
+      value: Math.max(0, (order.total ?? order.offerPrice + order.itemsTotal + (order.shippingCost ?? 0)) - returnedAmount(order.returns)),
       origin: order.source,
       trafficSource: order.source ?? "",
       campaign: "",
+      returns: order.returns ?? [],
     });
   }
 
@@ -243,7 +249,7 @@ export function withEdit(order: UnifiedOrder, edit: OrderEdit): UnifiedOrder {
     products: editRecordProducts(edit).map((product) => ({ modelId: product.modelId, name: product.name, quantity: product.quantity, size: product.fit, unitPrice: product.unitPrice })),
     shippingCost: edit.shippingCost,
     total: totals.total,
-    value: totals.total ?? totals.subtotal,
+    value: Math.max(0, (totals.total ?? totals.subtotal) - returnedAmount(order.returns)),
     hasCustomer: true,
   };
 }
@@ -380,19 +386,25 @@ export const ORDER_FACTS = [
   { id: "packed", yes: "اتجهز للشحن", no: "لسه ما اتجهزش" },
   { id: "notified", yes: "اتبلغت شركة الشحن", no: "لسه ما اتبلغتش شركة الشحن" },
   { id: "handed", yes: "راح لشركة الشحن", no: "لسه مراحش لشركة الشحن" },
+  { id: "returns", yes: "فيه قطع رجعت", no: "مفيش قطع رجعت" },
+  { id: "return-open", yes: "قطع راجعة لسه موصلتش المخزن", no: "مفيش قطع راجعة مستنياها" },
 ] as const;
 export type OrderFact = (typeof ORDER_FACTS)[number]["id"];
 export type FactChoice = Partial<Record<OrderFact, boolean>>;
 
-export function hasFact(order: Pick<UnifiedOrder, "deposit" | "courier">, fact: OrderFact) {
+type FactOrder = Pick<UnifiedOrder, "deposit" | "courier"> & { returns?: PieceReturn[] };
+
+export function hasFact(order: FactOrder, fact: OrderFact) {
   if (fact === "deposit") return order.deposit !== null;
+  if (fact === "returns") return Boolean(order.returns?.length);
+  if (fact === "return-open") return Boolean(order.returns?.some((item) => item.state !== "in_stock"));
   if (fact === "packed") return Boolean(order.courier?.packedAt);
   if (fact === "notified") return Boolean(order.courier?.notifiedAt);
   return Boolean(order.courier?.handedAt);
 }
 
 /** Ticked statuses (any of them) and every chosen step (has / has not) together. */
-export function matchesChoice(order: Pick<UnifiedOrder, "status" | "deposit" | "courier">, statuses: readonly OrderStatus[], facts: FactChoice) {
+export function matchesChoice(order: FactOrder & Pick<UnifiedOrder, "status">, statuses: readonly OrderStatus[], facts: FactChoice) {
   if (statuses.length > 0 && !statuses.includes(order.status)) return false;
   return (Object.entries(facts) as [OrderFact, boolean | undefined][]).every(([fact, wanted]) => wanted === undefined || hasFact(order, fact) === wanted);
 }

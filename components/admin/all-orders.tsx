@@ -5,11 +5,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BadgeCheck, Check, CheckCircle2, Copy, Package, PackageCheck, Pencil, RefreshCw, RotateCcw, Send, Truck, Undo2, X, XCircle } from "lucide-react";
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
+import { ReturnsBox, ReturnsDialog } from "@/components/admin/order-returns";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
 import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FACTS, ORDER_SHORTCUTS, STATUS_CHOICES, areaOptions, countValues, courierCollection, courierText, governorateOptions, matchesChoice, matchesHours, matchesMargin, matchesNetProfit, matchesPlace, matchesReason, matchesSearch, matchesTime, offerKindOf, withEdit, type FactChoice, type MarginRange, type OrderFact, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
 import { CANCEL_REASONS, isCancelReason, type CancelReason, type CourierStep, type OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
+import { returnedAmount } from "@/lib/order-returns";
 import { productImage } from "@/lib/quantity-summary";
 import { findProduct, offerPieceCount, hasWeightFit } from "@/lib/site-data";
 
@@ -64,6 +66,7 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [busyId, setBusyId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [returningId, setReturningId] = useState<string | null>(null);
   const resetPage = () => setLimit(PAGE_SIZE);
 
   const load = useCallback(async () => {
@@ -129,6 +132,7 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const rows = scoped.filter((order) => matchesChoice(order, statuses, facts) && (!cancelledOnly || matchesReason(order, reason)));
   const shown = rows.slice(0, limit);
   const editing = editingId ? orders?.find((order) => order.orderId === editingId) ?? null : null;
+  const returning = returningId ? orders?.find((order) => order.orderId === returningId) ?? null : null;
   const statusCount = (status: OrderStatus) => scoped.filter((order) => order.status === status && matchesChoice(order, [], facts)).length;
   const factCount = (fact: OrderFact, wanted: boolean) => scoped.filter((order) => matchesChoice(order, statuses, { ...facts, [fact]: wanted })).length;
   const activeCount = statuses.length + Object.values(facts).filter((value) => value !== undefined).length
@@ -375,10 +379,22 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
       {orders && rows.length === 0 && <p className="admin-muted empty">مفيش أوردرات بالاختيار ده.</p>}
 
       <div className="admin-orders">
-        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onRemoveDeposit={() => removeDeposit(order)} onEdit={() => setEditingId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} onCancelReason={(cancelReason) => void change(order, { cancelReason })} />)}
+        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onRemoveDeposit={() => removeDeposit(order)} onEdit={() => setEditingId(order.orderId)} onReturns={() => setReturningId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} onCancelReason={(cancelReason) => void change(order, { cancelReason })} />)}
       </div>
       {rows.length > shown.length && (
         <button type="button" className="admin-more" onClick={() => setLimit((current) => current + PAGE_SIZE)}>اعرضي {Math.min(PAGE_SIZE, rows.length - shown.length)} أوردر كمان ({rows.length - shown.length} باقيين)</button>
+      )}
+      {returning && (
+        <ReturnsDialog
+          order={returning}
+          onClose={() => setReturningId(null)}
+          onSaved={(returns) => {
+            setReturningId(null);
+            // Shown at once; the reload brings the order's new value and profit.
+            setOrders((current) => current?.map((item) => (item.orderId === returning.orderId ? { ...item, value: Math.max(0, item.value + returnedAmount(item.returns) - returnedAmount(returns)), returns } : item)) ?? null);
+            void load();
+          }}
+        />
       )}
       {editing && (
         <OrderEditDialog
@@ -434,14 +450,26 @@ function CourierCopyButton({ order }: { order: UnifiedOrder }) {
   );
 }
 
-function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, onEdit, onCourier, onCancelReason }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onRemoveDeposit: () => void; onEdit: () => void; onCourier: (step: CourierStep, done: boolean) => void; onCancelReason: (reason: CancelReason | null) => void }) {
+function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, onEdit, onReturns, onCourier, onCancelReason }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onRemoveDeposit: () => void; onEdit: () => void; onReturns: () => void; onCourier: (step: CourierStep, done: boolean) => void; onCancelReason: (reason: CancelReason | null) => void }) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const chat = (text: string) => (order.phone ? whatsappChatUrl(order.phone, text) : null);
-  const remaining = order.deposit && order.total !== null ? Math.max(0, order.total - order.deposit.amount) : null;
+  const remaining = order.deposit && order.total !== null ? Math.max(0, order.total - returnedAmount(order.returns) - order.deposit.amount) : null;
   const packed = Boolean(order.courier?.packedAt);
   const notified = Boolean(order.courier?.notifiedAt);
   const handed = Boolean(order.courier?.handedAt);
   const shippingOpen = order.status === "submitted" || order.status === "confirmed";
+  const sold = order.status === "confirmed" || order.status === "delivered";
+  const returnedByLine = (() => {
+    // Which lines the returned pieces come from (same rule as the totals: first lines of that product first).
+    const left = new Map<string, number>();
+    for (const item of order.returns) left.set(item.modelId, (left.get(item.modelId) ?? 0) + item.quantity);
+    return order.products.map((line) => {
+      const back = Math.min(line.quantity, left.get(line.modelId) ?? 0);
+      left.set(line.modelId, (left.get(line.modelId) ?? 0) - back);
+      return back;
+    });
+  })();
+  const back = returnedAmount(order.returns);
   return (
     <article className={`admin-order status-${order.status}`}>
       <header className="admin-order-head">
@@ -455,6 +483,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, o
               {packed && <span className="admin-courier packed" title={cairoTime(order.courier?.packedAt ?? "")}><Package size={14} aria-hidden="true" /> اتجهز للشحن</span>}
               {notified && <span className="admin-courier" title={cairoTime(order.courier?.notifiedAt ?? "")}><Send size={14} aria-hidden="true" /> اتبلغت شركة الشحن</span>}
             </>}
+          {order.returns.length > 0 && <span className="admin-courier returned"><Undo2 size={14} aria-hidden="true" /> مرتجع جزئي</span>}
           {order.archived && <small className="admin-muted">مؤرشف</small>}
         </div>
         <div className="admin-order-source">
@@ -492,7 +521,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, o
               const image = productImage(product.modelId);
               const catalog = findProduct(product.modelId);
               return (
-                <li key={`${product.modelId}-${index}`}>
+                <li key={`${product.modelId}-${index}`} className={returnedByLine[index] >= product.quantity ? "returned" : undefined}>
                   {image ? (
                     <a href={image} target="_blank" rel="noreferrer" className="admin-order-thumb" aria-label={`صورة ${product.name}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element -- small admin thumbnail */}
@@ -502,6 +531,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, o
                   <div>
                     <strong>{product.name}</strong>
                     {product.size && <small>{product.size}</small>}
+                    {returnedByLine[index] > 0 && <span className="order-return-mark">رجعت {returnedByLine[index]}{returnedByLine[index] < product.quantity ? ` · خدت ${product.quantity - returnedByLine[index]}` : " · مش محسوبة"}</span>}
                   </div>
                   <span className="qty">× {product.quantity}</span>
                   <span className="price">{product.unitPrice === null ? "ضمن العرض" : formatEGP(product.unitPrice * product.quantity)}</span>
@@ -525,9 +555,12 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, o
           <dl className="admin-totals">
             <div><dt>الشحن</dt><dd>{order.shippingCost === null ? "لسه هيتأكد" : formatEGP(order.shippingCost)}</dd></div>
             <div className="grand"><dt>الإجمالي</dt><dd>{order.total === null ? `${formatEGP(order.value)} + الشحن` : formatEGP(order.total)}</dd></div>
+            {order.returns.length > 0 && <div><dt>قطع رجعت</dt><dd>− {formatEGP(back)}</dd></div>}
+            {order.returns.length > 0 && order.total !== null && <div className="grand"><dt>بعد المرتجع</dt><dd>{formatEGP(Math.max(0, order.total - back))}</dd></div>}
             {order.deposit && <div><dt>ديبوزيت مدفوع</dt><dd>− {formatEGP(order.deposit.amount)}</dd></div>}
             {remaining !== null && <div className="grand"><dt>الباقي عند الاستلام</dt><dd>{formatEGP(remaining)}</dd></div>}
           </dl>
+          <ReturnsBox order={order} />
           <OrderMoneyBox order={order} />
         </section>
       </div>
@@ -538,7 +571,8 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, o
         {order.deposit && <button type="button" disabled={busy} className="danger" onClick={onRemoveDeposit} title="لو اتحط بالغلط"><XCircle size={15} /> شيل الديبوزيت</button>}
         {order.status !== "confirmed" && order.status !== "delivered" && <button type="button" disabled={busy} onClick={() => onStatus("confirmed")} title="بيع مؤكد"><CheckCircle2 size={16} /> تأكيد</button>}
         {order.status === "confirmed" && <button type="button" disabled={busy} className="good" onClick={() => onStatus("delivered")} title="العميلة استلمت"><PackageCheck size={16} /> تم الاستلام</button>}
-        {(order.status === "confirmed" || order.status === "delivered") && <button type="button" disabled={busy} className="danger" onClick={() => onStatus("returned")} title="الأوردر رجع"><Undo2 size={16} /> مرتجع</button>}
+        {sold && <button type="button" disabled={busy} className={order.returns.length ? "courier-on returned" : undefined} onClick={onReturns} title="العميلة رجّعت قطعة أو أكتر وخدت الباقي"><Undo2 size={16} /> {order.returns.length ? `قطع رجعت (${order.returns.reduce((sum, item) => sum + item.quantity, 0)})` : "رجّعت قطعة"}</button>}
+        {sold && <button type="button" disabled={busy} className="danger" onClick={() => onStatus("returned")} title="الأوردر كله رجع"><Undo2 size={16} /> مرتجع</button>}
         {order.status !== "cancelled" && order.status !== "returned" && order.status !== "delivered" && <button type="button" disabled={busy} className="danger" onClick={() => onStatus("cancelled")} title="إلغاء"><XCircle size={16} /> إلغاء</button>}
         {order.status === "cancelled" && (
           <select className={`admin-cancel-reason${order.cancelReason ? "" : " empty"}`} disabled={busy} value={order.cancelReason ?? ""} onChange={(event) => onCancelReason(isCancelReason(event.target.value) ? event.target.value : null)} aria-label="سبب الإلغاء">

@@ -95,6 +95,7 @@ export function PiecesTab() {
                 ["اتسلمت للعميلات", goods.delivered],
                 ["مع شركة الشحن", goods.withCourier],
                 ["مؤكدة لسه متشحنتش", goods.confirmedNotShipped],
+                ["قطع راجعة لسه موصلتش", goods.returning ?? 0],
                 ["بيع مباشر", goods.direct],
                 ["خدتيها لنفسك", goods.personal],
               ] as const).map(([label, value]) => <li key={label}><span>{label}</span><strong>{count.format(value)}</strong></li>)}

@@ -42,6 +42,7 @@ import type { OrderRecord } from "./order-record.ts";
 import { snapshotCosts } from "./finance.ts";
 import { productCostsFor } from "./finance-store.ts";
 import { applyEditToSiteOrder, type OrderEdit } from "./order-edit.ts";
+import { sanitizeReturns } from "./order-returns.ts";
 import { openOrderDetails, sealOrderDetails, type OrderDetails } from "./order-vault.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import { sourceTypeOf, trafficSourceOf, type TrafficSource } from "./traffic-source.ts";
@@ -436,6 +437,24 @@ export async function setOrderDeposit(orderId: string, amount: number | null) {
   const { deposit: _previous, ...rest } = order;
   void _previous;
   const updated: AnalyticsOrder = amount === null ? rest : { ...rest, deposit: { amount, at: new Date().toISOString() } };
+  const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
+  return result === "OK" ? updated : null;
+}
+
+/**
+ * Saves the pieces she gave back (the full list; [] removes them all). Only for a confirmed or received order.
+ * "not_sold" for any other order; { error } when the list does not fit the order's pieces.
+ */
+export async function setOrderReturns(orderId: string, raw: unknown): Promise<AnalyticsOrder | null | "not_sold" | { error: string }> {
+  const [stored] = await redisPipeline([["GET", key(`order:${orderId}`)]], "write");
+  if (typeof stored !== "string") return null;
+  const order = JSON.parse(stored) as AnalyticsOrder;
+  if (!isSaleStatus(order.status)) return "not_sold";
+  const checked = sanitizeReturns(raw, order.products, order.returns);
+  if ("error" in checked) return checked;
+  const { returns: _previous, ...rest } = order;
+  void _previous;
+  const updated: AnalyticsOrder = checked.returns.length ? { ...rest, returns: checked.returns } : rest;
   const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
   return result === "OK" ? updated : null;
 }

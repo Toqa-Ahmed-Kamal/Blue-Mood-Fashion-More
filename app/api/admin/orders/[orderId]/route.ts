@@ -1,7 +1,7 @@
 import { isSameOrigin } from "@/lib/admin-auth";
 import { accessDenied } from "@/lib/admin-users";
 import { parseCancelReason, parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
-import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderCancelReason, setOrderCourier, setOrderDeposit, setOrderStatus } from "@/lib/analytics-store";
+import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderCancelReason, setOrderCourier, setOrderDeposit, setOrderReturns, setOrderStatus } from "@/lib/analytics-store";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { sanitizeOrderEdit } from "@/lib/order-edit";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
@@ -59,6 +59,20 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
       return json(200, { success: true, order: { orderId: order.orderId, status: order.status, total: order.total, editedAt: order.editedAt } });
     } catch (error) {
       console.error("[admin] order edit failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+      return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
+    }
+  }
+  // Pieces she gave back: { returns: [{ id?, modelId, quantity, amount, state, note }] } (the full list).
+  if (body.returns !== undefined) {
+    try {
+      const order = await setOrderReturns(orderId, body.returns);
+      if (!order) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
+      if (order === "not_sold") return json(409, { success: false, error: { code: "NOT_SOLD", message: "المرتجع بيتسجل للأوردر المؤكد أو اللي اتسلم بس." } });
+      if ("error" in order) return json(400, { success: false, error: { code: "INVALID_RETURNS", message: order.error } });
+      await syncStoreStock();
+      return json(200, { success: true, order: { orderId: order.orderId, returns: order.returns ?? [] } });
+    } catch (error) {
+      console.error("[admin] order returns update failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
       return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
     }
   }

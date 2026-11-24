@@ -2188,3 +2188,32 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
   .orders-time-group { grid-column: 1 / -1; }
   .orders-time-group input, .orders-time-group select { width: 100%; min-width: 0; }
 }
+
+/* مرتجع جزئي: pieces she gave back (still listed in the order, not counted). */
+.admin-courier.returned { background: #fdecee; color: #b42335; }
+.admin-order-actions button.courier-on.returned { background: #fdecee; border-color: #eba3ad; color: #b42335; }
+.admin-order-items li.returned strong { text-decoration: line-through; color: var(--muted); }
+.order-return-mark { display: inline-block; margin-top: 2px; padding: 1px 8px; border-radius: 999px; background: #fdecee; color: #b42335; font-size: .74rem; font-weight: 700; }
+.order-return-mark.bad { background: #b42335; color: #fff; }
+.order-returns { margin: 12px 0 4px; padding: 10px 12px; border: 1px dashed #eba3ad; border-radius: 12px; background: #fffafa; }
+.order-returns h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: .9rem; color: #b42335; }
+.order-returns-story { margin: 0 0 8px; font-size: .84rem; font-weight: 700; color: var(--navy); }
+.order-returns ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.order-returns li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: .84rem; }
+.order-returns li small { flex-basis: 100%; }
+.order-returns li .price { margin-inline-start: auto; font-weight: 700; }
+.order-return-state { padding: 1px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; }
+.order-return-state.with_customer { background: #fff3dc; color: #8a5a00; }
+.order-return-state.with_courier { background: #e8efff; color: #2f5fb3; }
+.order-return-state.in_stock { background: #e2f5ea; color: #157a3e; }
+.order-returns-ordered { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: .88rem; }
+.order-returns-ordered li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.order-returns-rows { display: grid; gap: 10px; margin-bottom: 10px; }
+.order-returns-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 70px 110px minmax(0, 1.3fr) minmax(0, 1fr) 36px; gap: 8px; align-items: end; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.order-returns-row .admin-field select, .order-returns-row .admin-field input { width: 100%; min-width: 0; }
+.order-returns-row .wide { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 720px) {
+  .order-returns-row { grid-template-columns: 1fr 1fr; }
+  .order-returns-row .product, .order-returns-row .state, .order-returns-row .note { grid-column: 1 / -1; }
+  .order-returns-row > .admin-icon-btn { justify-self: start; }
+}

@@ -84,5 +84,5 @@ test("goods total: stock + delivered + with courier + confirmed + direct + perso
   const stock = buildStock({ productIds: [A], moves, live, old: [], direct });
   const report = buildPiecesReport({ live, old: [], direct, moves, stock });
   // Stock: 20 − 2 − 3 − 1 − 1 − 2 = 11 (the waiting order is still in the stock).
-  assert.deepEqual(goodsTotal(report), { total: 20, inStock: 11, delivered: 2, withCourier: 3, confirmedNotShipped: 1, direct: 1, personal: 2 });
+  assert.deepEqual(goodsTotal(report), { total: 20, inStock: 11, delivered: 2, withCourier: 3, confirmedNotShipped: 1, returning: 0, direct: 1, personal: 2 });
 });

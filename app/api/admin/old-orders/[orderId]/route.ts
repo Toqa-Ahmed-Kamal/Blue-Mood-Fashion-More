@@ -7,6 +7,7 @@ import { VaultNotConfiguredError, deleteOldOrder, loadOldOrder, updateOldOrder }
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { snapshotCosts } from "@/lib/finance";
 import { applyEditToOldOrder, sanitizeOrderEdit } from "@/lib/order-edit";
+import { sanitizeReturns } from "@/lib/order-returns";
 import { productCostsFor } from "@/lib/finance-store";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
 import { RedisUnavailableError } from "@/lib/redis";
@@ -96,6 +97,14 @@ export async function PATCH(request: Request, context: Context) {
       cancelReason = reason ?? undefined;
     }
     if (next.status !== "cancelled") cancelReason = undefined;
+    // Pieces she gave back: kept through edits; changed only by { returns: [...] } (the full list).
+    let returns = current.returns;
+    if (body.returns !== undefined) {
+      if (!isSaleStatus(next.status)) return json(409, { success: false, error: { code: "NOT_SOLD", message: "المرتجع بيتسجل للأوردر المؤكد أو اللي اتسلم بس." } });
+      const checkedReturns = sanitizeReturns(body.returns, next.products, current.returns, now);
+      if ("error" in checkedReturns) return json(400, { success: false, error: { code: "INVALID_RETURNS", message: checkedReturns.error } });
+      returns = checkedReturns.returns.length ? checkedReturns.returns : undefined;
+    }
     if (body.archived !== undefined) {
       if (typeof body.archived !== "boolean") return json(400, { success: false, error: { code: "INVALID_ARCHIVED" } });
       next = { ...next, archived: body.archived };
@@ -110,14 +119,15 @@ export async function PATCH(request: Request, context: Context) {
     }
     // Time it became a sale (inventory): kept while it stays a sale, cleared otherwise. Never from the browser.
     const soldAt = isSaleStatus(next.status) ? (isSaleStatus(current.status) ? current.soldAt : now.toISOString()) : undefined;
-    const { costSnapshot: _ignored, deposit: _ignoredDeposit, soldAt: _ignoredSoldAt, courier: _ignoredCourier, cancelReason: _ignoredReason, ...withoutSnapshot } = next;
+    const { costSnapshot: _ignored, deposit: _ignoredDeposit, soldAt: _ignoredSoldAt, courier: _ignoredCourier, cancelReason: _ignoredReason, returns: _ignoredReturns, ...withoutSnapshot } = next;
     void _ignoredReason;
+    void _ignoredReturns;
     void _ignored;
     void _ignoredDeposit;
     void _ignoredSoldAt;
     void _ignoredCourier;
-    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(soldAt ? { soldAt } : {}), ...(deposit ? { deposit } : {}), ...(courier ? { courier } : {}), ...(cancelReason ? { cancelReason } : {}), updatedAt: now.toISOString() });
-    if (saved && (body.order !== undefined || body.status !== undefined)) await syncStoreStock();
+    const saved = await updateOldOrder({ ...withoutSnapshot, ...(costSnapshot ? { costSnapshot } : {}), ...(soldAt ? { soldAt } : {}), ...(deposit ? { deposit } : {}), ...(courier ? { courier } : {}), ...(cancelReason ? { cancelReason } : {}), ...(returns ? { returns } : {}), updatedAt: now.toISOString() });
+    if (saved && (body.order !== undefined || body.status !== undefined || body.returns !== undefined)) await syncStoreStock();
     return saved ? json(200, { success: true, order: saved }) : json(404, NOT_FOUND);
   } catch (error) {
     return storageError(error, "update");

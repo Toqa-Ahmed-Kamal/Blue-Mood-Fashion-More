@@ -10,6 +10,7 @@ import type { AnalyticsOrder } from "./analytics-report.ts";
 import { isSaleStatus } from "./analytics-report.ts";
 import { isPersonalTake, type DirectSale } from "./direct-sales.ts";
 import type { OldOrder } from "./old-orders.ts";
+import { backInStock, type PieceReturn } from "./order-returns.ts";
 import { findProduct } from "./site-data.ts";
 
 export const STOCK_MOVE_KINDS = [
@@ -86,18 +87,20 @@ function orderLines(live: AnalyticsOrder[], old: OldOrder[]) {
   const waiting: Omit<SoldLine, "at">[] = [];
   const siteIds = new Set(live.map((order) => order.orderId));
   const seen = new Set<string>();
-  const add = (status: string, at: string, lines: { modelId: string; quantity: number }[]) => {
+  const add = (status: string, at: string, lines: { modelId: string; quantity: number }[], returns?: PieceReturn[]) => {
     for (const line of lines) {
       if (!line.modelId) continue;
       if (isSaleStatus(status)) sold.push({ productId: line.modelId, quantity: line.quantity, at });
       else if (status === "submitted") waiting.push({ productId: line.modelId, quantity: line.quantity });
     }
+    // A piece she gave back is in the stock again only from the time it reached us.
+    if (isSaleStatus(status)) for (const back of backInStock(returns)) sold.push({ ...back, quantity: -back.quantity });
   };
-  for (const order of live) add(order.status, soldTime(order), order.products);
+  for (const order of live) add(order.status, soldTime(order), order.products, order.returns);
   for (const order of old) {
     if (siteIds.has(order.orderId) || seen.has(order.orderId)) continue;
     seen.add(order.orderId);
-    add(order.status, soldTime(order), order.products);
+    add(order.status, soldTime(order), order.products, order.returns);
   }
   return { sold, waiting };
 }

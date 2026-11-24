@@ -1,5 +1,6 @@
 // Turns stored daily visit counters and order records into the dashboard report. Pure (no I/O) and tested.
 import type { Touch } from "./attribution.ts";
+import { returnedAmount, type PieceReturn } from "./order-returns.ts";
 import { catalog, categoryInfo } from "./site-data.ts";
 import { SOURCE_TYPES, TRAFFIC_SOURCES, isTrafficSource, sourceTypeOf, type SourceType, type TrafficSource } from "./traffic-source.ts";
 
@@ -135,6 +136,8 @@ export type AnalyticsOrder = {
   cancelReason?: CancelReason;
   /** Last time the admin edited the order (pieces, customer, shipping). */
   editedAt?: string;
+  /** Pieces she gave back from the order (the order keeps all its pieces; these are taken out of the sale). */
+  returns?: PieceReturn[];
 };
 
 /** Fields of one day's visit hash: all, s:<source>, t:<type>, c:<campaign>, a:<ad content>. */
@@ -148,8 +151,10 @@ export function orderValue(order: AnalyticsOrder) {
   return order.total ?? order.subtotal;
 }
 
+/** Collected amount (or the total), less what came off for pieces she gave back. */
 export function confirmedValueOf(order: AnalyticsOrder) {
-  return order.confirmedValue ?? orderValue(order);
+  const value = order.confirmedValue ?? orderValue(order);
+  return order.returns?.length ? Math.max(0, value - returnedAmount(order.returns)) : value;
 }
 
 const rate = (count: number, sessions: number) => (sessions > 0 ? count / sessions : null);

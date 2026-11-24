@@ -18,6 +18,7 @@
 import { confirmedValueOf, isSaleStatus, type AnalyticsOrder, type CostSnapshot, type OrderStatus } from "./analytics-report.ts";
 import { directSaleMoney, isPersonalTake, type DirectSale } from "./direct-sales.ts";
 import { type OldOrder } from "./old-orders.ts";
+import { keptLines, returnedAmount } from "./order-returns.ts";
 import { catalog, landingPromotion, offerPrice } from "./site-data.ts";
 
 /** Factory of every product that has none saved yet (all products at launch come from it). */
@@ -173,14 +174,15 @@ const piecesOf = (order: Normalized) => order.lines.reduce((sum, line) => sum + 
 
 /** A site order's sale without the customer's shipping: the pieces' subtotal, or the collected amount less shipping. */
 export function siteGoodsValue(order: AnalyticsOrder) {
-  if (order.confirmedValue === null && order.total === null) return order.subtotal;
+  if (order.confirmedValue === null && order.total === null) return Math.max(0, order.subtotal - returnedAmount(order.returns));
   return Math.max(0, confirmedValueOf(order) - (order.shippingCost ?? 0));
 }
 
 /** An imported Telegram order's sale without shipping. */
 export function oldGoodsValue(order: OldOrder) {
-  if (order.total === null) return order.offerPrice + order.itemsTotal;
-  return Math.max(0, order.total - (order.shippingCost ?? 0));
+  const back = returnedAmount(order.returns);
+  if (order.total === null) return Math.max(0, order.offerPrice + order.itemsTotal - back);
+  return Math.max(0, order.total - (order.shippingCost ?? 0) - back);
 }
 
 /** Site orders and imported Telegram orders, each once (a Telegram copy of a site order is the site order). */
@@ -194,7 +196,8 @@ function normalizeOrders(live: AnalyticsOrder[], old: OldOrder[]): Normalized[] 
       day: order.day,
       status: order.status,
       value: siteGoodsValue(order),
-      lines: order.products.map((product) => ({ productId: product.modelId, quantity: product.quantity })),
+      // Pieces she gave back are not sold: same lines (the saved costs line up), fewer pieces.
+      lines: keptLines(order.products, order.returns).map((product) => ({ productId: product.modelId, quantity: product.quantity })),
       snapshot: order.costSnapshot,
     })),
     ...old.flatMap((order) => {
@@ -206,7 +209,7 @@ function normalizeOrders(live: AnalyticsOrder[], old: OldOrder[]): Normalized[] 
         day: cairoDay(order.createdAt),
         status: order.status,
         value: oldGoodsValue(order),
-        lines: order.products.map((product) => ({ productId: product.modelId, quantity: product.quantity })),
+        lines: keptLines(order.products, order.returns).map((product) => ({ productId: product.modelId, quantity: product.quantity })),
         snapshot: order.costSnapshot,
       }];
     }),
