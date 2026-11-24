@@ -407,13 +407,34 @@ export const ORDER_SHORTCUTS: { id: string; label: string; statuses: OrderStatus
   { id: "with-courier", label: "مع شركة الشحن", statuses: ["confirmed"], facts: { handed: true } },
 ];
 
-const cairoDayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(iso));
+/** "YYYY-MM-DDTHH:mm" in Cairo time — the same shape a datetime-local field gives, so the two compare as text. */
+export function cairoStamp(iso: string) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(iso)).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
 
-/** The order's day (Cairo) within from..to (YYYY-MM-DD, either may be ""). */
-export function matchesDates(order: Pick<UnifiedOrder, "createdAt">, from: string, to: string) {
+/**
+ * Placed between two moments (Cairo, "YYYY-MM-DDTHH:mm" or just "YYYY-MM-DD"; either may be "").
+ * A day alone means the whole day: from its first minute, to its last.
+ */
+export function matchesTime(order: Pick<UnifiedOrder, "createdAt">, from: string, to: string) {
   if (!from && !to) return true;
-  const day = cairoDayOf(order.createdAt);
-  return (!from || day >= from) && (!to || day <= to);
+  const stamp = cairoStamp(order.createdAt);
+  const start = from.length === 10 ? `${from}T00:00` : from;
+  const end = to.length === 10 ? `${to}T23:59` : to;
+  return (!start || stamp >= start) && (!end || stamp <= end);
+}
+
+/**
+ * Placed at this time of day (Cairo), on any day: from hour fromHour up to the end of hour toHour (0–23).
+ * "" = open on that side. 22 → 2 wraps past midnight.
+ */
+export function matchesHours(order: Pick<UnifiedOrder, "createdAt">, fromHour: string, toHour: string) {
+  if (fromHour === "" && toHour === "") return true;
+  const hour = Number(cairoStamp(order.createdAt).slice(11, 13));
+  const from = fromHour === "" ? 0 : Number(fromHour);
+  const to = toHour === "" ? 23 : Number(toHour);
+  return from <= to ? hour >= from && hour <= to : hour >= from || hour <= to;
 }
 
 /** Which offer the order has: "winter", "christmas", "none" (or "" = any). */

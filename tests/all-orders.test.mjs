@@ -232,7 +232,7 @@ test("place filter: governorate and area, spellings merged", () => {
 });
 
 test("filters together: several statuses, each step has / has not, dates and offer", async () => {
-  const { matchesChoice, ORDER_SHORTCUTS, matchesDates, offerKindOf, countValues } = await import("../lib/all-orders.ts");
+  const { matchesChoice, ORDER_SHORTCUTS, matchesTime, matchesHours, cairoStamp, offerKindOf, countValues } = await import("../lib/all-orders.ts");
   const told = { notifiedAt: "2026-11-20T10:00:00Z" };
   const orders = [
     { id: 1, status: "confirmed", deposit: null, courier: null },
@@ -248,8 +248,15 @@ test("filters together: several statuses, each step has / has not, dates and off
   assert.deepEqual(ids([], {}), [1, 2, 3, 4]);
   const shortcut = ORDER_SHORTCUTS.find((item) => item.id === "confirmed-not-notified");
   assert.deepEqual(ids(shortcut.statuses, shortcut.facts), [1]);
-  assert.equal(matchesDates({ createdAt: "2026-11-22T23:30:00Z" }, "2026-11-23", "2026-11-23"), true, "Cairo day (01:30 on the 23rd)");
-  assert.equal(matchesDates({ createdAt: "2026-11-22T20:00:00Z" }, "2026-11-23", ""), false);
+  assert.equal(cairoStamp("2026-11-22T23:30:00Z"), "2026-11-23T01:30", "Cairo time (UTC+2)");
+  assert.equal(matchesTime({ createdAt: "2026-11-22T23:30:00Z" }, "2026-11-23", "2026-11-23"), true, "a day alone = the whole day");
+  assert.equal(matchesTime({ createdAt: "2026-11-22T20:00:00Z" }, "2026-11-23", ""), false);
+  assert.equal(matchesTime({ createdAt: "2026-11-23T10:00:00Z" }, "2026-11-23T12:00", "2026-11-23T12:30"), true, "12:00 Cairo, within 12:00–12:30");
+  assert.equal(matchesTime({ createdAt: "2026-11-23T10:31:00Z" }, "2026-11-23T12:00", "2026-11-23T12:30"), false);
+  assert.equal(matchesHours({ createdAt: "2026-11-23T19:15:00Z" }, "20", "23"), true, "21:15 Cairo between 8 and 11 pm");
+  assert.equal(matchesHours({ createdAt: "2026-11-23T09:15:00Z" }, "20", "23"), false);
+  assert.equal(matchesHours({ createdAt: "2026-11-23T23:15:00Z" }, "22", "2"), true, "01:15 Cairo, 10 pm → 2 am wraps");
+  assert.equal(matchesHours({ createdAt: "2026-11-23T12:00:00Z" }, "", ""), true);
   assert.equal(offerKindOf({ offerName: "عرض الكريسماس: ٣ بيجامات كريسماس" }), "christmas");
   assert.equal(offerKindOf({ offerName: "عرض الشتاء: ٤ بيجامات شتوية" }), "winter");
   assert.equal(offerKindOf({ offerName: "بدون عرض — قطع منفردة" }), "none");

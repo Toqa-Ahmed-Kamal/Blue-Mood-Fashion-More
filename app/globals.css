@@ -2176,3 +2176,15 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
   .orders-chip { font-size: .82rem; padding: 6px 10px; }
 }
 @media (max-width: 380px) { .orders-filter-grid { grid-template-columns: 1fr; } }
+.orders-time { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.orders-time-group { display: flex; flex-wrap: wrap; gap: 8px 10px; }
+.orders-time-group label { display: grid; gap: 4px; }
+.orders-time-group label > span { font-size: .78rem; font-weight: 700; color: var(--muted); }
+.orders-time-group input, .orders-time-group select { min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font: inherit; font-size: .88rem; color: var(--navy); }
+.orders-time-group input { width: 230px; }
+.orders-time-group select { width: 165px; }
+@media (max-width: 640px) {
+  .orders-time, .orders-time-group { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .orders-time-group { grid-column: 1 / -1; }
+  .orders-time-group input, .orders-time-group select { width: 100%; min-width: 0; }
+}

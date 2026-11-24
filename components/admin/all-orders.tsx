@@ -6,7 +6,7 @@ import { BadgeCheck, Check, CheckCircle2, Copy, Package, PackageCheck, Pencil, R
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
-import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FACTS, ORDER_SHORTCUTS, STATUS_CHOICES, areaOptions, countValues, courierCollection, courierText, governorateOptions, matchesChoice, matchesDates, matchesMargin, matchesNetProfit, matchesPlace, matchesReason, matchesSearch, offerKindOf, withEdit, type FactChoice, type MarginRange, type OrderFact, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
+import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FACTS, ORDER_SHORTCUTS, STATUS_CHOICES, areaOptions, countValues, courierCollection, courierText, governorateOptions, matchesChoice, matchesHours, matchesMargin, matchesNetProfit, matchesPlace, matchesReason, matchesSearch, matchesTime, offerKindOf, withEdit, type FactChoice, type MarginRange, type OrderFact, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
 import { CANCEL_REASONS, isCancelReason, type CancelReason, type CourierStep, type OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
@@ -17,16 +17,11 @@ const STATUS_LABELS: Record<OrderStatus, string> = { submitted: "مستني تأ
 const PAGE_SIZE = 30;
 const cairoTime = (iso: string) => (iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Cairo", dateStyle: "short", timeStyle: "short" }) : "—");
 
-/** Cairo day (YYYY-MM-DD) a number of days ago. */
-const cairoDay = (daysAgo = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo" }).format(new Date(Date.now() - daysAgo * 86_400_000));
-const DATE_PRESETS = [
-  { id: "", label: "كل الأيام", range: () => ({ from: "", to: "" }) },
-  { id: "today", label: "النهارده", range: () => ({ from: cairoDay(), to: cairoDay() }) },
-  { id: "yesterday", label: "امبارح", range: () => ({ from: cairoDay(1), to: cairoDay(1) }) },
-  { id: "7", label: "آخر ٧ أيام", range: () => ({ from: cairoDay(6), to: cairoDay() }) },
-  { id: "30", label: "آخر ٣٠ يوم", range: () => ({ from: cairoDay(29), to: cairoDay() }) },
-  { id: "month", label: "الشهر ده", range: () => ({ from: `${cairoDay().slice(0, 8)}01`, to: cairoDay() }) },
-] as const;
+/** Hours of the day for the time-of-day filter: 0 → "12 بالليل", 13 → "1 الضهر"… */
+const HOURS = Array.from({ length: 24 }, (_, hour) => ({
+  value: String(hour),
+  label: `${hour % 12 === 0 ? 12 : hour % 12} ${hour < 5 ? "بالليل" : hour < 12 ? "الصبح" : hour < 16 ? "الضهر" : hour < 19 ? "العصر" : "بالليل"}`,
+}));
 const OFFER_KINDS = [
   { id: "", label: "كل العروض" },
   { id: "winter", label: "عرض الشتاء" },
@@ -46,9 +41,11 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const [reason, setReason] = useState<ReasonFilter>("");
   const [source, setSource] = useState<"" | "site" | "telegram">("");
   const [query, setQuery] = useState("");
-  const [datePreset, setDatePreset] = useState("");
+  // From / to: a calendar with the time (Cairo). Hours: a time of day on any day (e.g. 8 to 11 at night).
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [hourFrom, setHourFrom] = useState("");
+  const [hourTo, setHourTo] = useState("");
   const [trafficSource, setTrafficSource] = useState("");
   const [campaign, setCampaign] = useState("");
   const [offerKind, setOfferKind] = useState("");
@@ -118,13 +115,14 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   // Every filter except status and steps (those show their own counts on the chips).
   const scoped = useMemo(() => base.filter((order) =>
     matchesPlace(order, governorate, area)
-    && matchesDates(order, dateFrom, dateTo)
+    && matchesTime(order, dateFrom, dateTo)
+    && matchesHours(order, hourFrom, hourTo)
     && (!trafficSource || order.trafficSource === trafficSource)
     && (!campaign || order.campaign === campaign)
     && (!offerKind || offerKindOf(order) === offerKind)
     && matchesSearch(order, query)
     && matchesMargin(order, marginRange)
-    && matchesNetProfit(order, netRange)), [base, governorate, area, dateFrom, dateTo, trafficSource, campaign, offerKind, query, marginRange, netRange]);
+    && matchesNetProfit(order, netRange)), [base, governorate, area, dateFrom, dateTo, hourFrom, hourTo, trafficSource, campaign, offerKind, query, marginRange, netRange]);
   const netActive = netRange.min !== null || netRange.max !== null;
   const marginActive = marginRange.min !== null || marginRange.max !== null || netActive;
   const cancelledOnly = statuses.length > 0 && statuses.every((status) => status === "cancelled");
@@ -134,7 +132,7 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const statusCount = (status: OrderStatus) => scoped.filter((order) => order.status === status && matchesChoice(order, [], facts)).length;
   const factCount = (fact: OrderFact, wanted: boolean) => scoped.filter((order) => matchesChoice(order, statuses, { ...facts, [fact]: wanted })).length;
   const activeCount = statuses.length + Object.values(facts).filter((value) => value !== undefined).length
-    + [query.trim(), dateFrom || dateTo, trafficSource, campaign, offerKind, governorate, area, source, marginPreset, netPreset, cancelledOnly ? reason : ""].filter(Boolean).length;
+    + [query.trim(), dateFrom || dateTo, hourFrom || hourTo, trafficSource, campaign, offerKind, governorate, area, source, marginPreset, netPreset, cancelledOnly ? reason : ""].filter(Boolean).length;
 
   function toggleStatus(status: OrderStatus) {
     setStatuses((current) => (current.includes(status) ? current.filter((item) => item !== status) : [...current, status]));
@@ -158,17 +156,9 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
     setFacts(shortcut.facts);
     resetPage();
   }
-  function chooseDates(id: string) {
-    const preset = DATE_PRESETS.find((item) => item.id === id) ?? DATE_PRESETS[0];
-    const range = preset.range();
-    setDatePreset(preset.id);
-    setDateFrom(range.from);
-    setDateTo(range.to);
-    resetPage();
-  }
   function clearAll() {
     setStatuses([]); setFacts({}); setReason(""); setSource(""); setQuery("");
-    setDatePreset(""); setDateFrom(""); setDateTo(""); setTrafficSource(""); setCampaign(""); setOfferKind("");
+    setDateFrom(""); setDateTo(""); setHourFrom(""); setHourTo(""); setTrafficSource(""); setCampaign(""); setOfferKind("");
     setGovernorate(""); setArea(""); setMarginPreset(""); setMarginMin(""); setMarginMax(""); setNetPreset(""); setNetMin(""); setNetMax("");
     resetPage();
   }
@@ -262,6 +252,30 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
           </div>
         </div>
 
+        <div className="orders-filter-row">
+          <span className="orders-filter-title">الوقت <small>من يوم وساعة لحد يوم وساعة، أو ساعات معينة في أي يوم</small></span>
+          <div className="orders-time">
+            <div className="orders-time-group">
+              <label><span>من (يوم وساعة)</span><input type="datetime-local" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); resetPage(); }} aria-label="من يوم وساعة" /></label>
+              <label><span>لحد (يوم وساعة)</span><input type="datetime-local" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); resetPage(); }} aria-label="لحد يوم وساعة" /></label>
+            </div>
+            <div className="orders-time-group">
+              <label><span>وقت اليوم من الساعة</span>
+                <select value={hourFrom} onChange={(event) => { setHourFrom(event.target.value); resetPage(); }} aria-label="من الساعة">
+                  <option value="">أي ساعة</option>
+                  {HOURS.map((hour) => <option key={hour.value} value={hour.value}>{hour.label}</option>)}
+                </select>
+              </label>
+              <label><span>لحد الساعة</span>
+                <select value={hourTo} onChange={(event) => { setHourTo(event.target.value); resetPage(); }} aria-label="لحد الساعة">
+                  <option value="">أي ساعة</option>
+                  {HOURS.map((hour) => <option key={hour.value} value={hour.value}>{hour.label} (لآخرها)</option>)}
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div className="orders-filter-grid">
           <label className="orders-field"><span>اختصارات جاهزة</span>
             <select value="" onChange={(event) => applyShortcut(event.target.value)} aria-label="اختصارات جاهزة">
@@ -269,18 +283,6 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
               {ORDER_SHORTCUTS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
           </label>
-          <label className="orders-field"><span>التاريخ</span>
-            <select value={datePreset} onChange={(event) => (event.target.value === "custom" ? setDatePreset("custom") : chooseDates(event.target.value))} aria-label="التاريخ">
-              {DATE_PRESETS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              <option value="custom">من يوم لحد يوم…</option>
-            </select>
-          </label>
-          {datePreset === "custom" && (
-            <div className="orders-field orders-pair">
-              <label><span>من</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); resetPage(); }} /></label>
-              <label><span>لحد</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); resetPage(); }} /></label>
-            </div>
-          )}
           <label className="orders-field"><span>المحافظة</span>
             <select value={governorate} onChange={(event) => { setGovernorate(event.target.value); setArea(""); resetPage(); }} aria-label="المحافظة">
               <option value="">كل المحافظات</option>
