@@ -7,6 +7,9 @@
 //   fee − the extra charges on the order. A returned order brings nothing in, so it only owes the store −charges.
 // - Extra charges are a real cost: they come off the order's net profit (and the period's), returned order or not.
 //   Return shipping entered here must not also be entered as a "شحن المرتجعات" expense.
+// - Delivered by the store itself (`self`: own scooter / private courier): no company in between, the whole
+//   collection is the store's. The customer's shipping pays the scooter (still not a sale); anything paid on top
+//   (a pickup for a return, a dearer trip) is a charge: off the profit, not off what is collected.
 // - "Collected" is what the company actually transferred for the order; remaining = owed − collected.
 import type { Courier, Deposit, OrderStatus } from "./analytics-report.ts";
 import { returnedAmount, type PieceReturn } from "./order-returns.ts";
@@ -14,6 +17,7 @@ import { governorateShippingFee } from "./shipping-rates.ts";
 
 export const CHARGE_KINDS = [
   { id: "weight", label: "زيادة وزن" },
+  { id: "delivery", label: "توصيل زيادة عن الشحن (مندوب / اسكوتر)" },
   { id: "return", label: "شحن مرتجع" },
   { id: "other", label: "مصاريف تانية" },
 ] as const;
@@ -30,6 +34,8 @@ export type Shipment = {
   /** What the company transferred for this order; null = nothing collected yet. */
   collected: number | null;
   collectedAt: string | null;
+  /** Delivered by the store itself (own scooter / private courier): the shipping and the whole collection are the store's. */
+  self?: boolean;
 };
 
 export function isChargeKind(value: unknown): value is ChargeKind {
@@ -55,6 +61,7 @@ export function sanitizeShipment(raw: unknown, current: Shipment | undefined, no
   if (typeof raw !== "object" || Array.isArray(raw)) return { error: "بيانات الشحن مش مظبوطة." };
   const input = raw as Record<string, unknown>;
   const company = text(input.company, 60);
+  const self = input.self === true;
   const tracking = text(input.tracking, 60);
   const list = input.charges === undefined ? [] : input.charges;
   if (!Array.isArray(list) || list.length > 20) return { error: "الخصومات مش مظبوطة." };
@@ -72,8 +79,8 @@ export function sanitizeShipment(raw: unknown, current: Shipment | undefined, no
   const collected = money(input.collected);
   if (collected === undefined) return { error: "المبلغ اللي حصّلتيه لازم يبقى رقم صفر أو أكتر." };
   const collectedAt = collected === null ? null : current?.collected === collected && current.collectedAt ? current.collectedAt : now.toISOString();
-  if (!company && !tracking && charges.length === 0 && collected === null) return { shipment: undefined };
-  return { shipment: { company, tracking, charges, collected, collectedAt } };
+  if (!company && !tracking && charges.length === 0 && collected === null && !self) return { shipment: undefined };
+  return { shipment: { company, tracking, charges, collected, collectedAt, ...(self ? { self: true } : {}) } };
 }
 
 export const chargesTotal = (shipment: Shipment | null | undefined) => round((shipment?.charges ?? []).reduce((sum, charge) => sum + charge.amount, 0));
@@ -117,15 +124,18 @@ export function shipStage(order: Pick<ShipOrder, "status" | "courier">): ShipSta
  */
 export function shipmentMoney(order: ShipOrder) {
   const stage = shipStage(order);
+  const self = order.shipment?.self === true;
   const guessed = order.shippingCost === null ? governorateShippingFee(order.governorate) : null;
-  const fee = order.shippingCost ?? guessed ?? 0;
-  const total = order.total !== null ? order.total - returnedAmount(order.returns) : order.value + fee;
+  const shipping = order.shippingCost ?? guessed ?? 0;
+  const total = order.total !== null ? order.total - returnedAmount(order.returns) : order.value + shipping;
   const collection = Math.max(0, round(total - (order.deposit?.amount ?? 0)));
   const charges = chargesTotal(order.shipment);
-  const expected = round(collection - fee - charges);
-  const owed = stage === "delivered" ? expected : stage === "returned" || (stage === "cancelled" && charges > 0) ? round(-charges) : null;
+  // Delivered by the store: nobody keeps the shipping or the charges out of the collection.
+  const fee = self ? 0 : shipping;
+  const expected = round(collection - fee - (self ? 0 : charges));
+  const owed = stage === "delivered" ? expected : stage === "returned" || (stage === "cancelled" && charges > 0) ? (self ? 0 : round(-charges)) : null;
   const collected = order.shipment?.collected ?? null;
-  return { stage, collection, fee, charges, expected, owed, collected, remaining: owed === null ? null : round(owed - (collected ?? 0)) };
+  return { stage, self, collection, fee, charges, expected, owed, collected, remaining: owed === null ? null : round(owed - (collected ?? 0)) };
 }
 
 export type CompanyTotals = {
@@ -180,3 +190,29 @@ export function knownCompanies(orders: { shipment: Shipment | null }[]) {
   for (const order of orders) if (order.shipment?.company) counts.set(order.shipment.company, (counts.get(order.shipment.company) ?? 0) + 1);
   return [...counts.entries()].toSorted((a, b) => b[1] - a[1]).map(([name]) => name);
 }
+
+/** A shipping company saved in the "شركات الشحن" table: offered when an order is given to a company. */
+export type CourierCompany = {
+  id: string;
+  name: string;
+  phone: string;
+  note: string;
+  /** The store's own scooter / private courier: picking it marks the order "delivered by us". */
+  self: boolean;
+  createdAt: string;
+};
+
+const clean = (value: unknown, max: number) => (typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "");
+
+/** Checks a company from the table form: a name (2+ letters), an optional phone and note. */
+export function sanitizeCourierCompany(raw: unknown, id: string, now: Date, createdAt?: string): CourierCompany | { error: string } {
+  const input = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const name = clean(input.name, 60);
+  if (name.length < 2) return { error: "اكتبي اسم الشركة." };
+  const phone = clean(input.phone, 30);
+  if (phone && !/^[\d+\-\s()]+$/.test(phone)) return { error: "رقم التليفون أرقام بس." };
+  return { id, name, phone, note: clean(input.note, 200), self: input.self === true, createdAt: createdAt ?? now.toISOString() };
+}
+
+/** Same name, ignoring extra spaces and letter case. */
+export const sameCompany = (a: string, b: string) => a.replace(/\s+/g, " ").trim().toLowerCase() === b.replace(/\s+/g, " ").trim().toLowerCase();

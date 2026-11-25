@@ -637,7 +637,7 @@ function OrderMoneyBox({ order }: { order: UnifiedOrder }) {
         <div className="sub"><dt>هامش الربح</dt><dd className={money.margin < 0 ? "admin-negative" : undefined}>{formatEGP(money.margin)}</dd></div>
         <div><dt>نصيبه من مصروفات الشهر <small>({formatEGP(money.perPiece)} للقطعة)</small></dt><dd>− {formatEGP(money.expenseShare)}</dd></div>
         {money.courierCharges > 0 && <div><dt>خصومات شركة الشحن</dt><dd>− {formatEGP(money.courierCharges)}</dd></div>}
-        <div className="grand"><dt>مكسبك الصافي</dt><dd className={money.netProfit < 0 ? "admin-negative" : "admin-positive"}>{formatEGP(money.netProfit)}</dd></div>
+        <div className="grand"><dt>{money.netProfit < 0 ? "خسارة الأوردر" : "مكسبك الصافي"}</dt><dd className={money.netProfit < 0 ? "admin-negative" : "admin-positive"}>{money.netProfit < 0 ? `− ${formatEGP(-money.netProfit)}` : formatEGP(money.netProfit)}</dd></div>
       </dl>
     </section>
   );

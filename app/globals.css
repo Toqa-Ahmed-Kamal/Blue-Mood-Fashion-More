@@ -2250,3 +2250,15 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
   .order-shipment-row > label:last-of-type { grid-column: 1 / -1; }
   .order-shipment-row > .admin-icon-btn { justify-self: start; }
 }
+.order-shipment-self { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: .86rem; cursor: pointer; }
+.order-shipment-self input { margin-top: 3px; }
+.order-shipment-companies { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.order-shipment-company { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--navy); font: inherit; cursor: pointer; }
+.order-shipment-company small { color: #64748b; font-size: .76rem; }
+.order-shipment-company:hover { border-color: var(--navy); }
+.order-shipment-company.active { border-color: var(--navy); background: #f1f6ff; box-shadow: inset 0 0 0 1px var(--navy); }
+.couriers-companies { margin: 12px 0 18px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.couriers-companies-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.couriers-companies-head h3 { margin: 0; }
+.couriers-companies-table input:not([type=checkbox]) { width: 100%; min-width: 110px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.couriers-self { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; }

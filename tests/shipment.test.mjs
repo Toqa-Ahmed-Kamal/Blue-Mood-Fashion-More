@@ -6,7 +6,7 @@ setPriceClock(() => Date.parse("2026-11-20T12:00:00+02:00"));
 
 import { mergeAllOrders } from "../lib/all-orders.ts";
 import { buildFinanceReport, orderFinance } from "../lib/finance.ts";
-import { chargesTotal, companyTotals, knownCompanies, sanitizeShipment, shipStage, shipmentMoney } from "../lib/shipment.ts";
+import { chargesTotal, companyTotals, knownCompanies, sameCompany, sanitizeCourierCompany, sanitizeShipment, shipStage, shipmentMoney } from "../lib/shipment.ts";
 
 const ABAYA = "bm-abaya-002";
 const products = [{ modelId: ABAYA, category: "abayas", quantity: 2, fit: "" }];
@@ -107,4 +107,31 @@ test("finance: the company's charges come off the order's and the period's net p
   const money = orderFinance({ live, old: [], costs, expenses: [] })["BM-AAAAAAAAAAAAAAAAAAA1"];
   assert.equal(money.courierCharges, 25);
   assert.equal(money.netProfit, 275);
+});
+
+test("delivered by us (scooter): the whole collection is ours; a pickup for the pieces she did not take is a loss", () => {
+  // Shipping 80 paid upfront (as a deposit) and paid to the scooter; she took pieces for 550 and paid them; the
+  // scooter went back for the pieces she did not keep: 174.
+  const order = site("BM-AAAAAAAAAAAAAAAAAAA1", "delivered", { subtotal: 550, total: 630, deposit: { amount: 80, at: "" }, shipment: box({ company: "اسكوتر", self: true, charges: [charge("return", 174)], collected: 550 }) });
+  const value = shipmentMoney(row(order));
+  assert.equal(value.collection, 550);
+  assert.equal(value.owed, 550, "nobody keeps the shipping or the charges out of it");
+  assert.equal(value.remaining, 0, "nothing left, nothing owed");
+  const costs = { [ABAYA]: { productId: ABAYA, cost: 200, factory: "", updatedAt: "" } };
+  const money = orderFinance({ live: [order], old: [], costs, expenses: [] })[order.orderId];
+  assert.equal(money.sales, 550, "the shipping paid the scooter: not a sale");
+  assert.equal(money.netProfit, 550 - 400 - 174, "more than the profit: a loss");
+  assert.ok(sanitizeShipment({ company: "اسكوتر", self: true }, undefined, NOW, makeId).shipment.self);
+  assert.equal(sanitizeShipment({ company: "بوسطة" }, undefined, NOW, makeId).shipment.self, undefined);
+});
+
+test("companies table: a name is needed, the phone is digits, same name ignores spaces and case", () => {
+  const made = sanitizeCourierCompany({ name: "  اسكوتر   المحل ", phone: "010 1234 5678", note: " بالليل ", self: true }, "id1", NOW);
+  assert.deepEqual(made, { id: "id1", name: "اسكوتر المحل", phone: "010 1234 5678", note: "بالليل", self: true, createdAt: NOW.toISOString() });
+  assert.ok("error" in sanitizeCourierCompany({ name: " ب " }, "id2", NOW));
+  assert.ok("error" in sanitizeCourierCompany({ name: "بوسطة", phone: "abc" }, "id2", NOW));
+  assert.equal(sanitizeCourierCompany({ name: "بوسطة", self: "yes" }, "id2", NOW).self, false);
+  assert.equal(sanitizeCourierCompany({ name: "بوسطة" }, "id2", NOW, "2026-01-01T00:00:00.000Z").createdAt, "2026-01-01T00:00:00.000Z");
+  assert.ok(sameCompany(" J&T  Express", "j&t express"));
+  assert.ok(!sameCompany("بوسطة", "J&T"));
 });
