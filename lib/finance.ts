@@ -9,7 +9,8 @@
 // - Cancelled and returned orders are neither sales nor products cost. Return shipping is entered as
 //   its own expense, so nothing is deducted twice.
 // - Each order counts once: an imported Telegram order that is also a site order is the site order.
-// - Net profit = sales − products cost − expenses, all in EGP, for the chosen dates.
+// - Net profit = sales − products cost − expenses − the shipping companies' extra charges (overweight, return
+//   shipping… lib/shipment.ts), all in EGP, for the chosen dates. A returned or cancelled order's charges count too.
 // - Direct sales to friends and family (lib/direct-sales.ts) are sales too: their sale and factory cost join
 //   the totals and their own extra cost comes off the net profit. The month's expenses stay on online orders.
 // - Pieces the owner took for herself (direct kind "personal") are not sales and not a loss: their factory cost
@@ -19,6 +20,7 @@ import { confirmedValueOf, isSaleStatus, type AnalyticsOrder, type CostSnapshot,
 import { directSaleMoney, isPersonalTake, type DirectSale } from "./direct-sales.ts";
 import { type OldOrder } from "./old-orders.ts";
 import { keptLines, returnedAmount } from "./order-returns.ts";
+import { chargesTotal } from "./shipment.ts";
 import { catalog, landingPromotion, offerPrice } from "./site-data.ts";
 
 /** Factory of every product that has none saved yet (all products at launch come from it). */
@@ -132,7 +134,9 @@ export type FinanceOrderRow = {
   margin: number;
   /** Share of the month's expenses carried by this order (by its pieces). */
   expenseShare: number;
-  /** Margin − expense share. */
+  /** Extra money the shipping company kept on this order. */
+  courierCharges: number;
+  /** Margin − expense share − courier charges. */
   netProfit: number;
   /** exact = every line has its confirmation cost; estimated = at least one line uses today's cost; missing = at least one line has no cost at all. */
   costState: CostState;
@@ -146,7 +150,7 @@ export type FinanceReport = {
    * expenses = deducted expenses only; stockPurchases = factory stock payments (recorded, not deducted);
    * stockForSale = stockPurchases less what the owner took for herself (the goods actually bought to sell).
    */
-  totals: { sales: number; productsCost: number; expenses: number; stockPurchases: number; stockForSale: number; netProfit: number };
+  totals: { sales: number; productsCost: number; expenses: number; courierCharges: number; stockPurchases: number; stockForSale: number; netProfit: number };
   counts: { confirmedOrders: number; returnedOrders: number; estimatedOrders: number; missingCostOrders: number; expenses: number };
   /** Value of returned orders (information only, not deducted anywhere). */
   returnedValue: number;
@@ -166,7 +170,7 @@ export type FinanceReport = {
 export type FinanceStage = { orders: number; pieces: number; sales: number; productsCost: number; netProfit: number };
 
 type OrderLine = { productId: string; quantity: number };
-type Normalized = { orderId: string; source: "site" | "telegram"; day: string; status: OrderStatus; value: number; lines: OrderLine[]; snapshot?: CostSnapshot };
+type Normalized = { orderId: string; source: "site" | "telegram"; day: string; status: OrderStatus; value: number; lines: OrderLine[]; snapshot?: CostSnapshot; charges: number };
 
 const round = (value: number) => Math.round(value * 100) / 100;
 const monthOf = (day: string) => day.slice(0, 7);
@@ -199,6 +203,7 @@ function normalizeOrders(live: AnalyticsOrder[], old: OldOrder[]): Normalized[] 
       // Pieces she gave back are not sold: same lines (the saved costs line up), fewer pieces.
       lines: keptLines(order.products, order.returns).map((product) => ({ productId: product.modelId, quantity: product.quantity })),
       snapshot: order.costSnapshot,
+      charges: chargesTotal(order.shipment),
     })),
     ...old.flatMap((order) => {
       if (siteIds.has(order.orderId) || seenOld.has(order.orderId)) return [];
@@ -211,6 +216,7 @@ function normalizeOrders(live: AnalyticsOrder[], old: OldOrder[]): Normalized[] 
         value: oldGoodsValue(order),
         lines: keptLines(order.products, order.returns).map((product) => ({ productId: product.modelId, quantity: product.quantity })),
         snapshot: order.costSnapshot,
+        charges: chargesTotal(order.shipment),
       }];
     }),
   ];
@@ -264,7 +270,9 @@ export type OrderMoney = {
   margin: number;
   /** Share of the month's expenses: (month's deducted expenses ÷ pieces sold that month) × this order's pieces. */
   expenseShare: number;
-  /** Margin − expense share: what the order really earned. */
+  /** Extra money the shipping company kept (overweight, return shipping…). */
+  courierCharges: number;
+  /** Margin − expense share − courier charges: what the order really earned. */
   netProfit: number;
   /** Expense share of one piece in the order's month. */
   perPiece: number;
@@ -287,7 +295,7 @@ function moneyOf(order: Normalized, costs: Record<string, ProductCost | undefine
   const { cost, costState, missingLines } = productsCostOf(order, costs);
   const margin = round(order.value - cost);
   const expenseShare = round(perPiece * pieces);
-  return { sales: order.value, productsCost: cost, margin, expenseShare, netProfit: round(margin - expenseShare), perPiece: round(perPiece), month, costState, missingLines, expected };
+  return { sales: order.value, productsCost: cost, margin, expenseShare, courierCharges: order.charges, netProfit: round(margin - expenseShare - order.charges), perPiece: round(perPiece), month, costState, missingLines, expected };
 }
 
 /** Money of every order that is sold or still waiting (cancelled and returned orders bring nothing). Keyed by order ID. */
@@ -316,6 +324,7 @@ export function buildFinanceReport(input: {
   let sales = 0;
   let productsCost = 0;
   let returnedValue = 0;
+  let courierCharges = 0;
   const stage = (): FinanceStage => ({ orders: 0, pieces: 0, sales: 0, productsCost: 0, netProfit: 0 });
   const stages = { confirmed: stage(), delivered: stage(), pending: stage() };
   const addTo = (target: FinanceStage, pieces: number, money: OrderMoney) => {
@@ -327,12 +336,14 @@ export function buildFinanceReport(input: {
   };
   for (const order of orders) {
     if (!inRange(order.day)) continue;
+    // The company's extra charges are a cost whatever became of the order (a waiting order's are counted once it is sold).
+    if (order.status !== "submitted") courierCharges += order.charges;
     if (order.status === "submitted") addTo(stages.pending, piecesOf(order), moneyOf(order, input.costs, months));
     if (!isSaleStatus(order.status) && order.status !== "returned") continue;
     const pieces = piecesOf(order);
     if (order.status === "returned") {
       returnedValue += order.value;
-      rows.push({ orderId: order.orderId, source: order.source, day: order.day, status: order.status, pieces, sales: 0, productsCost: 0, profit: 0, margin: 0, expenseShare: 0, netProfit: 0, costState: "exact", missingLines: 0 });
+      rows.push({ orderId: order.orderId, source: order.source, day: order.day, status: order.status, pieces, sales: 0, productsCost: 0, profit: 0, margin: 0, expenseShare: 0, courierCharges: order.charges, netProfit: round(-order.charges), costState: "exact", missingLines: 0 });
       continue;
     }
     const money = moneyOf(order, input.costs, months);
@@ -350,6 +361,7 @@ export function buildFinanceReport(input: {
       profit: money.margin,
       margin: money.margin,
       expenseShare: money.expenseShare,
+      courierCharges: money.courierCharges,
       netProfit: money.netProfit,
       costState: money.costState,
       missingLines: money.missingLines,
@@ -387,7 +399,7 @@ export function buildFinanceReport(input: {
     range: { from, to },
     // Direct sales are sales too; their extra cost (delivery, packaging) comes off the net profit. Pieces the
     // owner took for herself come off the stock purchases instead.
-    totals: { sales: round(allSales), productsCost: round(allProductsCost), expenses: expensesTotal, stockPurchases, stockForSale: round(stockPurchases - personal.cost), netProfit: round(allSales - allProductsCost - expensesTotal - direct.extraCost) },
+    totals: { sales: round(allSales), productsCost: round(allProductsCost), expenses: expensesTotal, courierCharges: round(courierCharges), stockPurchases, stockForSale: round(stockPurchases - personal.cost), netProfit: round(allSales - allProductsCost - expensesTotal - direct.extraCost - courierCharges) },
     personal: { ...personal, cost: round(personal.cost) },
     direct: { ...direct, sales: round(direct.sales), productsCost: round(direct.productsCost), extraCost: round(direct.extraCost), profit: round(direct.profit) },
     counts: {

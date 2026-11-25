@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, BadgeCheck, MessageSquareHeart, Settings, ShieldCheck, ChartLine, ChevronDown, LayoutDashboard, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Undo2, Wallet, X, XCircle } from "lucide-react";
+import { Archive, BadgeCheck, MessageSquareHeart, Settings, ShieldCheck, ChartLine, ChevronDown, LayoutDashboard, Megaphone, ShoppingCart, Store, UsersRound, Boxes, Calculator, ChartColumn, ChartPie, ClipboardList, Gift, HandCoins, Receipt, Tags, TrendingUp, Users, CheckCircle2, PackageCheck, ExternalLink, Eye, LogOut, Menu, Package, PanelRightClose, Pencil, RefreshCw, RotateCcw, Route, ShoppingBag, Truck, Undo2, Wallet, X, XCircle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -20,6 +20,7 @@ import {
 } from "recharts";
 
 import { AllOrdersTab } from "@/components/admin/all-orders";
+import { CouriersTab } from "@/components/admin/order-shipment";
 import { ChartsTab } from "@/components/admin/charts";
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { useAdminTableFit } from "@/components/admin/table-fit";
@@ -70,6 +71,7 @@ const PRESETS = [
 const TABS = [
   { id: "charts", label: "الرسوم البيانية", icon: ChartLine },
   { id: "all", label: "كل الأوردرات", icon: ClipboardList },
+  { id: "couriers", label: "شركات الشحن", icon: Truck },
   { id: "traffic", label: "الزيارات", icon: ChartColumn },
   { id: "journey", label: "رحلة العميلة والمنتجات", icon: Route },
   { id: "orders", label: "أوردرات الموقع", icon: ShoppingBag },
@@ -95,6 +97,7 @@ const NAV_GROUPS: NavGroup[] = [
   ] },
   { id: "orders", title: "الأوردرات", icon: ShoppingCart, items: [
     { tab: "all", label: "كل الأوردرات", icon: ClipboardList },
+    { tab: "couriers", label: "شركات الشحن", icon: Truck },
     { tab: "orders", label: "أوردرات الموقع", icon: ShoppingBag },
     { tab: "old", label: "الأوردرات القديمة", icon: Archive },
   ] },
@@ -132,7 +135,7 @@ const OWNER: DashboardAccess = { owner: true, name: "", permissions: ["orders", 
 function itemNeeds(item: NavItem): string[] | "owner" {
   if (item.tab === "users") return "owner";
   if (item.tab === "charts") return ["money"];
-  if (item.tab === "all" || item.tab === "orders" || item.tab === "old") return ["orders"];
+  if (item.tab === "all" || item.tab === "orders" || item.tab === "old" || item.tab === "couriers") return ["orders"];
   if (item.tab === "inventory" || item.tab === "quantities" || item.tab === "pieces") return ["stock"];
   if (item.tab === "team" || item.tab === "reviews") return ["products"];
   if (item.tab === "traffic" || item.tab === "journey") return ["marketing"];
@@ -439,6 +442,7 @@ export function AnalyticsDashboard({ access = OWNER }: { access?: DashboardAcces
             {tab === "charts" && has("money") && <ChartsTab />}
             {navItems.length === 0 && <p className="admin-note">مفيش أقسام مفتوحالك لسه. اطلبي من صاحبة المتجر تختارلك الأقسام.</p>}
             {tab === "all" && has("orders") && <AllOrdersTab showMoney={has("money")} />}
+            {tab === "couriers" && has("orders") && <CouriersTab />}
             {tab === "traffic" && report && <TrafficTab report={report} />}
             {tab === "journey" && report && <JourneyTab report={report} />}
             {tab === "orders" && report && <OrdersPanel report={report} onOrderUpdated={applyOrderUpdate} onDepositUpdated={applyDeposit} onEdited={() => void load(range.from, range.to)} />}

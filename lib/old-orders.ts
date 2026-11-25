@@ -8,6 +8,7 @@
 import { ORDER_STATUSES, type CancelReason, type CostSnapshot, type Courier, type Deposit, type OrderStatus } from "./analytics-report.ts";
 import { categoryDetailLabel, fitNoteFor } from "./order-flow.ts";
 import type { PieceReturn } from "./order-returns.ts";
+import type { Shipment } from "./shipment.ts";
 import type { OrderDetails } from "./order-vault.ts";
 import { findProduct, type CatalogCategory, hasWeightFit } from "./site-data.ts";
 
@@ -65,6 +66,8 @@ export type OldOrder = {
   deposit?: Deposit;
   /** Pieces she gave back from the order (set from the admin only). */
   returns?: PieceReturn[];
+  /** Shipping company, its extra charges and what it paid over (set from the admin only). */
+  shipment?: Shipment;
 };
 
 export type ParsedOldOrder = { order: OldOrder; warnings: string[] };

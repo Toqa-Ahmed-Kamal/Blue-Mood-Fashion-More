@@ -2217,3 +2217,36 @@ p.admin-flag { display: block; margin: 8px 0; padding: 6px 10px; }
   .order-returns-row .product, .order-returns-row .state, .order-returns-row .note { grid-column: 1 / -1; }
   .order-returns-row > .admin-icon-btn { justify-self: start; }
 }
+
+/* Shipping company box (order card), its dialog and "شركات الشحن". */
+.order-shipment { margin: 12px 0 4px; padding: 10px 12px; border: 1px dashed #a9bfe6; border-radius: 12px; background: #f8fbff; }
+.order-shipment h4 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 6px; font-size: .9rem; color: #2f5fb3; }
+.order-shipment ul { display: grid; gap: 4px; margin: 0 0 6px; padding: 0; list-style: none; font-size: .84rem; }
+.order-shipment li { display: flex; gap: 10px; }
+.order-shipment li .price { margin-inline-start: auto; font-weight: 700; color: #b42335; }
+.order-shipment-money { margin: 0; font-size: .84rem; }
+.order-shipment-money.open strong:last-child { color: #b42335; }
+.ship-stage { padding: 1px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; background: #eef0f3; color: #4a4f57; white-space: nowrap; }
+.ship-stage.with-courier { background: #e8efff; color: #2f5fb3; }
+.ship-stage.delivered { background: #e2f5ea; color: #157a3e; }
+.ship-stage.returned { background: #fde8eb; color: #b42335; }
+.ship-stage.cancelled { background: #f3f0ee; color: #6d6560; }
+.order-shipment-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.order-shipment-head input, .order-shipment-row input, .order-shipment-row select, .order-shipment-collect input { width: 100%; min-width: 0; }
+.order-shipment-picks { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.order-shipment-rows { display: grid; gap: 8px; }
+.order-shipment-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1.4fr) 36px; gap: 8px; align-items: end; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.order-shipment-collect { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 8px; }
+.order-shipment-collect .admin-field { flex: 1 1 180px; }
+.couriers-cards { margin: 12px 0; }
+.couriers-table tbody tr { cursor: pointer; }
+.couriers-table tbody tr.active { background: #f1f6ff; }
+.couriers-table .link { padding: 0; border: 0; background: none; color: var(--navy); font-weight: 700; cursor: pointer; text-decoration: underline; }
+.couriers-orders { margin-top: 16px; }
+.couriers-actions { display: flex; gap: 6px; white-space: nowrap; }
+@media (max-width: 720px) {
+  .order-shipment-head { grid-template-columns: 1fr; }
+  .order-shipment-row { grid-template-columns: 1fr 1fr; }
+  .order-shipment-row > label:last-of-type { grid-column: 1 / -1; }
+  .order-shipment-row > .admin-icon-btn { justify-self: start; }
+}

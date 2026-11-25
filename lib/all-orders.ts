@@ -8,6 +8,7 @@ import { SHIPPING_SYSTEM_NOTES, type OldOrder } from "./old-orders.ts";
 import { editRecordProducts, editTotals, type OrderEdit } from "./order-edit.ts";
 import { returnedAmount, type PieceReturn } from "./order-returns.ts";
 import type { OrderDetails } from "./order-vault.ts";
+import type { Shipment } from "./shipment.ts";
 import { governorateShippingFee } from "./shipping-rates.ts";
 import { findProduct } from "./site-data.ts";
 
@@ -50,6 +51,8 @@ export type UnifiedOrder = {
   campaign: string;
   /** Pieces she gave back after receiving the order (they stay in `products`, the order's history). */
   returns: PieceReturn[];
+  /** Shipping company, its extra charges and what it paid over; null when none set. */
+  shipment: Shipment | null;
   /** Cost, margin, share of expenses and net profit (added by the API; none for cancelled/returned). */
   money?: OrderMoney | null;
 };
@@ -192,6 +195,7 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       trafficSource: order.source ?? "",
       campaign: order.campaign ?? "",
       returns: order.returns ?? [],
+      shipment: order.shipment ?? null,
     });
   }
 
@@ -226,6 +230,7 @@ export function mergeAllOrders(live: { order: AnalyticsOrder; details: OrderDeta
       trafficSource: order.source ?? "",
       campaign: "",
       returns: order.returns ?? [],
+      shipment: order.shipment ?? null,
     });
   }
 

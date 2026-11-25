@@ -43,6 +43,7 @@ import { snapshotCosts } from "./finance.ts";
 import { productCostsFor } from "./finance-store.ts";
 import { applyEditToSiteOrder, type OrderEdit } from "./order-edit.ts";
 import { sanitizeReturns } from "./order-returns.ts";
+import { sanitizeShipment } from "./shipment.ts";
 import { openOrderDetails, sealOrderDetails, type OrderDetails } from "./order-vault.ts";
 import { keyPrefix, redisPipeline } from "./redis.ts";
 import { sourceTypeOf, trafficSourceOf, type TrafficSource } from "./traffic-source.ts";
@@ -455,6 +456,20 @@ export async function setOrderReturns(orderId: string, raw: unknown): Promise<An
   const { returns: _previous, ...rest } = order;
   void _previous;
   const updated: AnalyticsOrder = checked.returns.length ? { ...rest, returns: checked.returns } : rest;
+  const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
+  return result === "OK" ? updated : null;
+}
+
+/** Saves the shipping box (company, tracking, extra charges, collected). { error } when it is not valid. */
+export async function setOrderShipment(orderId: string, raw: unknown): Promise<AnalyticsOrder | null | { error: string }> {
+  const [stored] = await redisPipeline([["GET", key(`order:${orderId}`)]], "write");
+  if (typeof stored !== "string") return null;
+  const order = JSON.parse(stored) as AnalyticsOrder;
+  const checked = sanitizeShipment(raw, order.shipment);
+  if ("error" in checked) return checked;
+  const { shipment: _previous, ...rest } = order;
+  void _previous;
+  const updated: AnalyticsOrder = checked.shipment ? { ...rest, shipment: checked.shipment } : rest;
   const [result] = await redisPipeline([["SET", key(`order:${orderId}`), JSON.stringify(updated), "XX", "KEEPTTL"]], "write");
   return result === "OK" ? updated : null;
 }

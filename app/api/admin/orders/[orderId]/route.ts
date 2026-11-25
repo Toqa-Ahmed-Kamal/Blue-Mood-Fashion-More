@@ -1,7 +1,7 @@
 import { isSameOrigin } from "@/lib/admin-auth";
 import { accessDenied } from "@/lib/admin-users";
 import { parseCancelReason, parseCourierChange, parseDepositAmount } from "@/lib/analytics-report";
-import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderCancelReason, setOrderCourier, setOrderDeposit, setOrderReturns, setOrderStatus } from "@/lib/analytics-store";
+import { editSiteOrder, isOrderStatus, loadOrderDetails, setOrderCancelReason, setOrderCourier, setOrderDeposit, setOrderReturns, setOrderShipment, setOrderStatus } from "@/lib/analytics-store";
 import { ensureCustomProducts } from "@/lib/custom-products-store";
 import { sanitizeOrderEdit } from "@/lib/order-edit";
 import { isOrderVaultConfigured } from "@/lib/order-vault";
@@ -73,6 +73,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ order
       return json(200, { success: true, order: { orderId: order.orderId, returns: order.returns ?? [] } });
     } catch (error) {
       console.error("[admin] order returns update failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
+      return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
+    }
+  }
+  // Shipping company box: { shipment: { company, tracking, charges: [{ id?, kind, amount, note }], collected } | null }.
+  if (body.shipment !== undefined) {
+    try {
+      const order = await setOrderShipment(orderId, body.shipment);
+      if (!order) return json(404, { success: false, error: { code: "NOT_FOUND", message: "الطلب مش موجود." } });
+      if ("error" in order) return json(400, { success: false, error: { code: "INVALID_SHIPMENT", message: order.error } });
+      return json(200, { success: true, order: { orderId: order.orderId, shipment: order.shipment ?? null } });
+    } catch (error) {
+      console.error("[admin] order shipment update failed", { orderId, reason: error instanceof RedisUnavailableError ? error.message : "UNEXPECTED" });
       return json(502, { success: false, error: { code: "STORAGE_UNAVAILABLE", message: "مش قادرين نحفظ دلوقتي. جربي تاني." } });
     }
   }

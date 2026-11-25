@@ -129,7 +129,8 @@ export function FinanceTab({ showMoney = true, showProducts = true }: { showMone
               <div className="admin-card"><span>Total Sales · المبيعات</span><strong>{money(report.totals.sales)}</strong><small>{report.counts.confirmedOrders} أوردر مؤكد (شامل شحن العميلة){report.direct.count > 0 && ` + ${report.direct.count} بيع مباشر`}</small></div>
               <div className="admin-card"><span>Total Products Cost · تكلفة المنتجات</span><strong>{money(report.totals.productsCost)}</strong><small>بسعر المصنع وقت التأكيد</small></div>
               <div className="admin-card"><span>Total Expenses · المصروفات</span><strong>{money(report.totals.expenses)}</strong><small>{report.counts.expenses} مصروف</small></div>
-              <div className={`admin-card${report.totals.netProfit >= 0 ? " good" : " bad"}`}><span>Net Profit · صافي المكسب</span><strong>{money(report.totals.netProfit)}</strong><small>المبيعات − التكلفة − المصروفات</small></div>
+              {report.totals.courierCharges > 0 && <div className="admin-card"><span>Courier charges · خصومات شركات الشحن</span><strong>{money(report.totals.courierCharges)}</strong><small>زيادة وزن وشحن مرتجعات ومصاريف تانية</small></div>}
+              <div className={`admin-card${report.totals.netProfit >= 0 ? " good" : " bad"}`}><span>Net Profit · صافي المكسب</span><strong>{money(report.totals.netProfit)}</strong><small>المبيعات − التكلفة − المصروفات{report.totals.courierCharges > 0 ? " − خصومات الشحن" : ""}</small></div>
             </section>
             <PieceCards report={report} />
             <section className="admin-fin-stages" aria-label="المكسب حسب حالة الأوردر">
@@ -950,7 +951,7 @@ function OrdersProfit({ report }: { report: FinanceReport }) {
                   </td>
                   <td>{row.status === "returned" ? "—" : <span className={row.margin < 0 ? "admin-negative" : ""}>{money(row.margin)}</span>}</td>
                   <td>{row.status === "returned" ? "—" : money(row.expenseShare)}</td>
-                  <td>{row.status === "returned" ? "—" : <strong className={row.netProfit < 0 ? "admin-negative" : ""}>{money(row.netProfit)}</strong>}</td>
+                  <td>{row.status === "returned" && !row.courierCharges ? "—" : <strong className={row.netProfit < 0 ? "admin-negative" : ""}>{money(row.netProfit)}</strong>}{row.courierCharges > 0 && <small className="admin-muted"> (منها − {money(row.courierCharges)} شركة الشحن)</small>}</td>
                 </tr>
               ))}
             </tbody>

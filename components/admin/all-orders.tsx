@@ -6,12 +6,14 @@ import { BadgeCheck, Check, CheckCircle2, Copy, Package, PackageCheck, Pencil, R
 
 import { OrderEditDialog } from "@/components/admin/order-edit-dialog";
 import { ReturnsBox, ReturnsDialog } from "@/components/admin/order-returns";
+import { ShipmentBox, ShipmentDialog } from "@/components/admin/order-shipment";
 import { WhatsAppLink, WhatsAppMenu } from "@/components/admin/whatsapp-link";
 import { MARGIN_PRESETS, NET_PROFIT_PRESETS, ORDER_FACTS, ORDER_SHORTCUTS, STATUS_CHOICES, areaOptions, countValues, courierCollection, courierText, governorateOptions, matchesChoice, matchesHours, matchesMargin, matchesNetProfit, matchesPlace, matchesReason, matchesSearch, matchesTime, offerKindOf, withEdit, type FactChoice, type MarginRange, type OrderFact, type ReasonFilter, type UnifiedOrder } from "@/lib/all-orders";
 import { CANCEL_REASONS, isCancelReason, type CancelReason, type CourierStep, type OrderStatus } from "@/lib/analytics-report";
 import { confirmationMessage, orderMessage, unavailableMessage, weightMessage, whatsappChatUrl } from "@/lib/customer-whatsapp";
 import { formatEGP } from "@/lib/format";
 import { returnedAmount } from "@/lib/order-returns";
+import { chargesTotal, knownCompanies } from "@/lib/shipment";
 import { productImage } from "@/lib/quantity-summary";
 import { findProduct, offerPieceCount, hasWeightFit } from "@/lib/site-data";
 
@@ -67,6 +69,7 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
   const [busyId, setBusyId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [returningId, setReturningId] = useState<string | null>(null);
+  const [shippingId, setShippingId] = useState<string | null>(null);
   const resetPage = () => setLimit(PAGE_SIZE);
 
   const load = useCallback(async () => {
@@ -379,10 +382,24 @@ export function AllOrdersTab({ showMoney = true }: { showMoney?: boolean }) {
       {orders && rows.length === 0 && <p className="admin-muted empty">مفيش أوردرات بالاختيار ده.</p>}
 
       <div className="admin-orders">
-        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onRemoveDeposit={() => removeDeposit(order)} onEdit={() => setEditingId(order.orderId)} onReturns={() => setReturningId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} onCancelReason={(cancelReason) => void change(order, { cancelReason })} />)}
+        {shown.map((order) => <UnifiedOrderCard key={order.orderId} order={order} busy={busyId === order.orderId} onStatus={(status) => void change(order, { status })} onDeposit={() => askDeposit(order)} onRemoveDeposit={() => removeDeposit(order)} onEdit={() => setEditingId(order.orderId)} onReturns={() => setReturningId(order.orderId)} onShipment={() => setShippingId(order.orderId)} onCourier={(step, done) => void change(order, { courier: { step, done } })} onCancelReason={(cancelReason) => void change(order, { cancelReason })} />)}
       </div>
       {rows.length > shown.length && (
         <button type="button" className="admin-more" onClick={() => setLimit((current) => current + PAGE_SIZE)}>اعرضي {Math.min(PAGE_SIZE, rows.length - shown.length)} أوردر كمان ({rows.length - shown.length} باقيين)</button>
+      )}
+      {shippingId && orders?.some((order) => order.orderId === shippingId) && (
+        <ShipmentDialog
+          order={orders.find((order) => order.orderId === shippingId)!}
+          companies={knownCompanies(orders)}
+          onClose={() => setShippingId(null)}
+          onSaved={(shipment) => {
+            const id = shippingId;
+            setShippingId(null);
+            // Shown at once; the reload brings the order's new net profit.
+            setOrders((current) => current?.map((item) => (item.orderId === id ? { ...item, shipment } : item)) ?? null);
+            void load();
+          }}
+        />
       )}
       {returning && (
         <ReturnsDialog
@@ -450,7 +467,7 @@ function CourierCopyButton({ order }: { order: UnifiedOrder }) {
   );
 }
 
-function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, onEdit, onReturns, onCourier, onCancelReason }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onRemoveDeposit: () => void; onEdit: () => void; onReturns: () => void; onCourier: (step: CourierStep, done: boolean) => void; onCancelReason: (reason: CancelReason | null) => void }) {
+function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, onEdit, onReturns, onShipment, onCourier, onCancelReason }: { order: UnifiedOrder; busy: boolean; onStatus: (status: OrderStatus) => void; onDeposit: () => void; onRemoveDeposit: () => void; onEdit: () => void; onReturns: () => void; onShipment: () => void; onCourier: (step: CourierStep, done: boolean) => void; onCancelReason: (reason: CancelReason | null) => void }) {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const chat = (text: string) => (order.phone ? whatsappChatUrl(order.phone, text) : null);
   const remaining = order.deposit && order.total !== null ? Math.max(0, order.total - returnedAmount(order.returns) - order.deposit.amount) : null;
@@ -561,6 +578,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, o
             {remaining !== null && <div className="grand"><dt>الباقي عند الاستلام</dt><dd>{formatEGP(remaining)}</dd></div>}
           </dl>
           <ReturnsBox order={order} />
+          <ShipmentBox order={order} />
           <OrderMoneyBox order={order} />
         </section>
       </div>
@@ -583,6 +601,7 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, o
         {order.status !== "submitted" && <button type="button" disabled={busy} onClick={() => onStatus("submitted")} title="رجوع لمستني تأكيد" aria-label="رجوع لمستني تأكيد"><RotateCcw size={15} /></button>}
         <span className="admin-order-actions-break" aria-hidden="true" />
         <CourierCopyButton order={order} />
+        <button type="button" disabled={busy} className={order.shipment?.company ? "courier-on" : undefined} onClick={onShipment} title="الشركة، الخصومات (زيادة وزن / مرتجع) واللي حصّلتيه منها"><Truck size={15} /> {order.shipment?.company ? `شحن: ${order.shipment.company}` : "شركة الشحن"}</button>
         {shippingOpen && (
           <>
             <button type="button" disabled={busy} className={packed ? "courier-on packed" : undefined} aria-pressed={packed} onClick={() => onCourier("packed", !packed)} title={packed ? `اتجهز ${cairoTime(order.courier?.packedAt ?? "")} — دوسي علشان تلغي` : "الأوردر اتجهز واتغلف لشركة الشحن"}>
@@ -603,7 +622,8 @@ function UnifiedOrderCard({ order, busy, onStatus, onDeposit, onRemoveDeposit, o
 
 /** "مكسب الأوردر": what the order brings after the factory cost and its share of the month's expenses. */
 function OrderMoneyBox({ order }: { order: UnifiedOrder }) {
-  if (order.status === "returned") return <p className="admin-order-money-note">مرتجع: مالوش مكسب (شحن المرتجع بيتسجل كمصروف).</p>;
+  const charges = chargesTotal(order.shipment);
+  if (order.status === "returned") return <p className="admin-order-money-note">{charges > 0 ? <>مرتجع: مالوش بيع، وخسارة شركة الشحن <strong className="admin-negative">− {formatEGP(charges)}</strong> اتخصمت من المكسب.</> : "مرتجع: مالوش مكسب (شحن المرتجع يتكتب من زرار شركة الشحن)."}</p>;
   if (order.status === "cancelled") return null;
   const money = order.money;
   if (!money) return null;
@@ -616,6 +636,7 @@ function OrderMoneyBox({ order }: { order: UnifiedOrder }) {
         <div><dt>تكلفة المنتجات {cost}</dt><dd>− {formatEGP(money.productsCost)}</dd></div>
         <div className="sub"><dt>هامش الربح</dt><dd className={money.margin < 0 ? "admin-negative" : undefined}>{formatEGP(money.margin)}</dd></div>
         <div><dt>نصيبه من مصروفات الشهر <small>({formatEGP(money.perPiece)} للقطعة)</small></dt><dd>− {formatEGP(money.expenseShare)}</dd></div>
+        {money.courierCharges > 0 && <div><dt>خصومات شركة الشحن</dt><dd>− {formatEGP(money.courierCharges)}</dd></div>}
         <div className="grand"><dt>مكسبك الصافي</dt><dd className={money.netProfit < 0 ? "admin-negative" : "admin-positive"}>{formatEGP(money.netProfit)}</dd></div>
       </dl>
     </section>

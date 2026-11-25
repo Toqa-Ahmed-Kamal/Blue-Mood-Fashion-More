@@ -1,6 +1,7 @@
 // Turns stored daily visit counters and order records into the dashboard report. Pure (no I/O) and tested.
 import type { Touch } from "./attribution.ts";
 import { returnedAmount, type PieceReturn } from "./order-returns.ts";
+import type { Shipment } from "./shipment.ts";
 import { catalog, categoryInfo } from "./site-data.ts";
 import { SOURCE_TYPES, TRAFFIC_SOURCES, isTrafficSource, sourceTypeOf, type SourceType, type TrafficSource } from "./traffic-source.ts";
 
@@ -142,6 +143,8 @@ export type AnalyticsOrder = {
   editedAt?: string;
   /** Pieces she gave back from the order (the order keeps all its pieces; these are taken out of the sale). */
   returns?: PieceReturn[];
+  /** Shipping company, its extra charges and what it paid over (set from the admin only). */
+  shipment?: Shipment;
 };
 
 /** Fields of one day's visit hash: all, s:<source>, t:<type>, c:<campaign>, a:<ad content>. */
