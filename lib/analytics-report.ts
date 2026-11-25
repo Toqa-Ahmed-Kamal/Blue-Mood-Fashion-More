@@ -25,6 +25,10 @@ export const CANCEL_REASONS = [
   { id: "duplicate", label: "الأوردر متكرر" },
   { id: "our-delay", label: "تأخير مننا" },
   { id: "courier-delay", label: "تأخير من شركة الشحن" },
+  { id: "edit-order", label: "لتعديل الطلب" },
+  { id: "out-of-stock", label: "منتج مش موجود" },
+  { id: "changing-products", label: "العميل هيغير المنتجات" },
+  { id: "low-profit", label: "مكسبه أقل من 50 ج" },
 ] as const;
 export type CancelReason = (typeof CANCEL_REASONS)[number]["id"];
 

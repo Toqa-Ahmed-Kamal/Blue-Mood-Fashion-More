@@ -176,7 +176,7 @@ test("margin filter: more / less than an amount; cancelled, returned and orders 
 test("cancel reasons: only from the list, only on cancelled orders, and the reason filter", async () => {
   const { CANCEL_REASONS, parseCancelReason } = await import("../lib/analytics-report.ts");
   const { matchesReason } = await import("../lib/all-orders.ts");
-  assert.deepEqual(CANCEL_REASONS.map((reason) => reason.label), ["العميل مأكدش ومش بيرد", "العميل رجع في كلامه", "الأوردر متكرر", "تأخير مننا", "تأخير من شركة الشحن"]);
+  assert.deepEqual(CANCEL_REASONS.map((reason) => reason.label), ["العميل مأكدش ومش بيرد", "العميل رجع في كلامه", "الأوردر متكرر", "تأخير مننا", "تأخير من شركة الشحن", "لتعديل الطلب", "منتج مش موجود", "العميل هيغير المنتجات", "مكسبه أقل من 50 ج"]);
   assert.equal(parseCancelReason("duplicate"), "duplicate");
   assert.equal(parseCancelReason(null), null, "clear");
   assert.equal(parseCancelReason(""), null, "clear");
